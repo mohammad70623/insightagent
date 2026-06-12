@@ -4,6 +4,7 @@ import Login from '../pages/Login';
 import Dashboard from '../pages/Dashboard';
 import Upload from '../pages/Upload';
 import Chat from '../pages/Chat';
+import Analytics from '../pages/Analytics'; 
 import DashboardLayout from '../components/DashboardLayout';
 
 const ProtectedLoader = () => {
@@ -29,7 +30,10 @@ const router = createBrowserRouter([
         path: "dashboard",
         element: <Dashboard />
       },
-     
+      {
+        path: "analytics", 
+        element: <Analytics />
+      },
       {
         path: "upload",
         element: <Upload />
