@@ -2,8 +2,8 @@ import React from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
 import Dashboard from '../pages/Dashboard';
+import Upload from '../pages/Upload'; 
 import DashboardLayout from '../components/DashboardLayout';
-
 
 const ProtectedLoader = () => {
   const isAuthenticated = localStorage.getItem('token') !== null;
@@ -12,6 +12,7 @@ const ProtectedLoader = () => {
   }
   return null;
 };
+
 const router = createBrowserRouter([
   {
     path: "/login",
@@ -26,6 +27,10 @@ const router = createBrowserRouter([
       {
         path: "dashboard",
         element: <Dashboard />
+      },
+      {
+        path: "upload", 
+        element: <Upload />
       },
       {
         path: "",
