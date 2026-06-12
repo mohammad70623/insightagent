@@ -1,28 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { CloudUpload, FileText, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 
 
 export default function Upload() {
   const [isDragging, setIsDragging] = useState(false);
-  
-  const [uploadedFiles, setUploadedFiles] = useState([
-    { id: 1, name: 'Q4_Financial_Report.csv', size: '2.4 MB', status: 'COMPLETED', progress: 100 },
-    { id: 2, name: 'Customer_Feedback_Logs.json', size: '1.1 MB', status: 'PROCESSING', progress: 65 }
-  ]);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const fileInputRef = useRef(null);
 
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  
+  const processFiles = (files) => {
+    const fileList = Array.from(files);
+    
+    fileList.forEach((file) => {
+      const newFileId = Date.now() + Math.random();
+      
+      const newFileObject = {
+        id: newFileId,
+        name: file.name,
+        size: formatFileSize(file.size),
+        status: 'PROCESSING',
+        progress: 0
+      };
+
+     
+      setUploadedFiles((prev) => [newFileObject, ...prev]);
+
+      
+      let currentProgress = 0;
+      const interval = setInterval(() => {
+        currentProgress += Math.floor(Math.random() * 15) + 5; 
+        
+        if (currentProgress >= 100) {
+          currentProgress = 100;
+          clearInterval(interval);
+          
+          setUploadedFiles((prev) =>
+            prev.map((f) =>
+              f.id === newFileId ? { ...f, progress: 100, status: 'COMPLETED' } : f
+            )
+          );
+        } else {
+          setUploadedFiles((prev) =>
+            prev.map((f) =>
+              f.id === newFileId ? { ...f, progress: currentProgress } : f
+            )
+          );
+        }
+      }, 200);
+    });
+  };
+
+  
   const handleDragOver = (e) => {
     e.preventDefault();
     setIsDragging(true);
   };
 
+  
   const handleDragLeave = () => {
     setIsDragging(false);
   };
 
+  
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-   
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFiles(e.dataTransfer.files);
+    }
+  };
+
+ 
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      processFiles(e.target.files);
+    }
+  };
+
+  const triggerFileBrowser = () => {
+    fileInputRef.current.click();
   };
 
   const deleteFile = (id) => {
@@ -32,7 +97,17 @@ export default function Upload() {
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans">
       
-      {/* ─── HEADER TYPOGRAPHY ─── */}
+      
+      <input 
+        type="file" 
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        multiple
+        className="hidden" 
+        accept=".csv,.json,.txt,.pdf"
+      />
+
+      
       <div>
         <h2 className="text-2xl font-bold tracking-tight text-white">Data Ingest Engine</h2>
         <p className="text-xs text-brand-muted mt-1.5">
@@ -48,7 +123,8 @@ export default function Upload() {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            className={`relative flex flex-col items-center justify-center min-h-[350px] rounded-xl border-2 border-dashed p-8 text-center transition-all cursor-pointer bg-surface ${
+            onClick={triggerFileBrowser}
+            className={`relative flex flex-col items-center justify-center min-h-[350px] rounded-xl border-2 border-dashed p-8 text-center transition-all cursor-pointer bg-surface select-none ${
               isDragging 
                 ? 'border-brand-primary bg-brand-primary/5 shadow-[0_0_20px_rgba(129,140,248,0.1)]' 
                 : 'border-gray-800/80 hover:border-brand-primary/40'
@@ -68,42 +144,47 @@ export default function Upload() {
           </div>
         </div>
 
-        {/* ─── RIGHT: PROCESSING QUEUE STATUS ─── */}
-        <div className="lg:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
-          <div>
-            <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono mb-4">
-              📦 Ingestion Control Queue
+       
+        <div className="lg:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between min-h-[350px]">
+          <div className="flex-1 overflow-y-auto max-h-[380px] pr-1">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono mb-4 sticky top-0 bg-surface pb-2">
+              📦 Ingestion Control Queue ({uploadedFiles.length})
             </h4>
             
             <div className="space-y-3">
               {uploadedFiles.map((file) => (
-                <div key={file.id} className="rounded-lg bg-[#0B0F19]/60 p-4 border border-gray-850/40 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="p-2 rounded-lg bg-surface border border-gray-800 text-brand-primary shrink-0">
-                      <FileText size={16} />
+                <div key={file.id} className="rounded-lg bg-[#0B0F19]/60 p-4 border border-gray-850/40 flex items-center justify-between gap-4 animate-fade-in">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-surface border border-gray-800 text-brand-primary shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-white truncate" title={file.name}>{file.name}</p>
+                        <p className="text-[10px] text-brand-muted mt-0.5">{file.size}</p>
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-white truncate">{file.name}</p>
-                      <p className="text-[10px] text-brand-muted mt-0.5">{file.size}</p>
-                      
-                      
-                      {file.status === 'PROCESSING' && (
-                        <div className="w-full bg-gray-800 h-1 rounded-full mt-2 overflow-hidden">
-                          <div className="bg-brand-primary h-full rounded-full transition-all duration-300" style={{ width: `${file.progress}%` }} />
-                        </div>
-                      )}
+                    
+                  
+                    <div className="w-full bg-gray-800 h-1 rounded-full mt-3 overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full transition-all duration-200 ${
+                          file.status === 'COMPLETED' ? 'bg-green-400' : 'bg-brand-primary'
+                        }`} 
+                        style={{ width: `${file.progress}%` }} 
+                      />
                     </div>
                   </div>
 
-                
+                 
                   <div className="flex items-center gap-3 shrink-0">
                     {file.status === 'COMPLETED' ? (
                       <span className="inline-flex items-center gap-1 text-[9px] font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
                         <CheckCircle2 size={10} /> INDEXED
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 animate-pulse">
-                        <AlertCircle size={10} /> CHUNKING ({file.progress}%)
+                      <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                        <AlertCircle size={10} className="animate-spin" /> {file.progress}%
                       </span>
                     )}
                     <button 
@@ -118,12 +199,18 @@ export default function Upload() {
               ))}
 
               {uploadedFiles.length === 0 && (
-                <p className="text-xs text-brand-muted text-center py-8">No files currently active in queue.</p>
+                <div className="text-center py-12 border border-dashed border-gray-800 rounded-lg bg-[#0B0F19]/20">
+                  <p className="text-xs text-brand-muted">No files currently active in session queue.</p>
+                  <p className="text-[10px] text-gray-600 mt-1">Upload files to simulate RAG vector extraction.</p>
+                </div>
               )}
             </div>
           </div>
 
-          <button className="btn btn-sm w-full border-none bg-brand-primary text-black font-bold hover:bg-indigo-400 capitalize h-9 rounded-lg mt-4 cursor-pointer">
+          <button 
+            disabled={uploadedFiles.length === 0}
+            className="btn btn-sm w-full border-none bg-brand-primary text-black font-bold hover:bg-indigo-400 capitalize h-9 rounded-lg mt-4 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
             Commit Pipeline to Vector DB
           </button>
         </div>
