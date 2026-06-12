@@ -3,13 +3,12 @@ import { createBrowserRouter, Navigate, redirect } from 'react-router-dom';
 import Login from '../pages/Login';
 import DashboardLayout from '../components/DashboardLayout';
 
-
 const Dashboard = lazy(() => import('../pages/Dashboard'));
 const Analytics = lazy(() => import('../pages/Analytics'));
 const Upload = lazy(() => import('../pages/Upload'));
 const Chat = lazy(() => import('../pages/Chat'));
 const Admin = lazy(() => import('../pages/Admin'));
-
+const Billing = lazy(() => import('../pages/Billing')); 
 
 const LazyFallback = () => (
   <div className="flex h-[80vh] w-full items-center justify-center bg-transparent">
@@ -17,30 +16,21 @@ const LazyFallback = () => (
   </div>
 );
 
-
-
-
 const RequireAuth = ({ children }) => {
   const isAuthenticated = localStorage.getItem('token') !== null;
-  
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
   return children;
 };
 
-
 const RequireAdmin = ({ children }) => {
-  
-  const userRole = localStorage.getItem('user_role') || 'user'; 
-  
+  const userRole = localStorage.getItem('user_role') || 'user';
   if (userRole !== 'admin') {
-    
     return <Navigate to="/dashboard" replace />;
   }
   return children;
 };
-
 
 const router = createBrowserRouter([
   {
@@ -59,45 +49,27 @@ const router = createBrowserRouter([
     children: [
       {
         path: "dashboard",
-        element: (
-          <Suspense fallback={<LazyFallback />}>
-            <Dashboard />
-          </Suspense>
-        )
+        element: <Suspense fallback={<LazyFallback />}><Dashboard /></Suspense>
       },
       {
         path: "analytics",
-        element: (
-          <Suspense fallback={<LazyFallback />}>
-            <Analytics />
-          </Suspense>
-        )
+        element: <Suspense fallback={<LazyFallback />}><Analytics /></Suspense>
       },
       {
         path: "upload",
-        element: (
-          <Suspense fallback={<LazyFallback />}>
-            <Upload />
-          </Suspense>
-        )
+        element: <Suspense fallback={<LazyFallback />}><Upload /></Suspense>
       },
       {
         path: "chat",
-        element: (
-          <Suspense fallback={<LazyFallback />}>
-            <Chat />
-          </Suspense>
-        )
+        element: <Suspense fallback={<LazyFallback />}><Chat /></Suspense>
       },
       {
         path: "admin",
-        element: (
-          <RequireAdmin>
-            <Suspense fallback={<LazyFallback />}>
-              <Admin />
-            </Suspense>
-          </RequireAdmin>
-        )
+        element: <RequireAdmin><Suspense fallback={<LazyFallback />}><Admin /></Suspense></RequireAdmin>
+      },
+      {
+        path: "billing", 
+        element: <Suspense fallback={<LazyFallback />}><Billing /></Suspense>
       },
       {
         path: "",
