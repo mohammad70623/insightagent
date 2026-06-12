@@ -1,0 +1,37 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+@theme {
+  --color-main: #0B0F19;           /* ডিপ ওbcsidian ব্ল্যাক */
+  --color-surface: #111827;        /* সাইдবার ও কার্ড ব্যাকগ্রাউন্ড */
+  --color-surface-elevated: #1F2937; 
+  --color-brand-primary: #818CF8;   /* সিগনেচার বেগুনি/ব্লু বাটন কালার */
+  --color-brand-muted: #9CA3AF;     
+  
+  --font-sans: "Inter", "Roboto", "sans-serif";
+}
+
+@layer base {
+  body {
+    background-color: var(--color-main);
+    color: #F9FAFB;
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+  
+  /* এন্টারপ্রাইজ স্ট্যান্ডার্ড মিনিমাল ডার্ক স্ক্রোলবার */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-main);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #2563EB33;
+    border-radius: 10px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #818CF855;
+  }
+}
