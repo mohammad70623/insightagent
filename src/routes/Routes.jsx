@@ -1,19 +1,46 @@
-import React from 'react';
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import React, { lazy, Suspense } from 'react';
+import { createBrowserRouter, Navigate, redirect } from 'react-router-dom';
 import Login from '../pages/Login';
-import Dashboard from '../pages/Dashboard';
-import Upload from '../pages/Upload';
-import Chat from '../pages/Chat';
-import Analytics from '../pages/Analytics'; 
 import DashboardLayout from '../components/DashboardLayout';
 
-const ProtectedLoader = () => {
+
+const Dashboard = lazy(() => import('../pages/Dashboard'));
+const Analytics = lazy(() => import('../pages/Analytics'));
+const Upload = lazy(() => import('../pages/Upload'));
+const Chat = lazy(() => import('../pages/Chat'));
+const Admin = lazy(() => import('../pages/Admin'));
+
+
+const LazyFallback = () => (
+  <div className="flex h-[80vh] w-full items-center justify-center bg-transparent">
+    <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-primary border-t-transparent" />
+  </div>
+);
+
+
+
+
+const RequireAuth = ({ children }) => {
   const isAuthenticated = localStorage.getItem('token') !== null;
+  
   if (!isAuthenticated) {
-    throw new Response("Unauthorized", { status: 401 });
+    return <Navigate to="/login" replace />;
   }
-  return null;
+  return children;
 };
+
+
+const RequireAdmin = ({ children }) => {
+  
+  const userRole = localStorage.getItem('user_role') || 'user'; 
+  
+  if (userRole !== 'admin') {
+    
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
 
 const router = createBrowserRouter([
   {
@@ -22,25 +49,55 @@ const router = createBrowserRouter([
   },
   {
     path: "/",
-    element: <DashboardLayout />,
-    loader: ProtectedLoader,
-    errorElement: <Navigate to="/login" replace />,
+    element: (
+      <RequireAuth>
+        <Suspense fallback={<LazyFallback />}>
+          <DashboardLayout />
+        </Suspense>
+      </RequireAuth>
+    ),
     children: [
       {
         path: "dashboard",
-        element: <Dashboard />
+        element: (
+          <Suspense fallback={<LazyFallback />}>
+            <Dashboard />
+          </Suspense>
+        )
       },
       {
-        path: "analytics", 
-        element: <Analytics />
+        path: "analytics",
+        element: (
+          <Suspense fallback={<LazyFallback />}>
+            <Analytics />
+          </Suspense>
+        )
       },
       {
         path: "upload",
-        element: <Upload />
+        element: (
+          <Suspense fallback={<LazyFallback />}>
+            <Upload />
+          </Suspense>
+        )
       },
       {
         path: "chat",
-        element: <Chat />
+        element: (
+          <Suspense fallback={<LazyFallback />}>
+            <Chat />
+          </Suspense>
+        )
+      },
+      {
+        path: "admin",
+        element: (
+          <RequireAdmin>
+            <Suspense fallback={<LazyFallback />}>
+              <Admin />
+            </Suspense>
+          </RequireAdmin>
+        )
       },
       {
         path: "",
@@ -50,7 +107,7 @@ const router = createBrowserRouter([
   },
   {
     path: "/*",
-    element: <div className="flex h-screen items-center justify-center text-xl font-bold bg-main">Error 404: Page Not Found</div>
+    element: <div className="flex h-screen items-center justify-center text-sm font-bold bg-main text-brand-muted font-mono">Error 404: Route Architecture Broken</div>
   }
 ]);
 
