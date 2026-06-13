@@ -1,8 +1,10 @@
 import React, { lazy, Suspense } from 'react';
-import { createBrowserRouter, Navigate, redirect } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
 import DashboardLayout from '../components/DashboardLayout';
 
+
+const Landing = lazy(() => import('../pages/Landing')); 
 const Dashboard = lazy(() => import('../pages/Dashboard'));
 const Analytics = lazy(() => import('../pages/Analytics'));
 const Upload = lazy(() => import('../pages/Upload'));
@@ -27,18 +29,25 @@ const RequireAuth = ({ children }) => {
 const RequireAdmin = ({ children }) => {
   const userRole = localStorage.getItem('user_role') || 'user';
   if (userRole !== 'admin') {
-    return <Navigate to="/dashboard" replace />;
+    
+    return <Navigate to="/app/dashboard" replace />;
   }
   return children;
 };
 
 const router = createBrowserRouter([
   {
+    
+    path: "/",
+    element: <Suspense fallback={<LazyFallback />}><Landing /></Suspense>
+  },
+  {
     path: "/login",
     element: <Login />
   },
   {
-    path: "/",
+    
+    path: "/app", 
     element: (
       <RequireAuth>
         <Suspense fallback={<LazyFallback />}>
@@ -48,7 +57,7 @@ const router = createBrowserRouter([
     ),
     children: [
       {
-        path: "dashboard",
+        path: "dashboard", 
         element: <Suspense fallback={<LazyFallback />}><Dashboard /></Suspense>
       },
       {
@@ -73,7 +82,8 @@ const router = createBrowserRouter([
       },
       {
         path: "",
-        element: <Navigate to="/dashboard" replace />
+        
+        element: <Navigate to="dashboard" replace /> 
       }
     ]
   },
