@@ -11,6 +11,7 @@ const Upload = lazy(() => import('../pages/Upload'));
 const Chat = lazy(() => import('../pages/Chat'));
 const Admin = lazy(() => import('../pages/Admin'));
 const Billing = lazy(() => import('../pages/Billing')); 
+const Register = lazy(() => import('../pages/Register'));
 
 const LazyFallback = () => (
   <div className="flex h-[80vh] w-full items-center justify-center bg-transparent">
@@ -44,6 +45,10 @@ const router = createBrowserRouter([
   {
     path: "/login",
     element: <Login />
+  },
+  {
+    path: "/register", 
+    element: <Suspense fallback={<LazyFallback />}><Register /></Suspense>
   },
   {
     

@@ -183,10 +183,16 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs text-brand-muted font-medium">
-            Don't have an account?{' '}
-            <a href="#request-access" className="font-bold text-brand-primary hover:underline">Request Access</a>
-          </p>
+         <div className="text-center text-xs font-medium border-t border-gray-850/40 pt-4">
+  <span className="text-brand-muted">Don't have an account? </span>
+  <button
+    type="button"
+    onClick={() => navigate('/register')} 
+    className="text-brand-primary hover:underline font-bold bg-transparent border-none outline-none cursor-pointer"
+  >
+    Request Access
+  </button>
+</div>
 
           <div className="mt-16 flex justify-center gap-6 text-[10px] text-gray-600 border-t border-gray-900 pt-4 font-semibold">
             <a href="#support" className="hover:text-gray-400 transition-colors">Support</a>

@@ -71,7 +71,7 @@ const Landing = () => {
           <div className="flex flex-wrap gap-4 pt-2">
             <button 
               type="button"
-              onClick={() => navigate('/login')}
+             onClick={() => navigate('/register')}
               className="btn bg-brand-primary text-black font-bold text-xs rounded-lg px-5 py-3 hover:bg-indigo-400 cursor-pointer flex items-center gap-2"
             >
               Get Started <ArrowRight size={14} />
@@ -180,7 +180,7 @@ const Landing = () => {
 
               <button 
                 type="button"
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/register')}
                 className={`btn btn-sm w-full font-bold text-xs rounded-lg mt-8 h-9 border-none cursor-pointer transition-all ${
                   plan.isPopular 
                     ? 'bg-brand-primary text-black hover:bg-indigo-400 shadow-lg' 
