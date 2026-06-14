@@ -23,5 +23,11 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore"
     )
+    # API String Router Context
+    API_V1_STR: str = "/api/v1"
+    
+    @property
+    def AUTH_LOGIN_URL(self) -> str:
+        return f"{self.API_V1_STR}/auth/login"
 
 settings = Settings()
