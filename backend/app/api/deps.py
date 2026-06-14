@@ -4,15 +4,16 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.session import SessionLocal
 from app.core.config import settings
 from app.core.security import decode_and_verify_token, TokenExpiredError, TokenInvalidError
 from app.repositories.user_repository import UserRepository
 from app.models.user import User
 
-# 🔧 4: Initialize enterprise production logging framework for telemetry auditing
+# Initialize enterprise production logging framework for telemetry auditing
 logger = logging.getLogger(__name__)
 
-# 🔧 2: Decoupled OAuth2 configuration pattern driven by central infrastructure settings
+# Decoupled OAuth2 configuration pattern driven by central infrastructure settings
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=settings.AUTH_LOGIN_URL)
 
 # Shared Standard Authentication Header Configuration
@@ -38,7 +39,7 @@ async def get_current_user(
     Maintains strict telemetry logging and shields database from unnecessary traversal vectors.
     """
     try:
-        # 1. 🔧 1: Explicit Type Hint Enforcement for complete compiler/IDE safety
+        #  Explicit Type Hint Enforcement for complete compiler/IDE safety
         payload: Dict[str, Any] = decode_and_verify_token(token, expected_type="access")
         user_id: str = payload.get("sub")
         jti: str = payload.get("jti")
@@ -51,7 +52,7 @@ async def get_current_user(
                 headers=UNAUTHORIZED_HEADERS,
             )
 
-        # 2. 5: FUTURE BLACKLIST / TOKEN REVOCATION ENGINE GATEWAY
+        # FUTURE BLACKLIST / TOKEN REVOCATION ENGINE GATEWAY
         # if await is_jti_blacklisted(jti):
         #     logger.warning(f"Security Alert: Revoked/Blacklisted token execution intercepted. JTI context: {jti}")
         #     raise HTTPException(
@@ -60,7 +61,7 @@ async def get_current_user(
         #         headers=UNAUTHORIZED_HEADERS,
         #     )
 
-        # 3. Repository Instance Pattern Data Allocation
+        # Repository Instance Pattern Data Allocation
         user = await UserRepository.get_by_id(db, user_id=user_id)
         if not user:
             logger.warning(f"Authentication Failure: Valid signed token passed for non-existent system user ID: {user_id}")
@@ -86,7 +87,7 @@ async def get_current_user(
             headers=UNAUTHORIZED_HEADERS,
         )
     except TokenInvalidError:
-        # 🔧 4: Critical telemetry logging hook for automated fail-safe event metrics
+        # Critical telemetry logging hook for automated fail-safe event metrics
         logger.warning("Security Exception: Unauthorized runtime access attempt intercepted - Invalid token footprint passed.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -95,14 +96,13 @@ async def get_current_user(
         )
 
 
-# 🛡️ ROLE-BASED ACCESS CONTROL (RBAC) ENGINE
+#  ROLE-BASED ACCESS CONTROL (RBAC) ENGINE
 class RoleChecker:
     """
     Dynamic Permissive Clearance Interceptor Gating Endpoint Permissions.
     Optimized via high-speed O(1) set complexity operations.
     """
     def __init__(self, allowed_roles: list[str]) -> None:
-        # 🔧 3: Convert to high-speed set map for ultra-fast O(1) algorithmic lookup efficiency
         self.allowed_roles: Set[str] = set(allowed_roles)
 
     def __call__(self, current_user: User = Depends(get_current_user)) -> User:

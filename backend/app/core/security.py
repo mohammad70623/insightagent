@@ -1,19 +1,16 @@
 import uuid
+import bcrypt
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Union
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
-from passlib.context import CryptContext
 from app.core.config import settings
 
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
+# Strict Enterprise Security Claims Configuration
 JWT_ALGORITHM = "HS256"
 JWT_ISSUER = "insightagent.ai"
 JWT_AUDIENCE = "insightagent.client"
-CLOCK_SKEW_LEEWAY = 30  
+CLOCK_SKEW_LEEWAY = 30  # Allow 30 seconds network clock drift tolerance
 
 if not settings.SECRET_KEY or len(settings.SECRET_KEY) < 32:
     raise ValueError("CRITICAL SECURITY VIOLATION: SECRET_KEY is empty or cryptographically weak!")
@@ -37,21 +34,32 @@ class TokenBlacklistedError(AuthenticationError):
     pass
 
 
-
-# PART 1: PASSWORD CRYPTOGRAPHY LAYER
-
+# 🔐 PART 1: NATIVE BCRYPT PASWORD CRYPTOGRAPHY
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain-text password input against its stored database hash."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """
+    Verify a plain-text password input against its stored database hash.
+    Natively handles string-to-byte encoding without 72-byte truncation bugs.
+    """
+    try:
+        password_bytes = plain_password.encode("utf-8")
+        hashed_bytes = hashed_password.encode("utf-8")
+        return bcrypt.checkpw(password_bytes, hashed_bytes)
+    except Exception:
+        return False
 
 def get_password_hash(password: str) -> str:
-    """Generate a secure cryptographic one-way salted bcrypt hash of a password."""
-    return pwd_context.hash(password)
-
+    """
+    Generate a secure cryptographic one-way salted bcrypt hash of a password.
+    Enforces modern industry standard rounds natively.
+    """
+    password_bytes = password.encode("utf-8")
+    # Generate native salt and hash parameters
+    salt = bcrypt.gensalt(rounds=12)
+    hashed_bytes = bcrypt.hashpw(password_bytes, salt)
+    return hashed_bytes.decode("utf-8")
 
 
 # PART 2: DUAL-TOKEN LIFECYCLE FACTORY
-
 def create_access_token(
     subject: Union[str, Any], 
     role: str = "user", 
@@ -66,7 +74,7 @@ def create_access_token(
         "aud": JWT_AUDIENCE,
         "iat": int(now_utc.timestamp()),
         "exp": int(expire.timestamp()),
-        "jti": str(uuid.uuid4()),                     
+        "jti": str(uuid.uuid4()),
         "sub": str(subject),
         "role": str(role),
         "type": "access"
@@ -79,10 +87,7 @@ def create_refresh_token(
     subject: Union[str, Any], 
     expires_delta: Optional[timedelta] = None
 ) -> str:
-    """
-    ⚠️ 5: Minimal Payload Refresh Token Factory.
-    Drops duplicate roles. Relies entirely on database re-fetch and jti rotation tracking.
-    """
+    """Generate a long-lived Minimal Payload Refresh Token Factory."""
     now_utc = datetime.now(timezone.utc)
     expire = now_utc + (expires_delta if expires_delta else timedelta(days=7))
     
@@ -91,7 +96,7 @@ def create_refresh_token(
         "aud": JWT_AUDIENCE,
         "iat": int(now_utc.timestamp()),
         "exp": int(expire.timestamp()),
-        "jti": str(uuid.uuid4()),                     
+        "jti": str(uuid.uuid4()),
         "sub": str(subject),
         "type": "refresh"
     }
@@ -99,18 +104,13 @@ def create_refresh_token(
     return jwt.encode(payload, settings.SECRET_KEY, algorithm=JWT_ALGORITHM)
 
 
-
 # PART 3: PURE CRYPTOGRAPHIC TOKEN DECODER
-
 def decode_and_verify_token(token: str, expected_type: str = "access") -> Dict[str, Any]:
-    """
-    Abstract claims decoder with defensive custom exception routing.
-    Enforces clock skew leeway protection gates.
-    """
+    """Abstract claims decoder with defensive custom exception routing."""
     try:
         payload = jwt.decode(
             token, 
-            settings.settings.SECRET_KEY if hasattr(settings, 'settings') else settings.SECRET_KEY, 
+            settings.SECRET_KEY, 
             algorithms=[JWT_ALGORITHM],
             audience=JWT_AUDIENCE,
             issuer=JWT_ISSUER,
