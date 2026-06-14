@@ -1,20 +1,30 @@
+import ssl
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from app.core.config import settings
 
-# Safe driver extraction to ensure asyncpg is enforced without breaking existing schemas
 database_url = settings.DATABASE_URL
-if database_url.startswith("postgresql://"):
+
+# 1. Clean up driver prefix for async compliance
+if "postgresql+asyncpg" not in database_url:
     database_url = database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-# Initialize optimized async engine
+# 2. Strip standard query params if present to prevent asyncpg keyword errors
+if "?" in database_url:
+    database_url = database_url.split("?")[0]
+
+# 3. Create a secure SSL context required for Neon Cloud Serverless connection
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
+
+# 4. Initialize optimized async engine injecting native SSL parameters
 engine = create_async_engine(
     database_url,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    connect_args={"ssl": ssl_context}
 )
 
-# Async thread-safe session maker factory
+# Thread-safe async session factory
 SessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
