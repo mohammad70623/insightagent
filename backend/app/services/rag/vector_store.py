@@ -23,7 +23,7 @@ class VectorStoreService:
         self._ensure_collection(collection_name)
         self.client.upsert(collection_name=collection_name, points=points)
 
-    def delete_document_vectors(self, collection_name: str, user_id: uuid.UUID, document_id: uuid.UUID) -> None:
+    def delete_document_vectors(self, collection_name: str, user_id: uuid.UUID, document_id: str) -> None:
         """Purges specific isolated file vectors from the multi-user tenant schema instantly."""
         try:
             self.client.delete(
@@ -43,12 +43,63 @@ class VectorStoreService:
         if not self.client.collection_exists(collection_name=collection_name):
             return []
             
-        search_results = self.client.search(
+        search_results = self.client.query_points(
             collection_name=collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             query_filter=Filter(must=[FieldCondition(key="user_id", match=MatchValue(value=str(user_id)))]),
             limit=top_k
-        )
-        return [p.payload for p in search_results if p.payload]
+        ).points
+        #  Safe fallback pattern: extracts payload using getattr and default dict fallback
+        return [getattr(p, 'payload', {}) or {} for p in search_results if p is not None]
+
+    def list_user_documents(self, collection_name: str, user_id: uuid.UUID) -> List[Dict[str, Any]]:
+        """
+        Scrolls through the Qdrant collection and returns de-duplicated document metadata
+        (document_id + filename) for a specific tenant user.
+        This is the source of truth since uploaded files are tracked only via vector payloads.
+        """
+        if not self.client.collection_exists(collection_name=collection_name):
+            return []
+
+        seen_document_ids = set()
+        documents = []
+
+        try:
+            # Scroll through all points belonging to this user
+            scroll_filter = Filter(
+                must=[FieldCondition(key="user_id", match=MatchValue(value=str(user_id)))]
+            )
+            
+            offset = None
+            while True:
+                results, next_offset = self.client.scroll(
+                    collection_name=collection_name,
+                    scroll_filter=scroll_filter,
+                    limit=100,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                
+                for point in results:
+                    payload = getattr(point, 'payload', {}) or {}
+                    doc_id = payload.get("document_id")
+                    filename = payload.get("filename", "Unknown File")
+                    
+                    if doc_id and doc_id not in seen_document_ids:
+                        seen_document_ids.add(doc_id)
+                        documents.append({
+                            "document_id": doc_id,
+                            "filename": filename,
+                        })
+                
+                if next_offset is None:
+                    break
+                offset = next_offset
+
+        except Exception as e:
+            logger.error(f'{{"event": "list_user_documents_failed", "user_id": "{str(user_id)}", "error": "{str(e)}"}}')
+
+        return documents
 
 vector_store = VectorStoreService()

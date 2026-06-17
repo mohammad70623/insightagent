@@ -36,7 +36,6 @@ class UserResponse(UserBase):
     is_active: bool
     is_verified: bool
 
-    # Pydantic v2 configuration to natively read SQLAlchemy ORM instances
     model_config = ConfigDict(from_attributes=True)
 
 

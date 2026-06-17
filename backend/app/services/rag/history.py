@@ -111,4 +111,18 @@ class ChatHistoryService:
             logger.error(f'{{"event": "session_soft_delete_crash", "session_id": "{str(session_id)}", "error_details": "{str(e)}"}}')
             raise
 
+    async def get_user_sessions(self, db: AsyncSession, user_id: uuid.UUID) -> List[ChatSession]:
+        """Retrieves all non-deleted chat sessions for a specific user, ordered by creation date desc."""
+        try:
+            query = select(ChatSession).where(
+                ChatSession.user_id == user_id,
+                ChatSession.deleted_at == None
+            ).order_by(ChatSession.created_at.desc())
+            
+            result = await db.execute(query)
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.error(f'{{"event": "get_user_sessions_failed", "user_id": "{str(user_id)}", "error": "{str(e)}"}}')
+            raise
+
 chat_history_service = ChatHistoryService()

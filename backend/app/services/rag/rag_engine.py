@@ -10,61 +10,167 @@ from app.services.rag.vector_store import vector_store
 
 logger = logging.getLogger(__name__)
 
-CACHE_REGISTRY: Dict[str, Dict[str, Any]] = {}
 
 class RAGEngine:
     def __init__(self):
         self.llm_client = Groq(api_key=settings.GROQ_API_KEY)
 
-    async def index_document_payload(self, collection_name: str, user_id: uuid.UUID, document_id: uuid.UUID, raw_text: str) -> bool:
+    def _chunk_text(self, raw_text: str, chunk_size: int = 400, overlap: int = 80) -> List[str]:
+        """
+        Sliding-window character chunker with overlap.
+        Splits on sentence boundaries where possible for better semantic coherence.
+        Avoids the broken period-split strategy that produces one-word micro-chunks.
+        """
+        # First clean up whitespace
+        text = " ".join(raw_text.split())
+        if not text:
+            return []
+
+        chunks = []
+        start = 0
+        text_len = len(text)
+
+        while start < text_len:
+            end = min(start + chunk_size, text_len)
+
+          
+            if end < text_len:
+                snap_end = text.rfind(". ", start, end)
+                if snap_end == -1:
+                    snap_end = text.rfind("? ", start, end)
+                if snap_end == -1:
+                    snap_end = text.rfind("! ", start, end)
+                if snap_end != -1 and snap_end > start + (chunk_size // 2):
+                    end = snap_end + 1  # Include the period
+
+            chunk = text[start:end].strip()
+            if chunk:
+                chunks.append(chunk)
+
+            start = end - overlap if end - overlap > start else end
+
+        return chunks
+
+    async def index_document_payload(
+        self,
+        collection_name: str,
+        user_id: uuid.UUID,
+        document_id: uuid.UUID,
+        raw_text: str,
+        filename: str = ""
+    ) -> bool:
+        """
+        Splits raw text into overlapping semantic chunks and upserts vector points
+        to the user's Qdrant tenant collection.
+        Stores filename in each payload point for later document listing.
+        """
         try:
-            chunks = [c.strip() for c in raw_text.split(".") if c.strip()]
-            if not chunks: return False
-            
+            chunks = self._chunk_text(raw_text, chunk_size=400, overlap=80)
+            if not chunks:
+                logger.error(f'{{"event": "chunking_produced_empty", "filename": "{filename}"}}')
+                return False
+
+            logger.info(
+                f'{{"event": "chunking_complete", "filename": "{filename}", '
+                f'"chunk_count": {len(chunks)}, "collection": "{collection_name}"}}'
+            )
+
+            # Batch embed all chunks in one call
             embeddings = await embedding_service.get_embeddings(chunks)
-            
+
             from qdrant_client.models import PointStruct
             points = [
                 PointStruct(
                     id=str(uuid.uuid4()),
                     vector=embeddings[i],
-                    payload={"text": chunks[i], "user_id": str(user_id), "document_id": str(document_id)}
-                ) for i in range(len(chunks))
+                    payload={
+                        "text": chunks[i],
+                        "user_id": str(user_id),
+                        "document_id": str(document_id),
+                        "filename": filename,
+                    }
+                )
+                for i in range(len(chunks))
             ]
-            
+
             await asyncio.to_thread(vector_store.upsert_vectors, collection_name, points)
+
+            logger.info(
+                f'{{"event": "vectors_upserted", "filename": "{filename}", '
+                f'"points": {len(points)}, "collection": "{collection_name}"}}'
+            )
             return True
+
         except Exception as e:
-            logger.error(f'{{"event": "ingection_failed", "error": "{str(e)}"}}')
+            logger.error(f'{{"event": "ingestion_failed", "filename": "{filename}", "error": "{str(e)}"}}')
             return False
 
     async def stream_agent_handshake(
-        self, collection_name: str, user_id: uuid.UUID, user_prompt: str, chat_history: List[Dict[str, str]]
+        self,
+        collection_name: str,
+        user_id: uuid.UUID,
+        user_prompt: str,
+        chat_history: List[Dict[str, str]]
     ) -> AsyncGenerator[str, None]:
-       
-        cache_key = f"{str(user_id)}:{user_prompt}"
-        if cache_key in CACHE_REGISTRY and (time.time() - CACHE_REGISTRY[cache_key]["ts"] < 300):
-            logger.info(f'{{"event": "cache_hit", "user_id": "{str(user_id)}"}}')
-            yield CACHE_REGISTRY[cache_key]["response"]
-            return
-
+        """
+        1. Embeds the user query.
+        2. Retrieves top-k semantically similar chunks from the user's Qdrant namespace.
+        3. Builds a RAG-augmented system prompt.
+        4. Streams the LLM response token-by-token via Groq.
+        """
         start_time = time.perf_counter()
         success = False
-        full_response_accumulator = []
 
         try:
+            # Step 1: Embed the query
             query_vector = await embedding_service.get_embeddings([user_prompt])
-            
-            payloads = await asyncio.to_thread(
-                vector_store.search_tenant_vectors, collection_name, user_id, query_vector[0]
-            )
-            
-            context_str = "\n\n".join([p["text"] for p in payloads])
-            
-            system_instruction = "Answer user based on given context strictly.\n\nContext:\n" + context_str
-            messages = [{"role": "system", "content": system_instruction}, *chat_history, {"role": "user", "content": user_prompt}]
 
-        
+            # Step 2: Retrieve context from Qdrant
+            payloads = await asyncio.to_thread(
+                vector_store.search_tenant_vectors,
+                collection_name,
+                user_id,
+                query_vector[0],
+                5  # top_k
+            )
+
+            # Step 3: Build context string from retrieved payloads
+            context_chunks = [
+                p.get("text", "").strip()
+                for p in payloads
+                if isinstance(p, dict) and p.get("text", "").strip()
+            ]
+            context_str = "\n\n".join(context_chunks)
+
+            logger.info(
+                f'{{"event": "rag_retrieval", "collection": "{collection_name}", '
+                f'"retrieved_chunks": {len(context_chunks)}, '
+                f'"context_chars": {len(context_str)}}}'
+            )
+
+            # Step 4: Build system prompt
+            if context_str:
+                system_instruction = (
+                    "You are InsightAgent, an enterprise AI assistant.\n"
+                    "Answer the user's question using ONLY the context below. "
+                    "Be concise and accurate. If the answer is not in the context, say so clearly.\n\n"
+                    f"--- CONTEXT ---\n{context_str}\n--- END CONTEXT ---"
+                )
+            else:
+                # No documents uploaded or no match — be transparent, don't hallucinate
+                system_instruction = (
+                    "You are InsightAgent, an enterprise AI assistant.\n"
+                    "No relevant documents were found in the knowledge base for this query. "
+                    "Answer from your general knowledge if appropriate, or inform the user to upload relevant documents first."
+                )
+
+            messages = [
+                {"role": "system", "content": system_instruction},
+                *chat_history,
+                {"role": "user", "content": user_prompt}
+            ]
+
+            # Step 5: Stream from Groq
             completion = await asyncio.wait_for(
                 asyncio.to_thread(
                     self.llm_client.chat.completions.create,
@@ -72,27 +178,31 @@ class RAGEngine:
                     messages=messages,
                     stream=True
                 ),
-                timeout=15.0 
+                timeout=30.0  
             )
 
             for chunk in completion:
                 if chunk.choices and chunk.choices[0].delta.content:
                     token = chunk.choices[0].delta.content
-                    full_response_accumulator.append(token)
                     yield token
                     await asyncio.sleep(0.001)
-            
+
             success = True
-            CACHE_REGISTRY[cache_key] = {"response": "".join(full_response_accumulator), "ts": time.time()}
 
         except asyncio.TimeoutError:
             logger.critical(f'{{"event": "groq_timeout", "user_id": "{str(user_id)}"}}')
-            yield "\n[TIMEOUT ERROR]: The AI processing cluster timed out. Please try again."
+            yield "\n[TIMEOUT]: The AI response timed out. Please try again."
+
         except Exception as e:
             logger.error(f'{{"event": "stream_failed", "error": "{str(e)}"}}')
-            yield f"\n[CRITICAL FAULT]: Subsystem down: {str(e)}"
+            yield f"\n[ERROR]: {str(e)}"
+
         finally:
             latency = time.perf_counter() - start_time
-            logger.info(f'{{"event": "stream_complete", "user_id": "{str(user_id)}", "latency_sec": {latency:.4f}, "success": {success}}}')
+            logger.info(
+                f'{{"event": "stream_complete", "user_id": "{str(user_id)}", '
+                f'"latency_sec": {latency:.4f}, "success": {success}}}'
+            )
+
 
 rag_engine = RAGEngine()

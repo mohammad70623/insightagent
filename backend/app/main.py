@@ -14,7 +14,6 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS GATEWAY MIDDLEWARE CONFIGURATION
 # Secures backend from unauthorized cross-origin resource execution requests
 if settings.BACKEND_CORS_ORIGINS:
     app.add_middleware(
@@ -25,7 +24,6 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
-#GLOBAL API ROUTER COUPLING
 # Inject the assembled V1 Router cluster into the main app core runtime
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

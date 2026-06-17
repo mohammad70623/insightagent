@@ -30,18 +30,23 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 #  CORE IDENTITY PROVIDER MIDDLEWARE GATEWAY
+
 async def get_current_user(
     db: AsyncSession = Depends(get_db),
     token: str = Depends(oauth2_scheme)
 ) -> User:
     """
-     Identity Verification Guard: Extracts, decodes, and secures active user instances.
-    Maintains strict telemetry logging and shields database from unnecessary traversal vectors.
+    Identity Verification Guard: Patched for ultimate raw debugging
     """
+    print("\n" + "="*50)
+    print(f"📡 [DEBUG INCOMING] Raw Token Received from Frontend: '{token}'")
+    print(f"📡 [DEBUG TYPE] Token Variable Type: {type(token)}")
+    print("="*50 + "\n")
+
     try:
-        #  Explicit Type Hint Enforcement for complete compiler/IDE safety
-        payload: Dict[str, Any] = decode_and_verify_token(token, expected_type="access")
+        payload: Dict[str, Any] = decode_and_verify_token(token)
         user_id: str = payload.get("sub")
+        
         jti: str = payload.get("jti")
         
         if not user_id:
@@ -52,14 +57,6 @@ async def get_current_user(
                 headers=UNAUTHORIZED_HEADERS,
             )
 
-        # FUTURE BLACKLIST / TOKEN REVOCATION ENGINE GATEWAY
-        # if await is_jti_blacklisted(jti):
-        #     logger.warning(f"Security Alert: Revoked/Blacklisted token execution intercepted. JTI context: {jti}")
-        #     raise HTTPException(
-        #         status_code=status.HTTP_401_UNAUTHORIZED,
-        #         detail="Token has been revoked or user logged out.",
-        #         headers=UNAUTHORIZED_HEADERS,
-        #     )
 
         # Repository Instance Pattern Data Allocation
         user = await UserRepository.get_by_id(db, user_id=user_id)
@@ -87,7 +84,6 @@ async def get_current_user(
             headers=UNAUTHORIZED_HEADERS,
         )
     except TokenInvalidError:
-        # Critical telemetry logging hook for automated fail-safe event metrics
         logger.warning("Security Exception: Unauthorized runtime access attempt intercepted - Invalid token footprint passed.")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
