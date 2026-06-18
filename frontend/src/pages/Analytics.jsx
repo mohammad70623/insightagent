@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, memo } from 'react';
 import axios from 'axios';
-import { TrendingUp, AlertTriangle, Clock, ArrowUpRight, ArrowDownRight, MessageSquare, Mail, MessageCircle, ShieldAlert, X } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Clock, ArrowUpRight, ArrowDownRight, MessageSquare, Mail, MessageCircle, ShieldAlert, X, BarChart3 } from 'lucide-react';
 
 const FeedbackRow = memo(({ item }) => {
   const Icon = item.icon;
@@ -26,6 +26,7 @@ const FeedbackRow = memo(({ item }) => {
 
 const Analytics = () => {
   const [liveMetrics, setLiveMetrics] = useState(null);
+  const [forecastData, setForecastData] = useState([]);
   const [loading, setLoading] = useState(true);
   
   const [swotData, setSwotData] = useState(null);
@@ -37,20 +38,25 @@ const Analytics = () => {
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
-    const fetchDynamicMetrics = async () => {
+    const fetchAnalyticsAndForecast = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/metrics', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        setLiveMetrics(response.data);
+        const headers = { 'Authorization': `Bearer ${token}` };
+        
+        const [metricsRes, forecastRes] = await Promise.all([
+          axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/metrics', { headers }),
+          axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/forecast', { headers })
+        ]);
+        
+        setLiveMetrics(metricsRes.data);
+        setForecastData(forecastRes.data.forecast_data);
       } catch (error) {
-        console.error("Failed to fetch live SaaS metrics:", error);
+        console.error("Failed to fetch live SaaS analytics data:", error);
       } finally {
         setLoading(false);
       }
     };
-    fetchDynamicMetrics();
+    fetchAnalyticsAndForecast();
   }, []);
 
   const fetchSwotAnalysis = async () => {
@@ -344,7 +350,41 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* 🛸 FLOATING DRAGGABLE SWOT ASSISTANT BUTTON */}
+      {/* ─── NEW DYNAMIC PREDICTIVE FORECASTING WIDGET ─── */}
+      <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono flex items-center gap-2">
+            <BarChart3 size={14} className="text-brand-primary" /> Predictive Insights & Revenue Forecasting
+          </h4>
+          <span className="text-[9px] font-mono text-gray-500 font-bold">Target Horizon: 2 Quarters</span>
+        </div>
+        
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {forecastData.map((data, index) => (
+            <div key={index} className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-4 flex flex-col justify-between">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold font-mono text-gray-400">{data.period}</span>
+                <span className="text-[10px] font-mono font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded">
+                  +{data.growth_rate}% Projected Growth
+                </span>
+              </div>
+              <div className="mt-4 flex items-baseline justify-between">
+                <div>
+                  <p className="text-[10px] font-mono tracking-wide text-gray-500 uppercase font-semibold">Predicted Value</p>
+                  <p className="text-xl font-bold tracking-tight text-white mt-0.5">${data.predicted_revenue.toLocaleString()}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[9px] font-mono text-gray-600 font-semibold">Confidence Interval</p>
+                  <p className="text-[11px] font-mono text-brand-muted mt-0.5">
+                    ${data.confidence_bound_low.toLocaleString()} - ${data.confidence_bound_high.toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <button 
         onMouseDown={handleMouseDown}
         onClick={() => !isDragging && fetchSwotAnalysis()}
@@ -354,7 +394,6 @@ const Analytics = () => {
         SWOT
       </button>
 
-      {/* 🛸 GLASSMORPHISM SWOT MODAL/POPUP */}
       {isSwotOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-surface/80 border border-gray-800/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative backdrop-blur-xl max-h-[85vh] overflow-y-auto">
