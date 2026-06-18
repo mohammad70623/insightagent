@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, memo } from 'react';
 import axios from 'axios';
-import { TrendingUp, AlertTriangle, Clock, ArrowUpRight, ArrowDownRight, MessageSquare, Mail, MessageCircle } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Clock, ArrowUpRight, ArrowDownRight, MessageSquare, Mail, MessageCircle, ShieldAlert, X } from 'lucide-react';
 
 const FeedbackRow = memo(({ item }) => {
   const Icon = item.icon;
@@ -25,18 +25,23 @@ const FeedbackRow = memo(({ item }) => {
 });
 
 const Analytics = () => {
-  // 📊 এপিআই থেকে লাইভ মেট্রিকেক্স ডাটা হোল্ড করার স্টেট
   const [liveMetrics, setLiveMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  const [swotData, setSwotData] = useState(null);
+  const [isSwotOpen, setIsSwotOpen] = useState(false);
+  const [swotLoading, setSwotLoading] = useState(false);
+  
+  const [buttonPos, setButtonPos] = useState({ x: window.innerWidth - 100, y: window.innerHeight - 100 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     const fetchDynamicMetrics = async () => {
       try {
         const token = localStorage.getItem('token');
         const response = await axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/metrics', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
+          headers: { 'Authorization': `Bearer ${token}` }
         });
         setLiveMetrics(response.data);
       } catch (error) {
@@ -45,11 +50,61 @@ const Analytics = () => {
         setLoading(false);
       }
     };
-
     fetchDynamicMetrics();
   }, []);
 
-  // 📈 ব্যাকএন্ড থেকে আসা লাইভ ডাটা দিয়ে ৪টি টপ কার্ড ডাইনামিক করা
+  const fetchSwotAnalysis = async () => {
+    if (swotData) {
+      setIsSwotOpen(true);
+      return;
+    }
+    setSwotLoading(true);
+    setIsSwotOpen(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/swot', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setSwotData(response.data.swot_markdown);
+    } catch (error) {
+      console.error("Failed to fetch SWOT intelligence matrix:", error);
+      setSwotData("Failed to load SWOT analysis report. Please verify authorization.");
+    } finally {
+      setSwotLoading(false);
+    }
+  };
+
+  const handleMouseDown = (e) => {
+    setIsDragging(true);
+    setDragOffset({
+      x: e.clientX - buttonPos.x,
+      y: e.clientY - buttonPos.y
+    });
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDragging) return;
+      const newX = Math.max(20, Math.min(window.innerWidth - 80, e.clientX - dragOffset.x));
+      const newY = Math.max(20, Math.min(window.innerHeight - 80, e.clientY - dragOffset.y));
+      setButtonPos({ x: newX, y: newY });
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, dragOffset]);
+
   const metrics = useMemo(() => {
     if (!liveMetrics) return [];
     return [
@@ -60,7 +115,6 @@ const Analytics = () => {
     ];
   }, [liveMetrics]);
 
-  // ⏱️ চার্টের ডাটা ব্যাকএন্ড থেকে ডাইনামিক করা (উইথ ফ্যালব্যাক লেবেল)
   const chartData = useMemo(() => {
     if (!liveMetrics || !liveMetrics.chart_data || liveMetrics.chart_data.length === 0) {
       return [
@@ -73,17 +127,14 @@ const Analytics = () => {
         { label: 'OCT 30', ux: 70,  latency: 120 },
       ];
     }
-    
-    // ব্যাকএন্ডের chart_data অ্যারে থেকে ডাইনামিক পয়েন্ট তৈরি করা
     const baseLabels = ['OCT 18', 'OCT 20', 'OCT 22', 'OCT 24', 'OCT 26', 'OCT 28', 'OCT 30'];
     return liveMetrics.chart_data.map((val, idx) => ({
       label: baseLabels[idx] || `POINT ${idx + 1}`,
-      ux: val, // লাইভ ডেটা ম্যাপড
-      latency: Math.max(50, val - 30) // কো-রিলেটেড ডাইনামিক ভ্যালু
+      ux: val,
+      latency: Math.max(50, val - 30)
     }));
   }, [liveMetrics]);
 
-  // ⭕ লাইভ সেন্টিমেন্ট স্কোর অনুযায়ী বৃত্তের রেডিয়াস সিঙ্ক করা
   const sentiment = useMemo(() => {
     const score = liveMetrics ? liveMetrics.sentiment_score : 78.4;
     const radius = 40;
@@ -91,7 +142,7 @@ const Analytics = () => {
     return {
       circumference,
       positiveOffset: circumference - (score / 100) * circumference,
-      neutralOffset: circumference - ((score + 15) / 100) * circumference, // সিঙ্কড মক রেশিও
+      neutralOffset: circumference - ((score + 15) / 100) * circumference,
       negativeOffset: circumference - (100 / 100) * circumference,
     };
   }, [liveMetrics]);
@@ -116,18 +167,15 @@ const Analytics = () => {
       const svgHeight = 200;
       const padding = 20;
       const usableHeight = svgHeight - padding * 2;
-
       const values = chartData.map(d => d[key]);
       const maxVal = Math.max(...values);
       const minVal = Math.min(...values);
       const valueRange = maxVal - minVal || 1;
-
       const points = chartData.map((d, i) => {
         const x = (i * svgWidth) / (chartData.length - 1);
         const y = svgHeight - (padding + ((d[key] - minVal) / valueRange) * usableHeight);
         return { x, y };
       });
-
       return points.reduce((path, p, i, a) => {
         if (i === 0) return `M ${p.x} ${p.y}`;
         const cpX1 = a[i - 1].x + (p.x - a[i - 1].x) / 3;
@@ -142,15 +190,14 @@ const Analytics = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96 text-xs font-mono tracking-widest text-brand-primary animate-pulse">
-        ⚡ SYNCING LIVE ENTERPRISE BUSINESS METRICS...
+        SYNCING LIVE ENTERPRISE BUSINESS METRICS...
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans">
+    <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans relative">
       
-      {/* HEADER PANEL */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white">Analytics Dashboard</h2>
@@ -168,7 +215,6 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* METRICS CARDS GRID */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((item, idx) => {
           const Icon = item.icon;
@@ -192,10 +238,7 @@ const Analytics = () => {
         })}
       </div>
 
-      {/* CHARTS PANEL */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        
-        {/* LINE CHART */}
         <div className="lg:col-span-8 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
           <div className="flex items-center justify-between mb-6">
             <h3 id="trend-chart-title" className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono">
@@ -208,43 +251,29 @@ const Analytics = () => {
           </div>
 
           <figure className="h-64 w-full relative pt-4">
-            <svg 
-              role="img" 
-              aria-labelledby="trend-chart-title"
-              aria-describedby="chart-accessible-desc"
-              className="w-full h-full" 
-              viewBox="0 0 600 200" 
-              preserveAspectRatio="none"
-            >
+            <svg role="img" aria-labelledby="trend-chart-title" aria-describedby="chart-accessible-desc" className="w-full h-full" viewBox="0 0 600 200" preserveAspectRatio="none">
               <line x1="0" y1="50" x2="600" y2="50" stroke="#1F2937" strokeWidth="0.5" strokeDasharray="4 4" />
               <line x1="0" y1="100" x2="600" y2="100" stroke="#1F2937" strokeWidth="0.5" strokeDasharray="4 4" />
               <line x1="0" y1="150" x2="600" y2="150" stroke="#1F2937" strokeWidth="0.5" strokeDasharray="4 4" />
-              
               <path d={smoothBezierPath('ux')} fill="none" stroke="#818CF8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               <path d={smoothBezierPath('latency')} fill="none" stroke="#4B5563" strokeWidth="1.5" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <figcaption id="chart-accessible-desc" className="sr-only">
-              Line chart plotting enterprise performance indicators dynamically.
-            </figcaption>
-            
+            <figcaption id="chart-accessible-desc" className="sr-only">Line chart plotting indicators.</figcaption>
             <div className="flex justify-between text-[10px] text-gray-500 font-bold font-mono mt-3 px-1">
               {chartData.map((d, i) => <span key={i}>{d.label}</span>)}
             </div>
           </figure>
         </div>
 
-        {/* DONUT CHART */}
         <div className="lg:col-span-4 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
           <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono mb-4">
             📊 Sentiment Distribution
           </h3>
-
           <div className="relative flex items-center justify-center my-auto">
             <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 100 100">
               <circle cx="50" cy="50" r="40" stroke="#111827" strokeWidth="10" fill="transparent" />
               <circle cx="50" cy="50" r="40" stroke="#818CF8" strokeWidth="10" fill="transparent" strokeDasharray={sentiment.circumference} strokeDashoffset={sentiment.positiveOffset} />
             </svg>
-            
             <div className="absolute flex flex-col items-center justify-center">
               <span className="text-2xl font-black text-white tracking-tight">
                 {liveMetrics ? `${Math.round(liveMetrics.sentiment_score)}%` : '78%'}
@@ -252,7 +281,6 @@ const Analytics = () => {
               <span className="text-[9px] uppercase font-bold tracking-widest text-green-400 mt-0.5">Positive</span>
             </div>
           </div>
-
           <div className="space-y-2 pt-4 text-xs font-medium border-t border-gray-850/40">
             <div className="flex justify-between items-center"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-brand-primary" /> Positive</span><span className="text-white font-mono">{liveMetrics ? liveMetrics.sentiment_score : 65.2}%</span></div>
             <div className="flex justify-between items-center"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-gray-400" /> Neutral</span><span className="text-white font-mono">24.8%</span></div>
@@ -261,7 +289,6 @@ const Analytics = () => {
         </div>
       </div>
 
-      {/* FEEDBACKS & PRODUCTS LIST */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
         <div className="md:col-span-7 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
           <div className="flex items-center justify-between mb-4">
@@ -270,9 +297,8 @@ const Analytics = () => {
             </h4>
             <span className="text-[10px] text-brand-primary font-bold hover:underline cursor-pointer">View All</span>
           </div>
-
           <div className="overflow-x-auto text-[11px] w-full">
-            <table aria-label="Urgent security alerts data grid table" className="table table-xs w-full border-none">
+            <table aria-label="Alerts grid" className="table table-xs w-full border-none">
               <thead>
                 <tr className="border-b border-gray-800 text-brand-muted font-bold text-left">
                   <th className="bg-transparent pl-0 py-2">Source</th>
@@ -297,7 +323,6 @@ const Analytics = () => {
             </h4>
             <span className="text-[9px] text-gray-500 font-bold">Sorted by Conversion</span>
           </div>
-
           <div className="space-y-4 flex-1 flex flex-col justify-center">
             {products.map((prod, index) => (
               <div key={index} className="space-y-1.5">
@@ -318,6 +343,45 @@ const Analytics = () => {
           </div>
         </div>
       </div>
+
+      {/* 🛸 FLOATING DRAGGABLE SWOT ASSISTANT BUTTON */}
+      <button 
+        onMouseDown={handleMouseDown}
+        onClick={() => !isDragging && fetchSwotAnalysis()}
+        style={{ left: `${buttonPos.x}px`, top: `${buttonPos.y}px`, position: 'fixed', zIndex: 50 }}
+        className="w-14 h-14 bg-indigo-600 hover:bg-indigo-500 rounded-full shadow-2xl flex items-center justify-center text-white font-mono text-xs font-bold tracking-tighter border border-indigo-400/30 cursor-grab active:cursor-grabbing transition-colors select-none"
+      >
+        SWOT
+      </button>
+
+      {/* 🛸 GLASSMORPHISM SWOT MODAL/POPUP */}
+      {isSwotOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
+          <div className="bg-surface/80 border border-gray-800/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative backdrop-blur-xl max-h-[85vh] overflow-y-auto">
+            <button 
+              onClick={() => setIsSwotOpen(false)} 
+              className="absolute top-4 w-8 h-8 rounded-lg flex items-center justify-center right-4 text-gray-400 hover:text-white hover:bg-gray-800/50 transition-colors cursor-pointer"
+            >
+              <X size={16} />
+            </button>
+            
+            <div className="flex items-center gap-2 text-brand-primary border-b border-gray-800 pb-3 mb-4">
+              <ShieldAlert size={18} />
+              <h3 className="text-sm font-bold tracking-wider uppercase font-mono text-white">AI Strategic SWOT Intelligence</h3>
+            </div>
+
+            {swotLoading ? (
+              <div className="flex items-center justify-center h-48 text-xs font-mono tracking-widest text-brand-primary animate-pulse">
+                GENERATING SWOT INSIGHT MATRIX...
+              </div>
+            ) : (
+              <div className="text-xs text-gray-300 leading-relaxed font-sans space-y-4 whitespace-pre-wrap whitespace-pre-line text-left">
+                {swotData}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );
