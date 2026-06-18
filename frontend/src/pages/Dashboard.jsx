@@ -1,19 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UploadCloud, MessageSquare, Settings2, MoreVertical, Database, Cpu, HardDrive, X } from 'lucide-react';
+import axios from 'axios';
+import { UploadCloud, MessageSquare, Settings2, MoreVertical, Database, Cpu, HardDrive, X, ShieldAlert } from 'lucide-react';
 
-/**
- * @description Enterprise Dashboard Main Portal Workspace
- * Architecture: Clean Component Design using modern Arrow Function expression with reactive route linking.
- */
 const Dashboard = () => {
   const navigate = useNavigate(); 
   const [showTip, setShowTip] = useState(true);
+  const [anomalies, setAnomalies] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLiveAnomalies = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/anomalies', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        setAnomalies(response.data.alerts);
+      } catch (error) {
+        console.error("Failed to fetch live business anomalies:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLiveAnomalies();
+  }, []);
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans">
       
-      {/* ─── HEADER SECTION WITH DYNAMIC ROUTE TRIGGERS ─── */}
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white">
@@ -23,7 +38,6 @@ const Dashboard = () => {
             Get started by ingesting your first enterprise data modules. Automated AI analytics and intelligence reports are seconds away.
           </p>
         </div>
-        
         
         <div className="flex flex-wrap items-center gap-3">
           <button 
@@ -52,10 +66,8 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ─── ONBOARDING CHECKLIST TIMELINE ─── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         
-        {/* Onboarding Box */}
         <div className="lg:col-span-7 rounded-xl border border-gray-800/40 bg-surface p-8 shadow-xl flex flex-col justify-center">
           <h3 className="text-sm font-bold uppercase tracking-wider text-brand-muted mb-6 font-mono">
             Onboarding Checklist
@@ -100,7 +112,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Live Stream Widget Panel */}
         <div className="lg:col-span-5 relative flex min-h-[260px] items-center justify-center rounded-xl border border-gray-800/40 bg-surface p-6 overflow-hidden shadow-xl">
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff01_1px,transparent_1px),linear-gradient(to_bottom,#ffffff02_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
           
@@ -128,63 +139,60 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* ─── LOWER CORE PIPELINES (Syncs & Wave Graph Monitor) ─── */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         
-        {/* Recent Enterprise Syncs Table */}
         <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2 font-mono">
-              🔄 Recent Enterprise Syncs
+            <h4 className="text-xs font-bold uppercase tracking-widest text-red-400 flex items-center gap-2 font-mono">
+              <ShieldAlert size={14} className="text-red-400" /> Critical Risk Alerts
             </h4>
             <button type="button" aria-label="More actions" className="text-gray-600 hover:text-white transition-colors cursor-pointer bg-transparent border-none outline-none"><MoreVertical size={16}/></button>
           </div>
           
-          <div className="overflow-x-auto text-xs w-full">
-            <table aria-label="Recent database sync operations" className="table table-xs w-full border-none">
-              <thead>
-                <tr className="border-b border-gray-800 text-brand-muted font-bold text-left uppercase text-[10px] font-mono">
-                  <th scope="col" className="bg-transparent pl-0 py-2">Asset Name</th>
-                  <th scope="col" className="bg-transparent py-2">Last Sync</th>
-                  <th scope="col" className="bg-transparent text-right pr-0 py-2">Sync Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-gray-850/40">
-                  <td className="bg-transparent pl-0 font-medium py-3 text-white">📄 Logistics_June_Data.csv</td>
-                  <td className="bg-transparent text-brand-muted py-3">2 mins ago</td>
-                  <td className="bg-transparent text-right pr-0 py-3">
-                    <span className="inline-flex items-center gap-1.5 text-[9px] font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-md tracking-wide">
-                      ● SUCCESS
-                    </span>
-                  </td>
-                </tr>
-                <tr className="border-none">
-                  <td className="bg-transparent pl-0 font-medium py-3 text-white">📄 Sales_Report_Global.json</td>
-                  <td className="bg-transparent text-brand-muted py-3">1 hour ago</td>
-                  <td className="bg-transparent text-right pr-0 py-3">
-                    <span className="inline-flex items-center gap-1.5 text-[9px] font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-md tracking-wide">
-                      ● SUCCESS
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="overflow-x-auto text-xs w-full flex-1">
+            {loading ? (
+              <div className="text-gray-500 font-mono text-[11px] py-4 animate-pulse">Running security fraud scans...</div>
+            ) : anomalies.length === 0 ? (
+              <div className="text-gray-500 font-mono text-[11px] py-4">No critical operational anomalies identified.</div>
+            ) : (
+              <table aria-label="Live anomaly alerts data grid" className="table table-xs w-full border-none">
+                <thead>
+                  <tr className="border-b border-gray-800 text-brand-muted font-bold text-left uppercase text-[10px] font-mono">
+                    <th scope="col" className="bg-transparent pl-0 py-2">Metric Vector</th>
+                    <th scope="col" className="bg-transparent py-2">Risk Description</th>
+                    <th scope="col" className="bg-transparent text-right pr-0 py-2">Severity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {anomalies.map((alert) => (
+                    <tr key={alert.id} className="border-b border-gray-850/40 last:border-none">
+                      <td className="bg-transparent pl-0 font-medium py-3 text-white max-w-[120px] truncate">{alert.metric}</td>
+                      <td className="bg-transparent text-gray-300 py-3 max-w-[200px] truncate" title={alert.message}>{alert.message}</td>
+                      <td className="bg-transparent text-right pr-0 py-3">
+                        <span className={`inline-flex items-center text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
+                          alert.severity === 'CRITICAL' ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                        }`}>
+                          {alert.severity}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
 
-        {/* Infrastructure Health & Signature Purple Wave Graph */}
         <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2 font-mono">
-              📊 Enterprise Infrastructure Health
+              Enterprise Infrastructure Health
             </h4>
             <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-brand-primary bg-brand-primary/10 border border-brand-primary/20 px-2 py-0.5 rounded-md">
               ● Live Monitor
             </span>
           </div>
           
-          {/* Wave Graph Area */}
           <div className="h-16 w-full flex items-end my-2 overflow-hidden">
             <svg aria-label="Infrastructure pulse line monitor" className="w-full h-full" viewBox="0 0 400 60" preserveAspectRatio="none">
               <defs>
@@ -219,7 +227,6 @@ const Dashboard = () => {
 
       </div>
 
-      {/* ─── BOTTOM INTERACTIVE TIP BAR ─── */}
       {showTip && (
         <div className="flex items-center justify-between rounded-xl border border-gray-800/50 bg-surface px-6 py-3 text-xs text-brand-muted shadow-md transition-all animate-fade-in">
           <span className="flex items-center gap-2 leading-relaxed">
