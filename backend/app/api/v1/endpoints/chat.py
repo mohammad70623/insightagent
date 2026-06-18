@@ -520,3 +520,48 @@ async def generate_floating_swot_matrix(
     except Exception as e:
         logger.error(f"SWOT engine execution failed: {str(e)}")
         raise HTTPException(status_code=500, detail="SWOT calculation engine failed.")
+
+
+class AnomalyAlert(BaseModel):
+    id: int
+    metric: str
+    message: str
+    severity: str
+    timestamp: str
+
+class AnomalyResponse(BaseModel):
+    status: str
+    anomalies_found: int
+    alerts: list[AnomalyAlert]
+
+@router.get("/analytics/anomalies", response_model=AnomalyResponse)
+async def detect_business_anomalies(
+    current_user: User = Depends(deps.get_current_user)
+):
+    try:
+        mock_alerts = [
+            {
+                "id": 1,
+                "metric": "Expense Variance",
+                "message": "Invoice #402 shows a 300% variance from historical average setup costs.",
+                "severity": "CRITICAL",
+                "timestamp": "2 mins ago"
+            },
+            {
+                "id": 2,
+                "metric": "Revenue Drop",
+                "message": "Substantial conversion degradation detected in EU region server nodes.",
+                "severity": "HIGH",
+                "timestamp": "15 mins ago"
+            }
+        ]
+        
+        return {
+            "status": "success",
+            "anomalies_found": len(mock_alerts),
+            "alerts": mock_alerts
+        }
+        
+    except Exception as e:
+        logger.error(f"Anomaly detection pipeline failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Anomaly engine failure.")
