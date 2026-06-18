@@ -565,3 +565,47 @@ async def detect_business_anomalies(
     except Exception as e:
         logger.error(f"Anomaly detection pipeline failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Anomaly engine failure.")
+    
+class ForecastMetric(BaseModel):
+    period: str
+    predicted_revenue: float
+    confidence_bound_low: float
+    confidence_bound_high: float
+    growth_rate: float
+
+class ForecastResponse(BaseModel):
+    target_vector: str
+    horizon_quarters: int
+    forecast_data: list[ForecastMetric]
+
+@router.get("/analytics/forecast", response_model=ForecastResponse)
+async def get_predictive_forecasting(
+    current_user: User = Depends(deps.get_current_user)
+):
+    try:
+        mock_forecast = [
+            {
+                "period": "2026-Q3",
+                "predicted_revenue": 450000.0,
+                "confidence_bound_low": 420000.0,
+                "confidence_bound_high": 480000.0,
+                "growth_rate": 8.5
+            },
+            {
+                "period": "2026-Q4",
+                "predicted_revenue": 492000.0,
+                "confidence_bound_low": 455000.0,
+                "confidence_bound_high": 530000.0,
+                "growth_rate": 9.3
+            }
+        ]
+        
+        return {
+            "target_vector": "Enterprise SaaS Revenue Model",
+            "horizon_quarters": 2,
+            "forecast_data": mock_forecast
+        }
+        
+    except Exception as e:
+        logger.error(f"Predictive forecasting data generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Forecasting engine execution failure.")
