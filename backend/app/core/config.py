@@ -5,14 +5,11 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "InsightAgent Enterprise AI Engine"
     API_V1_STR: str = "/api/v1"
     
-    # Core Infrastructure Tokens
     SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8 
     
-    # Relational Database Storage Gate
     DATABASE_URL: str 
     
-    # CORS Gateways 
     BACKEND_CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173"
@@ -28,8 +25,8 @@ class Settings(BaseSettings):
     def AUTH_LOGIN_URL(self) -> str:
         return f"{self.API_V1_STR}/auth/login"
 
-    # AI & Vector Engine Settings Scope
     GROQ_API_KEY: str
+    TAVILY_API_KEY: str
     VECTOR_DB_URL: str = "http://localhost:6333"
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     LLM_MODEL_NAME: str = "llama-3.1-8b-instant"
