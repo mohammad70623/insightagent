@@ -4,7 +4,9 @@ import asyncio
 import io
 import csv
 import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, File, UploadFile
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.api import deps
 from app.models.user import User
 from app.services.rag.rag_engine import rag_engine
@@ -93,13 +95,28 @@ def extract_text_from_file(file_name: str, content: bytes) -> str:
 @router.post("/index-payload")
 async def index_payload(
     file: UploadFile = File(...),
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
     """
     Accepts incoming payload binary buffers, streams them in safe 1MB chunk boundaries
     to prevent memory-spikes, invokes layout-aware extraction, and awaits solid Qdrant insertion.
     """
     try:
+        # Check Expiration & Limits
+        now_utc = datetime.now(timezone.utc)
+        if current_user.subscription_expires_at and now_utc > current_user.subscription_expires_at:
+            current_user.subscription_tier = "Free"
+            current_user.subscription_expires_at = None
+            current_user.subscription_started_at = None
+            db.add(current_user)
+            await db.commit()
+            
+        if current_user.subscription_tier == "Free" and current_user.uploaded_files_count >= 5:
+            raise HTTPException(status_code=403, detail="PAYWALL_LIMIT_REACHED: Free tier limited to 5 files. Upgrade to Pro.")
+        if current_user.subscription_tier == "Pro" and current_user.uploaded_files_count >= 50:
+            raise HTTPException(status_code=403, detail="PAYWALL_LIMIT_REACHED: Pro tier limited to 50 files. Upgrade to Enterprise.")
+
         chunks_accumulator = []
         while chunk_bytes := await file.read(1024 * 1024):
             chunks_accumulator.append(chunk_bytes)
@@ -129,6 +146,10 @@ async def index_payload(
         
         if not success:
             raise HTTPException(status_code=500, detail="Vector warehouse sync rejected the operation payload.")
+            
+        current_user.uploaded_files_count += 1
+        db.add(current_user)
+        await db.commit()
             
         return {
             "status": "success",

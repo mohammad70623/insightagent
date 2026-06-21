@@ -12,21 +12,21 @@ const Landing = () => {
  
   const pricingPlans = useMemo(() => [
     {
-      name: 'STANDARD',
-      price: '$499',
+      name: 'Starter',
+      price: '$0',
       features: ['Up to 5 AI Agents', '100GB Data Lake Storage', 'Standard Support'],
       isPopular: false
     },
     {
       name: 'PRO PLAN',
-      price: '$1,299',
+      price: '$29',
       features: ['Unlimited AI Agents', '1TB Data Lake Storage', 'Custom Fine-Tuning', 'Priority 24/7 Support'],
       isPopular: true,
-      badge: 'BEST VALUE'
+      badge: 'Most Popular'
     },
     {
       name: 'ENTERPRISE',
-      price: 'Custom',
+      price: '$149',
       features: ['On-Premise Deployment', 'Infinite Scalability', 'Dedicated TAM'],
       isPopular: false
     }

@@ -66,8 +66,8 @@ async def terminate_tenant_ecosystem(
             detail=f"Internal pipeline crash context: {str(general_fault)}"
         )
 
-@router.get("/admin/tenants")
-async def get_all_tenants(
+@router.get("/admin/users")
+async def get_users(
     db: AsyncSession = Depends(deps.get_db),
     current_admin: User = Depends(get_current_admin_user)
 ):
@@ -76,17 +76,20 @@ async def get_all_tenants(
         result = await db.execute(statement)
         users = result.scalars().all()
         
-        tenants = []
+        real_users = []
         for u in users:
+            # We skip the current admin so they don't delete themselves
             if u.id != current_admin.id:
-                tenants.append({
+                real_users.append({
                     "id": str(u.id),
                     "email": u.email,
                     "namespace": f"tenant_cluster_{str(u.id).replace('-', '_')}",
-                    "tier": "Enterprise" if u.role == "admin" else "Pro",
-                    "dataSize": "Indexed Data"
+                    "tier": u.subscription_tier,
+                    "files_count": u.uploaded_files_count,
+                    "started_at": u.subscription_started_at.isoformat() if u.subscription_started_at else None,
+                    "expires_at": u.subscription_expires_at.isoformat() if u.subscription_expires_at else None
                 })
-        return {"status": "success", "tenants": tenants}
+        return {"status": "success", "users": real_users}
     except Exception as e:
-        logger.error(f"Failed to fetch tenants: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to retrieve tenant registry.")
+        logger.error(f"Failed to fetch authentic users: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve real user registry from DB.")

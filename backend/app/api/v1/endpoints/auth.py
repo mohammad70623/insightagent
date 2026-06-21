@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserResponse, TokenRefreshRequest, TokenResponse
 from app.models.auth import OTPVerification, PasswordResetToken
+from app.models.user import User, Invoice
 from app.services.email import send_otp_email, send_password_reset_email
 
 router = APIRouter()
@@ -269,3 +270,48 @@ async def reset_password(
     await db.commit()
     
     return {"status": "success", "message": "Password has been successfully reset."}
+
+class UpgradeTierRequest(BaseModel):
+    plan_name: str
+
+@router.post("/upgrade-tier")
+async def upgrade_tier(
+    payload: UpgradeTierRequest,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    if payload.plan_name not in ["Free", "Pro", "Enterprise"]:
+        raise HTTPException(status_code=400, detail="Invalid plan name.")
+        
+    current_user.subscription_tier = payload.plan_name
+    
+    if payload.plan_name != "Free":
+        current_user.subscription_started_at = datetime.now(timezone.utc)
+        current_user.subscription_expires_at = current_user.subscription_started_at + timedelta(days=30)
+        
+        # Calculate amount
+        amount_paid = 29.00 if payload.plan_name == "Pro" else 149.00
+        transaction_id = f"TXN-DEMO-{str(uuid.uuid4())[:8].upper()}"
+        
+        # Insert invoice
+        new_invoice = Invoice(
+            user_id=current_user.id,
+            plan_name=payload.plan_name,
+            amount_paid=amount_paid,
+            transaction_id=transaction_id,
+            billing_date=datetime.now(timezone.utc)
+        )
+        db.add(new_invoice)
+    else:
+        current_user.subscription_started_at = None
+        current_user.subscription_expires_at = None
+        
+    db.add(current_user)
+    await db.commit()
+    
+    return {
+        "status": "success", 
+        "tier": current_user.subscription_tier,
+        "started_at": current_user.subscription_started_at,
+        "expires_at": current_user.subscription_expires_at
+    }

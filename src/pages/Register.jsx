@@ -10,7 +10,7 @@ const Register = () => {
   const navigate = useNavigate();
   // ─── CORE STATES ───
   const [isSignupStep, setIsSignupStep] = useState(true);
-  
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -52,7 +52,7 @@ const Register = () => {
         email: formData.email,
         password: formData.password
       });
-      setIsSignupStep(false); 
+      setIsSignupStep(false);
     } catch (err) {
       setErrorMsg(err.response?.data?.detail || 'Registration failed. Please try again.');
     } finally {
@@ -85,11 +85,11 @@ const Register = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-main text-white font-sans select-none">
-      
+
       {/* ─── LEFT PANEL: BRAND BANNER ─── */}
       <div className="hidden w-[45%] flex-col justify-between border-r border-gray-800/40 bg-[#0B0F19]/40 p-12 lg:flex relative">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff01_1px,transparent_1px),linear-gradient(to_bottom,#ffffff01_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-        
+
         <div className="flex items-center gap-3 relative z-10">
           <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-brand-primary text-black font-black text-sm">I</div>
           <div>
@@ -103,8 +103,8 @@ const Register = () => {
             <Sparkles size={10} /> {isSignupStep ? "Private Node Initialization" : "Identity Verification"}
           </span>
           <h2 className="text-3xl font-black tracking-tight text-white leading-tight">
-            {isSignupStep 
-              ? "Initialize your secure enterprise data node." 
+            {isSignupStep
+              ? "Initialize your secure enterprise data node."
               : "Verify your corporate identity channel."
             }
           </h2>
@@ -121,7 +121,7 @@ const Register = () => {
       {/* ─── RIGHT PANEL: DYNAMIC RECEPTOR (SIGNUP vs Verification) ─── */}
       <div className="flex flex-1 flex-col items-center justify-center bg-transparent px-6 relative">
         <div className="w-full max-w-sm space-y-8 animate-fade-in">
-          
+
           {errorMsg && (
             <div className="flex items-center gap-2 text-[11px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg animate-fade-in">
               <AlertCircle size={14} /> {errorMsg}
@@ -137,7 +137,7 @@ const Register = () => {
               </div>
 
               <form onSubmit={handleSignupSubmit} className="space-y-4">
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label htmlFor="firstName" className="text-[11px] font-bold uppercase tracking-wider text-brand-muted font-mono">First Name</label>
@@ -235,7 +235,7 @@ const Register = () => {
               </div>
             </>
           ) : (
-        
+
             <>
               <div className="space-y-2 animate-fade-in">
                 <h3 className="text-2xl font-bold tracking-tight text-white">Check your email</h3>
@@ -278,7 +278,7 @@ const Register = () => {
               <div className="text-center text-xs font-medium border-t border-gray-850/40 pt-4 flex justify-between items-center px-1">
                 <button
                   type="button"
-                  onClick={() => setIsSignupStep(true)} 
+                  onClick={() => setIsSignupStep(true)}
                   className="text-gray-500 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
                 >
                   ← Edit Credentials
@@ -295,7 +295,7 @@ const Register = () => {
                         password: formData.password
                       });
                       alert("OTP Code resent successfully!");
-                    } catch(e) {}
+                    } catch (e) { }
                   }}
                 >
                   Resend Code
