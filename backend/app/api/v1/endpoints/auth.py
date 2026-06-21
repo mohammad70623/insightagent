@@ -1,6 +1,7 @@
 from datetime import timedelta, datetime, timezone
 from typing import Any
 import secrets
+import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
@@ -13,8 +14,8 @@ from app.core import security
 from app.core.config import settings
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserResponse, TokenRefreshRequest, TokenResponse
-from app.models.auth import OTPVerification
-from app.services.email import send_otp_email
+from app.models.auth import OTPVerification, PasswordResetToken
+from app.services.email import send_otp_email, send_password_reset_email
 
 router = APIRouter()
 
@@ -194,3 +195,77 @@ async def refresh(payload: TokenRefreshRequest) -> Any:
             detail=str(auth_err),
             headers={"WWW-Authenticate": "Bearer"}
         )
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+# 5. PASSWORD RESET TRIGGER
+@router.post("/forgot-password")
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    db: AsyncSession = Depends(deps.get_db)
+) -> Any:
+    """
+    Trigger the secure password reset flow. Returns 200 OK regardless of existence 
+    to prevent email enumeration attacks.
+    """
+    normalized_email = payload.email.lower().strip()
+    user = await UserRepository.get_by_email(db, email=normalized_email)
+    
+    if user:
+        reset_token = str(uuid.uuid4())
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+        
+        token_record = PasswordResetToken(
+            email=normalized_email,
+            token=reset_token,
+            expires_at=expires_at
+        )
+        db.add(token_record)
+        await db.commit()
+        
+        await send_password_reset_email(normalized_email, reset_token)
+
+    return {"status": "success", "message": "If an account with that email exists, a password reset link has been dispatched."}
+
+# 6. PASSWORD RESET COMMIT
+@router.post("/reset-password")
+async def reset_password(
+    payload: ResetPasswordRequest,
+    db: AsyncSession = Depends(deps.get_db)
+) -> Any:
+    """
+    Validates the token and applies the new password securely.
+    """
+    statement = select(PasswordResetToken).where(
+        PasswordResetToken.token == payload.token,
+        PasswordResetToken.is_used == False
+    ).order_by(PasswordResetToken.created_at.desc())
+    
+    result = await db.execute(statement)
+    latest_token = result.scalars().first()
+    
+    if not latest_token:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This security reset link has expired or is invalid.")
+        
+    if datetime.now(timezone.utc) > latest_token.expires_at:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This security reset link has expired or is invalid.")
+        
+    user = await UserRepository.get_by_email(db, email=latest_token.email)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account not found.")
+        
+    hashed_password = security.get_password_hash(payload.new_password)
+    user.hashed_password = hashed_password
+    db.add(user)
+    
+    latest_token.is_used = True
+    db.add(latest_token)
+    
+    await db.commit()
+    
+    return {"status": "success", "message": "Password has been successfully reset."}

@@ -40,7 +40,7 @@ const Admin = () => {
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans pb-20">
-      
+
       {/* ─── HEADER: Enterprise System Administration ─── */}
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
@@ -88,7 +88,7 @@ const Admin = () => {
 
       {/* ─── CONTROL TABLES & ACTION MODULES ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
+
         {/* Tenant Registries Table */}
         <div className="lg:col-span-8 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col">
           <div className="flex flex-col gap-4 border-b border-gray-850 pb-4 mb-6">
@@ -96,7 +96,7 @@ const Admin = () => {
               <Database size={14} className="text-brand-primary" /> Tenant Registries
             </h4>
           </div>
-          
+
           <div className="overflow-x-auto text-[11px] w-full flex-1">
             {loading ? (
               <div className="flex items-center justify-center py-12 text-brand-primary animate-pulse font-mono tracking-widest">
@@ -129,11 +129,10 @@ const Admin = () => {
                         {tenant.namespace}
                       </td>
                       <td className="bg-transparent py-4">
-                        <span className={`px-2 py-0.5 rounded border text-[9px] font-bold tracking-wide ${
-                          tenant.tier === 'Enterprise' ? 'bg-brand-primary/10 border-brand-primary/20 text-brand-primary' :
-                          tenant.tier === 'Pro' ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' :
-                          'bg-gray-500/10 border-gray-500/20 text-gray-400'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded border text-[9px] font-bold tracking-wide ${tenant.tier === 'Enterprise' ? 'bg-brand-primary/10 border-brand-primary/20 text-brand-primary' :
+                            tenant.tier === 'Pro' ? 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400' :
+                              'bg-gray-500/10 border-gray-500/20 text-gray-400'
+                          }`}>
                           {tenant.tier}
                         </span>
                       </td>
@@ -141,7 +140,7 @@ const Admin = () => {
                         {tenant.dataSize}
                       </td>
                       <td className="bg-transparent text-right pr-0 py-4">
-                        <button 
+                        <button
                           onClick={() => handleRemoveTenant(tenant.id)}
                           className="btn btn-sm bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-md px-3 py-1 flex items-center justify-end gap-2 ml-auto transition-colors cursor-pointer text-[10px] font-bold uppercase tracking-wider"
                         >
@@ -167,18 +166,18 @@ const Admin = () => {
                 <Trash2 size={16} />
                 <span className="text-left">Wipe Corrupted Vectors</span>
               </button>
-              
+
               <button className="w-full btn btn-sm bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 rounded-lg px-4 py-2.5 flex items-center justify-start gap-3 transition-colors cursor-pointer text-xs font-semibold h-auto">
                 <RefreshCcw size={16} />
                 <span className="text-left">Flush Global Polling Registry Nodes</span>
               </button>
-              
+
               <button className="w-full btn btn-sm bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary/20 hover:text-indigo-300 rounded-lg px-4 py-2.5 flex items-center justify-start gap-3 transition-colors cursor-pointer text-xs font-semibold h-auto">
                 <KeyRound size={16} />
                 <span className="text-left">Rotate System LLaMA API Bundles</span>
               </button>
             </div>
-            
+
             <div className="mt-6 p-4 rounded-lg bg-[#0B0F19] border border-gray-850">
               <p className="text-[10px] text-gray-500 font-mono leading-relaxed">
                 <span className="text-red-400 font-bold uppercase">Warning:</span> These actions execute instantly across all global database instances. Ensure synchronization is halted before rotating keys.

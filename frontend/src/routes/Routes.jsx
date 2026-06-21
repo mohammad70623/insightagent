@@ -12,6 +12,7 @@ const Chat = lazy(() => import('../pages/Chat'));
 const Admin = lazy(() => import('../pages/Admin'));
 const Billing = lazy(() => import('../pages/Billing')); 
 const Register = lazy(() => import('../pages/Register'));
+const ResetPassword = lazy(() => import('../pages/ResetPassword'));
 
 const LazyFallback = () => (
   <div className="flex h-[80vh] w-full items-center justify-center bg-transparent">
@@ -49,6 +50,10 @@ const router = createBrowserRouter([
   {
     path: "/register", 
     element: <Suspense fallback={<LazyFallback />}><Register /></Suspense>
+  },
+  {
+    path: "/reset-password",
+    element: <Suspense fallback={<LazyFallback />}><ResetPassword /></Suspense>
   },
   {
     
