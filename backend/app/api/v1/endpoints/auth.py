@@ -1,18 +1,49 @@
-from datetime import timedelta
+from datetime import timedelta, datetime, timezone
 from typing import Any
+import secrets
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import select
+from pydantic import BaseModel, EmailStr
 
 from app.api import deps
 from app.core import security
 from app.core.config import settings
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate, UserResponse, TokenRefreshRequest, TokenResponse
+from app.models.auth import OTPVerification
+from app.services.email import send_otp_email
 
 router = APIRouter()
 
-# USER REGISTRATION (SIGN-UP)
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp_code: str
+    purpose: str
+
+def generate_otp() -> str:
+    return "".join(secrets.choice("0123456789") for _ in range(6))
+
+async def create_and_send_otp(db: AsyncSession, email: str, purpose: str):
+    otp_code = generate_otp()
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    
+    # Store in DB
+    otp_record = OTPVerification(
+        email=email,
+        otp_code=otp_code,
+        purpose=purpose,
+        expires_at=expires_at
+    )
+    db.add(otp_record)
+    await db.commit()
+    
+    # Dispatch Async Email
+    await send_otp_email(email, otp_code, purpose)
+
+# 1. USER REGISTRATION (SIGN-UP)
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     *,
@@ -20,13 +51,10 @@ async def signup(
     user_in: UserCreate
 ) -> Any:
     """
-    Register a brand new user account in the system.
-     3: Strictly enforces global lowercase email normalization to eliminate duplicate vectors.
+    Register a brand new user account in the system and triggers OTP flow.
     """
-    #  Prevent duplicate identity leakages via rigorous lowercase normalization
     normalized_email = user_in.email.lower().strip()
     
-    #  Integrity Check: Does identity already exist?
     existing_user = await UserRepository.get_by_email(db, email=normalized_email)
     if existing_user:
         raise HTTPException(
@@ -34,31 +62,32 @@ async def signup(
             detail="An account with this email address already exists in our system."
         )
         
-    #  Cryptographic Password Hashing Lifecycle
     hashed_password = security.get_password_hash(user_in.password)
-    
-    #  Intercept input payload to switch with normalized parameters
     user_in.email = normalized_email
     
-    #  Transmit transaction record to Neon Cloud Serverless Instance
+    # Force verification status to False for OTP Gate
     new_user = await UserRepository.create(db, obj_in=user_in, hashed_password=hashed_password)
+    new_user.is_verified = False
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    # Trigger OTP
+    await create_and_send_otp(db, normalized_email, "registration")
+    
     return new_user
 
-
-# 2. OAUTH2 COMPLIANT LOGIN (ACCESS TOKEN)
-@router.post("/login", response_model=TokenResponse)
+# 2. OAUTH2 COMPLIANT LOGIN - STAGE 1 (VERIFY PASSWORD, SEND OTP)
+@router.post("/login")
 async def login(
     db: AsyncSession = Depends(deps.get_db),
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     """
-    OAuth2 compatible token login. Consumes password forms and returns 
-     Enforced strongly-typed TokenResponse schemas for rigid OpenAPI documentation.
+    Dual-Gate login process. Verifies credentials and issues a 202 Accepted directing the client to the OTP Verification step.
     """
-    # Re-apply normalization on incoming username inputs
     normalized_username = form_data.username.lower().strip()
     
-    #  Fetch user by clean email index context
     user = await UserRepository.get_by_email(db, email=normalized_username)
     if not user:
         raise HTTPException(
@@ -67,7 +96,6 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
         
-    #  Salted bcrypt cryptographic clearance check
     if not security.verify_password(form_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -75,43 +103,91 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
         
-    # Administrative security gate
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access Denied: This account has been deactivated."
         )
 
-    # Generate Dual Enterprise Tokens (Token Rotation Enabled)
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = security.create_access_token(
-        subject=user.id, role=user.role, expires_delta=access_token_expires
+    # Instead of generating tokens immediately, generate OTP and enforce Dual-Gate
+    await create_and_send_otp(db, normalized_username, "login")
+
+    return JSONResponse(
+        status_code=status.HTTP_202_ACCEPTED,
+        content={"status": "otp_required", "message": "Verification code dispatched to corporate email address."}
     )
-    refresh_token = security.create_refresh_token(subject=user.id)
 
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "user": user
-    }
+# 3. VERIFY OTP GATEWAY (LOGIN & REGISTRATION)
+@router.post("/verify-otp")
+async def verify_otp(
+    payload: VerifyOTPRequest,
+    db: AsyncSession = Depends(deps.get_db)
+) -> Any:
+    """
+    Consumes the 6-digit code for either Registration or Login pathways.
+    Returns the JWT payload if used for Login.
+    """
+    normalized_email = payload.email.lower().strip()
+    
+    statement = select(OTPVerification).where(
+        OTPVerification.email == normalized_email,
+        OTPVerification.purpose == payload.purpose,
+        OTPVerification.is_used == False
+    ).order_by(OTPVerification.created_at.desc())
+    
+    result = await db.execute(statement)
+    latest_otp = result.scalars().first()
 
+    if not latest_otp or latest_otp.otp_code != payload.otp_code:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification code.")
+        
+    if datetime.now(timezone.utc) > latest_otp.expires_at:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code has expired.")
 
-#  INDUSTRY STANDARD TOKEN REFRESH
+    # Mark as used
+    latest_otp.is_used = True
+    db.add(latest_otp)
+    
+    user = await UserRepository.get_by_email(db, email=normalized_email)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account not found.")
+
+    if payload.purpose == "registration":
+        user.is_verified = True
+        db.add(user)
+        await db.commit()
+        return {"status": "success", "message": "Identity verified successfully."}
+
+    elif payload.purpose == "login":
+        await db.commit()
+        
+        # Issue standard JWT matrix
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = security.create_access_token(
+            subject=user.id, role=user.role, expires_delta=access_token_expires
+        )
+        refresh_token = security.create_refresh_token(subject=user.id)
+
+        # Assuming UserResponse structure maps natively to UserMetadata via from_attributes
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": user.role
+            }
+        }
+
+# 4. INDUSTRY STANDARD TOKEN REFRESH
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh(payload: TokenRefreshRequest) -> Any:
-    """
-     Re-architected async refresh pipeline utilizing strong typing.
-    Consumes dedicated Pydantic request body structures to rotate stateless token sets cleanly.
-    """
     try:
-        # Extract and exchange token payloads via our core security utilities engine
         token_matrix = security.refresh_access_token(refresh_token=payload.refresh_token)
-        
-        # Note: In Step 10/Auth Lifecycle, we will expand this layer to attach fresh 
-        # database user object validation to complete the TokenResponse footprint requirement.
         return token_matrix
-        
     except security.AuthenticationError as auth_err:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, KeyRound, Mail, User, ArrowRight, Sparkles, ShieldCheck } from 'lucide-react';
+import axios from 'axios';
+import { Shield, KeyRound, Mail, User, ArrowRight, Sparkles, ShieldCheck, AlertCircle } from 'lucide-react';
 
 /**
  * @description Enterprise Standalone Registration with Native OTP Verification State
@@ -18,40 +19,68 @@ const Register = () => {
   });
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    if (errorMsg) setErrorMsg(''); // Clear error on typing
+  };
+
+  const validateEmail = (email) => {
+    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return regex.test(email);
   };
 
   /**
    * Step 1: Handle Initial Form Submit (Moves to OTP Screen)
    */
-  const handleSignupSubmit = (e) => {
+  const handleSignupSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
+    if (!validateEmail(formData.email)) {
+      setErrorMsg('Invalid email format. Please provide a valid corporate email.');
+      return;
+    }
 
-    
-    setTimeout(() => {
-      setLoading(false);
+    setLoading(true);
+    setErrorMsg('');
+
+    try {
+      await axios.post('http://127.0.0.1:8000/api/v1/auth/signup', {
+        first_name: formData.firstName,
+        last_name: formData.lastName,
+        email: formData.email,
+        password: formData.password
+      });
       setIsSignupStep(false); 
-    }, 800);
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || 'Registration failed. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   /**
-   * Step 2: Handle OTP Verification Code Submit (Moves to Dashboard)
+   * Step 2: Handle OTP Verification Code Submit
    */
-  const handleVerifySubmit = (e) => {
+  const handleVerifySubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg('');
 
-    setTimeout(() => {
-     
-      localStorage.setItem('token', 'mock_verified_jwt_token');
-      localStorage.setItem('user_role', 'user');
+    try {
+      await axios.post('http://127.0.0.1:8000/api/v1/auth/verify-otp', {
+        email: formData.email,
+        otp_code: verificationCode,
+        purpose: 'registration'
+      });
+      alert('Identity verified successfully! Please sign in.');
+      navigate('/login');
+    } catch (err) {
+      setErrorMsg(err.response?.data?.detail || 'Invalid or expired verification code.');
+    } finally {
       setLoading(false);
-      navigate('/app/dashboard');
-    }, 800);
+    }
   };
 
   return (
@@ -93,6 +122,12 @@ const Register = () => {
       <div className="flex flex-1 flex-col items-center justify-center bg-transparent px-6 relative">
         <div className="w-full max-w-sm space-y-8 animate-fade-in">
           
+          {errorMsg && (
+            <div className="flex items-center gap-2 text-[11px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg animate-fade-in">
+              <AlertCircle size={14} /> {errorMsg}
+            </div>
+          )}
+
           {isSignupStep ? (
             /* ─── STEP A: SIGNUP INPUT MODULE ─── */
             <>
@@ -102,7 +137,6 @@ const Register = () => {
               </div>
 
               <form onSubmit={handleSignupSubmit} className="space-y-4">
-                
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
@@ -221,7 +255,7 @@ const Register = () => {
                       maxLength={6}
                       required
                       value={verificationCode}
-                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))} // শুধু নাম্বার ইনপুট লক
+                      onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ''))}
                       placeholder="000000"
                       className="w-full text-center tracking-[12px] text-sm font-bold rounded-xl border border-brand-primary/40 bg-surface px-4 py-3 text-white outline-none font-mono focus:border-brand-primary"
                     />
@@ -236,7 +270,7 @@ const Register = () => {
                   {loading ? (
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-black border-t-transparent" />
                   ) : (
-                    "Verify & Open Workspace"
+                    "Verify & Proceed to Login"
                   )}
                 </button>
               </form>
@@ -252,7 +286,17 @@ const Register = () => {
                 <button
                   type="button"
                   className="text-brand-primary hover:underline font-bold bg-transparent border-none outline-none cursor-pointer"
-                  onClick={() => alert("Mock OTP Code resent successfully!")}
+                  onClick={async () => {
+                    try {
+                      await axios.post('http://127.0.0.1:8000/api/v1/auth/signup', {
+                        first_name: formData.firstName,
+                        last_name: formData.lastName,
+                        email: formData.email,
+                        password: formData.password
+                      });
+                      alert("OTP Code resent successfully!");
+                    } catch(e) {}
+                  }}
                 >
                   Resend Code
                 </button>

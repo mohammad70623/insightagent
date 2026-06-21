@@ -31,4 +31,9 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     LLM_MODEL_NAME: str = "llama-3.1-8b-instant"
 
+    SMTP_HOST: str
+    SMTP_PORT: int
+    SMTP_USER: str
+    SMTP_PASSWORD: str
+
 settings = Settings()
