@@ -1,260 +1,299 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { CloudUpload, FileText, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import axios from 'axios';
+import { apiService } from '../services/api';
 
+// Status badge helper
+const StatusBadge = ({ status, progress }) => {
+  const map = {
+    READY:    { label: '⟳ READY',                    cls: 'bg-blue-500/20 text-blue-400 border-blue-500/40' },
+    INDEXING: { label: `⚡ INDEXING (${progress}%)`, cls: 'bg-amber-500/20 text-amber-400 border-amber-500/40' },
+    INDEXED:  { label: '✓ INDEXED',                  cls: 'bg-green-500/20 text-green-400 border-green-500/40' },
+    FAILED:   { label: '✗ FAILED',                   cls: 'bg-red-500/20 text-red-400 border-red-500/40' },
+  };
+  const { label, cls } = map[status] || map.READY;
+  return (
+    <span className={`px-2.5 py-1 rounded text-xs font-bold border ${cls}`}>{label}</span>
+  );
+};
 
-export default function Upload() {
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState([]);
+const Upload = () => {
+  const [queuedFiles, setQueuedFiles] = useState([]);    // Files staged for upload
+  const [indexedFiles, setIndexedFiles] = useState([]);  // Files already in Qdrant
+  const [isCommitting, setIsCommitting] = useState(false);
+  const [isLoadingFiles, setIsLoadingFiles] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
-  
- 
-  const activeIntervalsRef = useRef({});
-  const fileInputRef = useRef(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const clearTimers = useRef({});
 
-  
-  useEffect(() => {
-    return () => {
-      Object.values(activeIntervalsRef.current).forEach(clearInterval);
-    };
+  // Load indexed files from Qdrant on mount
+  const fetchIndexedFiles = useCallback(async () => {
+    setIsLoadingFiles(true);
+    try {
+      const data = await apiService.getUploadedFiles();
+      setIndexedFiles(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to fetch indexed files:', err.message);
+      // Gracefully handle 401s without crashing the router if the interceptor handles it
+      if (!err.message.includes("Session expired")) {
+        setErrorMessage("Could not load indexed files. Please try refreshing.");
+      }
+    } finally {
+      setIsLoadingFiles(false);
+    }
   }, []);
 
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  useEffect(() => {
+    fetchIndexedFiles();
+    // Cleanup timers on unmount to prevent memory leaks
+    return () => Object.values(clearTimers.current).forEach(clearTimeout);
+  }, [fetchIndexedFiles]);
+
+  // Stage files for upload
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || e.dataTransfer?.files || []);
+    if (!files.length) return;
+    const newEntries = files.map((file) => ({
+      id: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
+      name: file.name,
+      rawFile: file,
+      status: 'READY',
+      progress: 0,
+    }));
+    setQueuedFiles((prev) => [...prev, ...newEntries]);
+    e.target.value = null; // Reset so same file can be re-selected
   };
 
-  const processFiles = (files) => {
-    const fileList = Array.from(files);
-    setErrorMessage(''); 
-    
-    fileList.forEach((file) => {
-      
-      if (file.size > 50 * 1024 * 1024) {
-        setErrorMessage(`File "${file.name}" exceeds the 50MB enterprise limit.`);
-        return;
+  // Remove a staged file before committing
+  const handleRemoveQueued = (id) => {
+    setQueuedFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  // Commit all READY files to Qdrant sequentially
+  const handleCommitPipeline = async () => {
+    const readyFiles = queuedFiles.filter((f) => f.status === 'READY');
+    if (!readyFiles.length || isCommitting) return;
+
+    setIsCommitting(true);
+    setErrorMessage('');
+
+    // Isolated local Axios config to track chunks without polluting global headers
+    const uploadAxios = axios.create({
+      baseURL: 'http://127.0.0.1:8000/api/v1',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
       }
-
-      
-      const newFileId = window.crypto?.randomUUID ? crypto.randomUUID() : `file-${Date.now()}-${Math.random()}`;
-      
-      const newFileObject = {
-        id: newFileId,
-        name: file.name,
-        size: formatFileSize(file.size),
-        status: 'PROCESSING',
-        progress: 0
-      };
-
-      setUploadedFiles((prev) => [newFileObject, ...prev]);
-
-      let currentProgress = 0;
-      const interval = setInterval(() => {
-        currentProgress += Math.floor(Math.random() * 15) + 5;
-        
-        if (currentProgress >= 100) {
-          currentProgress = 100;
-          clearInterval(interval);
-          delete activeIntervalsRef.current[newFileId]; 
-          
-          setUploadedFiles((prev) =>
-            prev.map((f) =>
-              f.id === newFileId ? { ...f, progress: 100, status: 'COMPLETED' } : f
-            )
-          );
-        } else {
-          setUploadedFiles((prev) =>
-            prev.map((f) =>
-              f.id === newFileId ? { ...f, progress: currentProgress } : f
-            )
-          );
-        }
-      }, 200);
-
-     
-      activeIntervalsRef.current[newFileId] = interval;
     });
+
+    for (const fileObj of readyFiles) {
+      // Mark as INDEXING
+      setQueuedFiles((prev) =>
+        prev.map((f) => (f.id === fileObj.id ? { ...f, status: 'INDEXING', progress: 0 } : f))
+      );
+
+      try {
+        const formData = new FormData();
+        formData.append('file', fileObj.rawFile);
+
+        await uploadAxios.post('/chat/index-payload', formData, {
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setQueuedFiles((prev) =>
+              prev.map((f) =>
+                f.id === fileObj.id
+                  ? { ...f, progress: percentCompleted }
+                  : f
+              )
+            );
+          }
+        });
+
+        // Mark INDEXED, then auto-clear after 3 seconds and refresh list
+        setQueuedFiles((prev) =>
+          prev.map((f) => (f.id === fileObj.id ? { ...f, status: 'INDEXED', progress: 100 } : f))
+        );
+
+        clearTimers.current[fileObj.id] = setTimeout(() => {
+          setQueuedFiles((prev) => prev.filter((f) => f.id !== fileObj.id));
+          delete clearTimers.current[fileObj.id];
+          fetchIndexedFiles();
+        }, 3000);
+
+      } catch (err) {
+        setQueuedFiles((prev) =>
+          prev.map((f) => (f.id === fileObj.id ? { ...f, status: 'FAILED', progress: 0 } : f))
+        );
+        const errorDetail = err.response?.data?.detail || err.message;
+        setErrorMessage(`Failed to index "${fileObj.name}": ${errorDetail}`);
+      }
+    }
+
+    setIsCommitting(false);
   };
 
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      processFiles(e.dataTransfer.files);
+  // Delete an indexed file's vectors from Qdrant
+  const handleDeleteIndexed = async (documentId, filename) => {
+    if (deletingId) return;
+    setDeletingId(documentId);
+    setErrorMessage('');
+    try {
+      await apiService.deleteFile(documentId);
+      setIndexedFiles((prev) => prev.filter((f) => f.document_id !== documentId));
+    } catch (err) {
+      setErrorMessage(`Failed to delete "${filename}": ${err.message}`);
+    } finally {
+      setDeletingId(null);
     }
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files && e.target.files.length > 0) {
-      processFiles(e.target.files);
-    }
-  };
-
-  const triggerFileBrowser = () => {
-    fileInputRef.current.click();
-  };
-
-  
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      triggerFileBrowser();
-    }
-  };
-
-  const deleteFile = (id) => {
-    if (activeIntervalsRef.current[id]) {
-      clearInterval(activeIntervalsRef.current[id]);
-      delete activeIntervalsRef.current[id];
-    }
-    setUploadedFiles(uploadedFiles.filter(file => file.id !== id));
-  };
+  const readyCount = queuedFiles.filter((f) => f.status === 'READY').length;
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans">
-      
-      <input 
-        type="file" 
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        multiple
-        className="hidden" 
-        accept=".csv,.json,.txt,.pdf"
-      />
+    <div className="p-6 bg-[#111827] min-h-screen text-gray-100 space-y-8">
 
-    
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight text-white">Data Ingest Engine</h2>
-        <p className="text-xs text-brand-muted mt-1.5">
-          Ingest raw unstructured data into the secure Vector database. Supported formats: CSV, JSON, TXT, PDF.
-        </p>
+      {/* ──────────────── INGESTION PANEL ──────────────── */}
+      <div className="max-w-3xl mx-auto bg-[#1f2937] rounded-xl p-6 border border-gray-700 shadow-2xl">
+        <h2 className="text-xl font-bold mb-4 text-[#38bdf8] flex items-center gap-2">
+          📦 Data Ingestion Control
+        </h2>
+
+        {/* Drop Zone */}
+        <label className="block border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-[#38bdf8] transition relative mb-6 cursor-pointer">
+          <input
+            type="file"
+            multiple
+            accept=".txt,.csv,.json,.pdf"
+            onChange={handleFileSelect}
+            disabled={isCommitting}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          />
+          <div className="pointer-events-none space-y-1">
+            <div className="text-3xl">📂</div>
+            <p className="text-sm text-gray-400">Drag & Drop or click to select files</p>
+            <p className="text-xs text-gray-600">Supported: .txt, .csv, .json, .pdf</p>
+          </div>
+        </label>
+
+        {/* Error Banner */}
+        {errorMessage && (
+          <div className="bg-red-500/20 text-red-400 border border-red-500/50 p-3 rounded mb-4 text-xs font-mono flex items-start gap-2">
+            <span>⚠️</span>
+            <span className="flex-1">{errorMessage}</span>
+            <button onClick={() => setErrorMessage('')} className="font-bold hover:text-white ml-1">×</button>
+          </div>
+        )}
+
+        {/* Upload Queue */}
+        <div className="space-y-3 mb-6">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            Ingestion Queue ({queuedFiles.length})
+          </h3>
+          {queuedFiles.length === 0 ? (
+            <p className="text-sm text-gray-500 italic p-4 bg-[#111827] rounded border border-gray-800 text-center">
+              No files staged. Select files above to begin.
+            </p>
+          ) : (
+            queuedFiles.map((file) => (
+              <div key={file.id} className="flex flex-col p-3.5 bg-[#111827] rounded border border-gray-700 font-mono text-sm space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="truncate text-gray-300 min-w-0">📄 {file.name}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <StatusBadge status={file.status} progress={file.progress} />
+                    {file.status === 'READY' && (
+                      <button
+                        onClick={() => handleRemoveQueued(file.id)}
+                        className="text-gray-600 hover:text-red-400 transition text-lg leading-none"
+                        title="Remove from queue"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                {(file.status === 'INDEXING' || file.status === 'INDEXED') && (
+                  <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className={`h-1.5 rounded-full transition-all duration-500 ease-out ${
+                        file.status === 'INDEXED' ? 'bg-green-500' : 'bg-[#38bdf8] animate-pulse'
+                      }`}
+                      style={{ width: `${file.progress}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Commit Button */}
+        <button
+          onClick={handleCommitPipeline}
+          disabled={isCommitting || readyCount === 0}
+          className="w-full py-3 bg-[#38bdf8] hover:bg-[#7dd3fc] disabled:bg-gray-700 disabled:text-gray-500 text-gray-900 font-bold rounded-lg transition tracking-wide text-sm shadow-lg cursor-pointer disabled:cursor-not-allowed"
+        >
+          {isCommitting
+            ? '⚡ Processing Pipeline...'
+            : readyCount > 0
+            ? `Commit ${readyCount} File${readyCount > 1 ? 's' : ''} to Vector DB`
+            : 'Commit Pipeline to Vector DB'}
+        </button>
       </div>
 
-     
-      {errorMessage && (
-        <div className="alert alert-error bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl py-3 px-4 flex items-center gap-2 animate-fade-in">
-          <AlertCircle size={16} />
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        
-       
-        <div className="lg:col-span-7 space-y-4">
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onClick={triggerFileBrowser}
-            onKeyDown={handleKeyDown}
-            
-          
-            role="button"
-            tabIndex={0}
-            aria-label="File dropzone. Click or press enter to upload datasets."
-            
-            className={`relative flex flex-col items-center justify-center min-h-[350px] rounded-xl border-2 border-dashed p-8 text-center transition-all cursor-pointer bg-surface select-none outline-none focus:border-brand-primary ${
-              isDragging 
-                ? 'border-brand-primary bg-brand-primary/5 shadow-[0_0_20px_rgba(129,140,248,0.1)]' 
-                : 'border-gray-800/80 hover:border-brand-primary/40'
-            }`}
+      {/* ──────────────── INDEXED FILES PANEL ──────────────── */}
+      <div className="max-w-3xl mx-auto bg-[#1f2937] rounded-xl p-6 border border-gray-700 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold text-green-400 flex items-center gap-2">
+            🗂️ Active Vector Base Indexes
+          </h2>
+          <button
+            onClick={fetchIndexedFiles}
+            disabled={isLoadingFiles}
+            className="text-xs text-gray-400 hover:text-white transition font-mono disabled:opacity-40 cursor-pointer"
           >
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#0B0F19] border border-gray-800 shadow-md mb-4 text-brand-primary">
-              <CloudUpload size={28} className={isDragging ? 'animate-bounce' : ''} />
-            </div>
-            
-            <h3 className="text-sm font-bold text-white tracking-wide">
-              Drag and drop your dataset here, or <span className="text-brand-primary hover:underline">browse files</span>
-            </h3>
-            <p className="text-[11px] text-brand-muted mt-1.5 max-w-xs">
-              Files are automatically encrypted and chunked into optimized vector fragments for high-fidelity RAG lookup.
-            </p>
-            <span className="text-[10px] text-gray-600 font-mono mt-4">Max allocation size per transmission: 50MB</span>
-          </div>
-        </div>
-
-       
-        <div className="lg:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between min-h-[350px]">
-          <div className="flex-1 overflow-y-auto max-h-[380px] pr-1">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono mb-4 sticky top-0 bg-surface pb-2">
-              📦 Ingestion Control Queue ({uploadedFiles.length})
-            </h4>
-            
-            <div className="space-y-3">
-              {uploadedFiles.map((file) => (
-                <div key={file.id} className="rounded-lg bg-[#0B0F19]/60 p-4 border border-gray-850/40 flex items-center justify-between gap-4 animate-fade-in">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-surface border border-gray-800 text-brand-primary shrink-0">
-                        <FileText size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-white truncate" title={file.name}>{file.name}</p>
-                        <p className="text-[10px] text-brand-muted mt-0.5">{file.size}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="w-full bg-gray-800 h-1 rounded-full mt-3 overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full transition-all duration-200 ${
-                          file.status === 'COMPLETED' ? 'bg-green-400' : 'bg-brand-primary'
-                        }`} 
-                        style={{ width: `${file.progress}%` }} 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    {file.status === 'COMPLETED' ? (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-bold text-green-400 bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20">
-                        <CheckCircle2 size={10} /> INDEXED
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                        <AlertCircle size={10} className="animate-spin" /> {file.progress}%
-                      </span>
-                    )}
-                    <button 
-                      onClick={() => deleteFile(file.id)}
-                      className="text-gray-600 hover:text-red-400 transition-colors cursor-pointer p-1"
-                      aria-label="Remove asset"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-
-              {uploadedFiles.length === 0 && (
-                <div className="text-center py-12 border border-dashed border-gray-800 rounded-lg bg-[#0B0F19]/20">
-                  <p className="text-xs text-brand-muted">No files currently active in session queue.</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <button 
-            disabled={uploadedFiles.length === 0}
-            className="btn btn-sm w-full border-none bg-brand-primary text-black font-bold hover:bg-indigo-400 capitalize h-9 rounded-lg mt-4 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-          >
-            Commit Pipeline to Vector DB
+            {isLoadingFiles ? '⟳ Loading...' : '↻ Refresh'}
           </button>
         </div>
 
+        <div className="overflow-hidden rounded-lg border border-gray-800 bg-[#111827]">
+          {isLoadingFiles ? (
+            <div className="p-6 text-center text-gray-500 text-sm animate-pulse font-mono">
+              Loading indexed documents...
+            </div>
+          ) : indexedFiles.length === 0 ? (
+            <p className="text-sm text-gray-500 italic p-6 text-center">
+              No documents indexed yet. Upload a file above to begin.
+            </p>
+          ) : (
+            <div className="divide-y divide-gray-800">
+              {indexedFiles.map((file) => (
+                <div
+                  key={file.document_id}
+                  className="flex items-center justify-between p-4 hover:bg-[#1f2937]/50 transition gap-3"
+                >
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="text-sm font-medium text-gray-200 truncate">
+                      📄 {file.filename || 'Unknown File'}
+                    </span>
+                    <span className="text-xs text-gray-600 font-mono mt-0.5 truncate">
+                      ID: {file.document_id}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteIndexed(file.document_id, file.filename)}
+                    disabled={deletingId === file.document_id}
+                    className="shrink-0 px-3 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 rounded text-xs font-bold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {deletingId === file.document_id ? 'Purging...' : 'Purge 🗑️'}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-
     </div>
   );
-}
+};
+
+export default Upload;

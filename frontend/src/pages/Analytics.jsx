@@ -1,32 +1,19 @@
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { TrendingUp, AlertTriangle, Clock, ArrowUpRight, ArrowDownRight, MessageSquare, Mail, MessageCircle, ShieldAlert, X, BarChart3, Globe, Zap } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Clock, ArrowUpRight, MessageSquare, Mail, MessageCircle, Upload, Trash2, Loader2, Database, FileText } from 'lucide-react';
 
-const FeedbackRow = memo(({ item }) => {
-  const Icon = item.icon;
-  return (
-    <tr className="border-b border-gray-850/40 hover:bg-gray-900/10 transition-colors">
-      <td className="bg-transparent pl-0 py-3 font-semibold text-white">
-        <span className="flex items-center gap-2"><Icon size={12} className="text-brand-primary/80"/> {item.source}</span>
-      </td>
-      <td className="bg-transparent py-3 text-gray-300 max-w-[200px] truncate" title={item.msg}>{item.msg}</td>
-      <td className="bg-transparent py-3">
-        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
-          item.severity === 'CRITICAL' ? 'text-red-400 bg-red-500/10 border-red-500/20' :
-          item.severity === 'HIGH' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-          'text-indigo-400 bg-indigo-500/10 border-indigo-500/20'
-        }`}>
-          {item.severity}
-        </span>
-      </td>
-      <td className="bg-transparent text-right pr-0 py-3 text-brand-muted font-medium">{item.time}</td>
-    </tr>
-  );
-});
+import MetricsGrid from '../components/analytics/MetricsGrid';
+import TrendChart from '../components/analytics/TrendChart';
+import SentimentCircle from '../components/analytics/SentimentCircle';
+import BenchmarkingMatrix from '../components/analytics/BenchmarkingMatrix';
+import ForecastSimulator from '../components/analytics/ForecastSimulator';
+import SwotModal from '../components/analytics/SwotModal';
+import UrgentFeedbacks from '../components/analytics/UrgentFeedbacks';
+import TopProducts from '../components/analytics/TopProducts';
 
 const Analytics = () => {
   const [liveMetrics, setLiveMetrics] = useState(null);
-  const [forecastData, setForecastData] = useState([]);
+  const [baseForecastData, setBaseForecastData] = useState([]);
   const [benchmarks, setBenchmarks] = useState([]);
   const [searchMeta, setSearchMeta] = useState({ query: '', time: '' });
   const [loading, setLoading] = useState(true);
@@ -34,10 +21,29 @@ const Analytics = () => {
   const [swotData, setSwotData] = useState(null);
   const [isSwotOpen, setIsSwotOpen] = useState(false);
   const [swotLoading, setSwotLoading] = useState(false);
-  
-  const [buttonPos, setButtonPos] = useState({ x: window.innerWidth - 100, y: window.innerHeight - 100 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  // What-If Simulation States
+  const [priceMultiplier, setPriceMultiplier] = useState(0); // Range: -50% to +50%
+  const [efficiencyMultiplier, setEfficiencyMultiplier] = useState(0); // Range: -20% to +20%
+
+  // Ingestion & Vector Base States
+  const [activeFiles, setActiveFiles] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [pollingDocId, setPollingDocId] = useState(null);
+
+  const fetchUploadedFiles = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('http://127.0.0.1:8000/api/v1/chat/uploaded-files', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      setActiveFiles(response.data);
+    } catch (error) {
+      console.error("Failed to fetch active vector base files", error);
+    }
+  };
 
   useEffect(() => {
     const fetchAnalyticsForecastAndBenchmarking = async () => {
@@ -52,7 +58,7 @@ const Analytics = () => {
         ]);
         
         setLiveMetrics(metricsRes.data);
-        setForecastData(forecastRes.data.forecast_data);
+        setBaseForecastData(forecastRes.data.forecast_data);
         setBenchmarks(benchmarkingRes.data.benchmarks);
         setSearchMeta({
           query: benchmarkingRes.data.search_query_used,
@@ -64,8 +70,89 @@ const Analytics = () => {
         setLoading(false);
       }
     };
+    
     fetchAnalyticsForecastAndBenchmarking();
+    fetchUploadedFiles();
   }, []);
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setUploadFile(e.target.files[0]);
+    }
+  };
+
+  const commitUpload = async () => {
+    if (!uploadFile) return;
+    setUploading(true);
+    setUploadProgress(0);
+
+    const formData = new FormData();
+    formData.append('file', uploadFile);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post('http://127.0.0.1:8000/api/v1/chat/index-payload', formData, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      const { document_id } = response.data;
+      setPollingDocId(document_id);
+    } catch (error) {
+      console.error("Upload failed", error);
+      setUploading(false);
+    }
+  };
+
+  useEffect(() => {
+    let interval;
+    if (pollingDocId) {
+      interval = setInterval(async () => {
+        try {
+          const token = localStorage.getItem('token');
+          const response = await axios.get(`http://127.0.0.1:8000/api/v1/chat/ingestion-status/${pollingDocId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const { status, progress } = response.data;
+          
+          setUploadProgress(progress);
+
+          if (status === 'completed' || status === 'failed') {
+            clearInterval(interval);
+            setPollingDocId(null);
+            setUploading(false);
+            if (status === 'completed') {
+              setUploadFile(null);
+              // Reset file input value
+              const fileInput = document.getElementById('vector-file-upload');
+              if (fileInput) fileInput.value = '';
+              fetchUploadedFiles();
+            }
+          }
+        } catch (error) {
+          console.error("Polling failed", error);
+          clearInterval(interval);
+          setPollingDocId(null);
+          setUploading(false);
+        }
+      }, 2500);
+    }
+    return () => clearInterval(interval);
+  }, [pollingDocId]);
+
+  const handleDeleteFile = async (documentId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`http://127.0.0.1:8000/api/v1/chat/delete-file/${documentId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      fetchUploadedFiles();
+    } catch (error) {
+      console.error("Failed to delete file", error);
+    }
+  };
 
   const fetchSwotAnalysis = async () => {
     if (swotData) {
@@ -87,37 +174,6 @@ const Analytics = () => {
       setSwotLoading(false);
     }
   };
-
-  const handleMouseDown = (e) => {
-    setIsDragging(true);
-    setDragOffset({
-      x: e.clientX - buttonPos.x,
-      y: e.clientY - buttonPos.y
-    });
-  };
-
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      if (!isDragging) return;
-      const newX = Math.max(20, Math.min(window.innerWidth - 80, e.clientX - dragOffset.x));
-      const newY = Math.max(20, Math.min(window.innerHeight - 80, e.clientY - dragOffset.y));
-      setButtonPos({ x: newX, y: newY });
-    };
-
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
-
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, dragOffset]);
 
   const metrics = useMemo(() => {
     if (!liveMetrics) return [];
@@ -199,6 +255,28 @@ const Analytics = () => {
     };
   }, [chartData]);
 
+  // Dynamic Mathematical Simulation Pipe over Ingested Forecast Vectors
+  const simulatedForecastData = useMemo(() => {
+    const priceEffect = 1 + priceMultiplier / 100;
+    const efficiencyEffect = 1 + efficiencyMultiplier / 100;
+    const combinedGrowthDelta = (priceMultiplier * 0.4) + (efficiencyMultiplier * 0.6);
+
+    return baseForecastData.map(data => {
+      const simulatedRevenue = data.predicted_revenue * priceEffect * efficiencyEffect;
+      const simulatedLow = data.confidence_bound_low * priceEffect * efficiencyEffect;
+      const simulatedHigh = data.confidence_bound_high * priceEffect * efficiencyEffect;
+      const simulatedGrowth = data.growth_rate + combinedGrowthDelta;
+
+      return {
+        ...data,
+        predicted_revenue: Math.max(0, simulatedRevenue),
+        confidence_bound_low: Math.max(0, simulatedLow),
+        confidence_bound_high: Math.max(0, simulatedHigh),
+        growth_rate: Number(simulatedGrowth.toFixed(1))
+      };
+    });
+  }, [baseForecastData, priceMultiplier, efficiencyMultiplier]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96 text-xs font-mono tracking-widest text-brand-primary animate-pulse">
@@ -208,8 +286,7 @@ const Analytics = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans relative">
-      
+    <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans relative pb-20">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white">Analytics Dashboard</h2>
@@ -227,288 +304,109 @@ const Analytics = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((item, idx) => {
-          const Icon = item.icon;
-          return (
-            <div key={idx} className="rounded-xl border border-gray-800/40 bg-surface p-5 shadow-lg flex flex-col justify-between">
-              <div className="flex items-center justify-between text-brand-muted">
-                <span className="text-xs font-semibold tracking-wide">{item.title}</span>
-                <Icon size={16} className="text-gray-500" />
-              </div>
-              <div className="mt-4 flex items-baseline justify-between">
-                <span className="text-2xl font-bold tracking-tight text-white">{item.value}</span>
-                <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${
-                  item.isPositive ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {item.isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                  {item.change}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <MetricsGrid metrics={metrics} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-8 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
-          <div className="flex items-center justify-between mb-6">
-            <h3 id="trend-chart-title" className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono">
-              📈 Top Complaints over Time
-            </h3>
-            <div className="flex items-center gap-4 text-[11px] text-brand-muted font-medium">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-brand-primary" /> UX Issues</span>
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-gray-600" /> Latency</span>
-            </div>
-          </div>
-
-          <figure className="h-64 w-full relative pt-4">
-            <svg role="img" aria-labelledby="trend-chart-title" aria-describedby="chart-accessible-desc" className="w-full h-full" viewBox="0 0 600 200" preserveAspectRatio="none">
-              <line x1="0" y1="50" x2="600" y2="50" stroke="#1F2937" strokeWidth="0.5" strokeDasharray="4 4" />
-              <line x1="0" y1="100" x2="600" y2="100" stroke="#1F2937" strokeWidth="0.5" strokeDasharray="4 4" />
-              <line x1="0" y1="150" x2="600" y2="150" stroke="#1F2937" strokeWidth="0.5" strokeDasharray="4 4" />
-              <path d={smoothBezierPath('ux')} fill="none" stroke="#818CF8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d={smoothBezierPath('latency')} fill="none" stroke="#4B5563" strokeWidth="1.5" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <figcaption id="chart-accessible-desc" className="sr-only">Line chart plotting indicators.</figcaption>
-            <div className="flex justify-between text-[10px] text-gray-500 font-bold font-mono mt-3 px-1">
-              {chartData.map((d, i) => <span key={i}>{d.label}</span>)}
-            </div>
-          </figure>
-        </div>
-
-        <div className="lg:col-span-4 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono mb-4">
-            📊 Sentiment Distribution
-          </h3>
-          <div className="relative flex items-center justify-center my-auto">
-            <svg className="w-40 h-40 transform -rotate-90" viewBox="0 0 100 100">
-              <circle cx="50" cy="50" r="40" stroke="#111827" strokeWidth="10" fill="transparent" />
-              <circle cx="50" cy="50" r="40" stroke="#818CF8" strokeWidth="10" fill="transparent" strokeDasharray={sentiment.circumference} strokeDashoffset={sentiment.positiveOffset} />
-            </svg>
-            <div className="absolute flex flex-col items-center justify-center">
-              <span className="text-2xl font-black text-white tracking-tight">
-                {liveMetrics ? `${Math.round(liveMetrics.sentiment_score)}%` : '78%'}
-              </span>
-              <span className="text-[9px] uppercase font-bold tracking-widest text-green-400 mt-0.5">Positive</span>
-            </div>
-          </div>
-          <div className="space-y-2 pt-4 text-xs font-medium border-t border-gray-850/40">
-            <div className="flex justify-between items-center"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-brand-primary" /> Positive</span><span className="text-white font-mono">{liveMetrics ? liveMetrics.sentiment_score : 65.2}%</span></div>
-            <div className="flex justify-between items-center"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-gray-400" /> Neutral</span><span className="text-white font-mono">24.8%</span></div>
-            <div className="flex justify-between items-center"><span className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-red-300" /> Negative</span><span className="text-white font-mono">10.0%</span></div>
-          </div>
-        </div>
+        <TrendChart chartData={chartData} smoothBezierPath={smoothBezierPath} />
+        <SentimentCircle sentiment={sentiment} liveMetrics={liveMetrics} />
       </div>
 
-      {/* ─── LIVE REAL-TIME COMPETITOR BENCHMARKING GRID WIDGET ─── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-12 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-gray-850 pb-4 mb-6">
-            <div className="flex items-center gap-2.5">
-              <Globe size={16} className="text-brand-primary animate-pulse" />
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-widest text-white font-mono">
-                  Live Competitor Benchmarking Matrix
-                </h4>
-                <p className="text-[10px] text-brand-muted mt-0.5">
-                  Real-time intelligence scraped from global vectors. Query: <span className="text-gray-400 italic">"{searchMeta.query}"</span>
-                </p>
-              </div>
-            </div>
-            <span className="text-[9px] font-mono font-black text-gray-500 uppercase tracking-widest bg-[#0B0F19] px-2 py-1 rounded border border-gray-850">
-              ⚡ Scraped At: {searchMeta.time || 'N/A'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            <div className="space-y-4">
-              <h5 className="text-[11px] font-bold tracking-wider text-brand-muted font-mono uppercase">
-                Market Share Shareholder Comparison (%)
-              </h5>
-              <div className="space-y-3.5">
-                {benchmarks.map((comp, idx) => (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex justify-between text-xs">
-                      <span className={`font-medium ${comp.company_name.includes('Our SaaS') || comp.company_name.includes('InsightAgent') ? 'text-brand-primary font-bold' : 'text-gray-300'}`}>
-                        {comp.company_name}
-                      </span>
-                      <span className="font-mono text-white font-bold">{comp.market_share_percentage}%</span>
-                    </div>
-                    <div className="w-full bg-[#0B0F19] h-2 rounded-md overflow-hidden border border-gray-850/60">
-                      <div 
-                        style={{ width: `${comp.market_share_percentage}%` }}
-                        className={`h-full rounded-md transition-all duration-1000 ${
-                          comp.company_name.includes('Our SaaS') || comp.company_name.includes('InsightAgent') ? 'bg-brand-primary' : 'bg-gray-700'
-                        }`} 
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto text-[11px] w-full flex flex-col justify-between">
-              <h5 className="text-[11px] font-bold tracking-wider text-brand-muted font-mono uppercase mb-3">
-                Core Scalability Performance Metrics
-              </h5>
-              <table aria-label="Competitor metadata grid" className="table table-xs w-full border-none">
-                <thead>
-                  <tr className="border-b border-gray-800 text-brand-muted font-bold text-left uppercase text-[10px] font-mono">
-                    <th className="bg-transparent pl-0 py-2">Vendor Asset</th>
-                    <th className="bg-transparent py-2 text-center">Satisfaction Index</th>
-                    <th className="bg-transparent text-right pr-0 py-2">API Latency Vector</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {benchmarks.map((comp, idx) => (
-                    <tr key={idx} className="border-b border-gray-850/30 last:border-none hover:bg-gray-900/10 transition-colors">
-                      <td className={`bg-transparent pl-0 py-3 font-semibold ${comp.company_name.includes('Our SaaS') || comp.company_name.includes('InsightAgent') ? 'text-brand-primary' : 'text-white'}`}>
-                        {comp.company_name}
-                      </td>
-                      <td className="bg-transparent text-center py-3 font-mono font-bold text-green-400">
-                        {comp.customer_satisfaction_score}%
-                      </td>
-                      <td className="bg-transparent text-right pr-0 py-3 font-mono font-semibold text-gray-300">
-                        <span className="inline-flex items-center gap-1">
-                          <Zap size={10} className="text-amber-400" /> {comp.api_latency_ms}ms
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
+      <BenchmarkingMatrix searchMeta={searchMeta} benchmarks={benchmarks} />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-        <div className="md:col-span-7 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono flex items-center gap-2">
-              🚨 Urgent Feedbacks
-            </h4>
-            <span className="text-[10px] text-brand-primary font-bold hover:underline cursor-pointer">View All</span>
+        <UrgentFeedbacks urgentFeedbacks={urgentFeedbacks} />
+        <TopProducts products={products} />
+      </div>
+
+      <ForecastSimulator 
+        simulatedForecastData={simulatedForecastData}
+        priceMultiplier={priceMultiplier}
+        setPriceMultiplier={setPriceMultiplier}
+        efficiencyMultiplier={efficiencyMultiplier}
+        setEfficiencyMultiplier={setEfficiencyMultiplier}
+      />
+
+      {/* ─── INGESTION & VECTOR BASE INVENTORY WIDGET ─── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-12 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
+          <div className="flex flex-col gap-4 border-b border-gray-850 pb-4 mb-6">
+            <div>
+              <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono flex items-center gap-2">
+                <Database size={14} className="text-brand-primary" /> Active Vector Base
+              </h4>
+              <p className="text-[10px] text-gray-500 mt-0.5">Manage custom knowledge base documents for enterprise RAG indexing.</p>
+            </div>
+            
+            <div className="flex items-center gap-4 bg-[#0B0F19] rounded-xl p-4 border border-gray-850 flex-wrap">
+              <input 
+                id="vector-file-upload"
+                type="file" 
+                onChange={handleFileChange} 
+                className="text-xs text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-brand-primary/10 file:text-brand-primary hover:file:bg-brand-primary/20 cursor-pointer flex-1 min-w-[250px]"
+                disabled={uploading}
+              />
+              <button 
+                onClick={commitUpload}
+                disabled={!uploadFile || uploading}
+                className="btn btn-sm bg-brand-primary text-black font-bold text-xs rounded-lg px-6 hover:bg-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer transition-colors whitespace-nowrap h-10"
+              >
+                {uploading ? (
+                  <><Loader2 size={14} className="animate-spin" /> Indexing {uploadProgress}%</>
+                ) : (
+                  <><Upload size={14} /> Commit to Vector DB</>
+                )}
+              </button>
+            </div>
           </div>
+
           <div className="overflow-x-auto text-[11px] w-full">
-            <table aria-label="Alerts grid" className="table table-xs w-full border-none">
+            <table aria-label="Vector Base Documents" className="table table-xs w-full border-none">
               <thead>
-                <tr className="border-b border-gray-800 text-brand-muted font-bold text-left">
-                  <th className="bg-transparent pl-0 py-2">Source</th>
-                  <th className="bg-transparent py-2">Message Snippet</th>
-                  <th className="bg-transparent py-2">Severity</th>
-                  <th className="bg-transparent text-right pr-0 py-2">Timestamp</th>
+                <tr className="border-b border-gray-800 text-brand-muted font-bold text-left uppercase font-mono text-[10px]">
+                  <th className="bg-transparent pl-0 py-3">Document Source</th>
+                  <th className="bg-transparent py-3">Chunk/Character Count</th>
+                  <th className="bg-transparent text-right pr-0 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {urgentFeedbacks.map((item) => (
-                  <FeedbackRow key={item.id} item={item} />
-                ))}
+                {activeFiles.length === 0 ? (
+                  <tr>
+                    <td colSpan="3" className="text-center py-6 text-gray-500 font-mono text-[10px]">No documents found in the vector base.</td>
+                  </tr>
+                ) : (
+                  activeFiles.map((doc, idx) => (
+                    <tr key={idx} className="border-b border-gray-850/30 last:border-none hover:bg-gray-900/10 transition-colors">
+                      <td className="bg-transparent pl-0 py-3 font-semibold text-brand-primary flex items-center gap-2">
+                        <FileText size={12} /> {doc.filename || 'Unknown Document'}
+                      </td>
+                      <td className="bg-transparent py-3 text-gray-300 font-mono">
+                        {doc.text_preview ? `${doc.text_preview.length} chars snippet...` : 'Indexed'}
+                      </td>
+                      <td className="bg-transparent text-right pr-0 py-3">
+                        <button 
+                          onClick={() => handleDeleteFile(doc.document_id || doc.id)}
+                          className="text-red-400 hover:text-red-300 p-1.5 rounded-md hover:bg-red-500/10 transition-colors cursor-pointer"
+                          title="Purge Document"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </div>
-
-        <div className="md:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono">
-              🚀 Top Performing Products
-            </h4>
-            <span className="text-[9px] text-gray-500 font-bold">Sorted by Conversion</span>
-          </div>
-          <div className="space-y-4 flex-1 flex flex-col justify-center">
-            {products.map((prod, index) => (
-              <div key={index} className="space-y-1.5">
-                <div className="flex justify-between text-xs font-semibold">
-                  <span className="text-white">{prod.name}</span>
-                  <span className="text-brand-primary font-mono">
-                    {prod.rate}{' '}
-                    <span className={`text-[10px] font-bold ${prod.isUp ? 'text-green-400' : 'text-red-400'}`}>
-                      {prod.delta}
-                    </span>
-                  </span>
-                </div>
-                <div className="w-full bg-gray-900 h-1.5 rounded-full overflow-hidden border border-gray-800/50">
-                  <div className={`bg-brand-primary ${prod.width} h-full rounded-full transition-all duration-500`} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
       </div>
 
-      <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono flex items-center gap-2">
-            <BarChart3 size={14} className="text-brand-primary" /> Predictive Insights & Revenue Forecasting
-          </h4>
-          <span className="text-[9px] font-mono text-gray-500 font-bold">Target Horizon: 2 Quarters</span>
-        </div>
-        
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {forecastData.map((data, index) => (
-            <div key={index} className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-4 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold font-mono text-gray-400">{data.period}</span>
-                <span className="text-[10px] font-mono font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded">
-                  +{data.growth_rate}% Projected Growth
-                </span>
-              </div>
-              <div className="mt-4 flex items-baseline justify-between">
-                <div>
-                  <p className="text-[10px] font-mono tracking-wide text-gray-500 uppercase font-semibold">Predicted Value</p>
-                  <p className="text-xl font-bold tracking-tight text-white mt-0.5">${data.predicted_revenue.toLocaleString()}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[9px] font-mono text-gray-600 font-semibold">Confidence Interval</p>
-                  <p className="text-[11px] font-mono text-brand-muted mt-0.5">
-                    ${data.confidence_bound_low.toLocaleString()} - ${data.confidence_bound_high.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <button 
-        onMouseDown={handleMouseDown}
-        onClick={() => !isDragging && fetchSwotAnalysis()}
-        style={{ left: `${buttonPos.x}px`, top: `${buttonPos.y}px`, position: 'fixed', zIndex: 50 }}
-        className="w-14 h-14 bg-indigo-600 hover:bg-indigo-500 rounded-full shadow-2xl flex items-center justify-center text-white font-mono text-xs font-bold tracking-tighter border border-indigo-400/30 cursor-grab active:cursor-grabbing transition-colors select-none"
-      >
-        SWOT
-      </button>
-
-      {isSwotOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in p-4">
-          <div className="bg-surface/80 border border-gray-800/80 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative backdrop-blur-xl max-h-[85vh] overflow-y-auto">
-            <button 
-              onClick={() => setIsSwotOpen(false)} 
-              className="absolute top-4 w-8 h-8 rounded-lg flex items-center justify-center right-4 text-gray-400 hover:text-white hover:bg-gray-800/50 transition-colors cursor-pointer"
-            >
-              <X size={16} />
-            </button>
-            
-            <div className="flex items-center gap-2 text-brand-primary border-b border-gray-800 pb-3 mb-4">
-              <ShieldAlert size={18} />
-              <h3 className="text-sm font-bold tracking-wider uppercase font-mono text-white">AI Strategic SWOT Intelligence</h3>
-            </div>
-
-            {swotLoading ? (
-              <div className="flex items-center justify-center h-48 text-xs font-mono tracking-widest text-brand-primary animate-pulse">
-                GENERATING SWOT INSIGHT MATRIX...
-              </div>
-            ) : (
-              <div className="text-xs text-gray-300 leading-relaxed font-sans space-y-4 whitespace-pre-wrap whitespace-pre-line text-left">
-                {swotData}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
+      <SwotModal 
+        swotData={swotData}
+        isSwotOpen={isSwotOpen}
+        setIsSwotOpen={setIsSwotOpen}
+        swotLoading={swotLoading}
+        fetchSwotAnalysis={fetchSwotAnalysis}
+      />
     </div>
   );
 };

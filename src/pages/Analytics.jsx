@@ -7,15 +7,14 @@ const FeedbackRow = memo(({ item }) => {
   return (
     <tr className="border-b border-gray-850/40 hover:bg-gray-900/10 transition-colors">
       <td className="bg-transparent pl-0 py-3 font-semibold text-white">
-        <span className="flex items-center gap-2"><Icon size={12} className="text-brand-primary/80"/> {item.source}</span>
+        <span className="flex items-center gap-2"><Icon size={12} className="text-brand-primary/80" /> {item.source}</span>
       </td>
       <td className="bg-transparent py-3 text-gray-300 max-w-[200px] truncate" title={item.msg}>{item.msg}</td>
       <td className="bg-transparent py-3">
-        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
-          item.severity === 'CRITICAL' ? 'text-red-400 bg-red-500/10 border-red-500/20' :
-          item.severity === 'HIGH' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
-          'text-indigo-400 bg-indigo-500/10 border-indigo-500/20'
-        }`}>
+        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${item.severity === 'CRITICAL' ? 'text-red-400 bg-red-500/10 border-red-500/20' :
+            item.severity === 'HIGH' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' :
+              'text-indigo-400 bg-indigo-500/10 border-indigo-500/20'
+          }`}>
           {item.severity}
         </span>
       </td>
@@ -26,7 +25,7 @@ const FeedbackRow = memo(({ item }) => {
 
 
 const Analytics = () => {
-  
+
   const metrics = useMemo(() => [
     { title: 'Total Interactions', value: '1.2M', change: '+12.4%', isPositive: true, icon: MessageSquare },
     { title: 'Avg. Sentiment Score', value: '78.4%', change: '+3.1%', isPositive: true, icon: TrendingUp },
@@ -34,18 +33,18 @@ const Analytics = () => {
     { title: 'Response Time', value: '1.4m', change: '+18.5%', isPositive: true, icon: Clock },
   ], []);
 
-  
+
   const chartData = useMemo(() => [
     { label: 'OCT 18', ux: 140, latency: 170 },
     { label: 'OCT 20', ux: 110, latency: 150 },
     { label: 'OCT 22', ux: 160, latency: 180 },
     { label: 'OCT 24', ux: 120, latency: 140 },
-    { label: 'OCT 26', ux: 90,  latency: 130 },
+    { label: 'OCT 26', ux: 90, latency: 130 },
     { label: 'OCT 28', ux: 100, latency: 110 },
-    { label: 'OCT 30', ux: 70,  latency: 120 },
+    { label: 'OCT 30', ux: 70, latency: 120 },
   ], []);
 
- 
+
   const sentiment = useMemo(() => {
     const radius = 40;
     const circumference = 2 * Math.PI * radius;
@@ -70,7 +69,7 @@ const Analytics = () => {
     { id: 4, source: 'Email', icon: Mail, msg: 'Invoice receipt not received for last billing...', severity: 'MEDIUM', time: '1 hr ago' },
   ], []);
 
-  
+
   const smoothBezierPath = useMemo(() => {
     return (key) => {
       if (chartData.length === 0) return "";
@@ -80,25 +79,25 @@ const Analytics = () => {
       const padding = 20;
       const usableHeight = svgHeight - padding * 2;
 
-      
+
       const values = chartData.map(d => d[key]);
       const maxVal = Math.max(...values);
       const minVal = Math.min(...values);
       const valueRange = maxVal - minVal || 1;
 
-      
+
       const points = chartData.map((d, i) => {
         const x = (i * svgWidth) / (chartData.length - 1);
-        
+
         const y = svgHeight - (padding + ((d[key] - minVal) / valueRange) * usableHeight);
         return { x, y };
       });
 
-      
+
       return points.reduce((path, p, i, a) => {
         if (i === 0) return `M ${p.x} ${p.y}`;
 
-        
+
         const cpX1 = a[i - 1].x + (p.x - a[i - 1].x) / 3;
         const cpY1 = a[i - 1].y;
         const cpX2 = a[i - 1].x + (2 * (p.x - a[i - 1].x)) / 3;
@@ -107,12 +106,12 @@ const Analytics = () => {
         return `${path} C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p.x} ${p.y}`;
       }, "");
     };
-  }, [chartData]); 
+  }, [chartData]);
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans">
-      
-      
+
+
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white">Analytics Dashboard</h2>
@@ -130,7 +129,7 @@ const Analytics = () => {
         </div>
       </div>
 
-      
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {metrics.map((item, idx) => {
           const Icon = item.icon;
@@ -142,9 +141,8 @@ const Analytics = () => {
               </div>
               <div className="mt-4 flex items-baseline justify-between">
                 <span className="text-2xl font-bold tracking-tight text-white">{item.value}</span>
-                <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${
-                  item.isPositive ? 'text-green-400' : 'text-red-400'
-                }`}>
+                <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${item.isPositive ? 'text-green-400' : 'text-red-400'
+                  }`}>
                   {item.isPositive ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                   {item.change}
                 </span>
@@ -154,10 +152,10 @@ const Analytics = () => {
         })}
       </div>
 
-      
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        
-        
+
+
         <div className="lg:col-span-8 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
           <div className="flex items-center justify-between mb-6">
             <h3 id="trend-chart-title" className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono">
@@ -170,34 +168,34 @@ const Analytics = () => {
           </div>
 
           <figure className="h-64 w-full relative pt-4">
-           
-            <svg 
-              role="img" 
+
+            <svg
+              role="img"
               aria-labelledby="trend-chart-title"
               aria-describedby="chart-accessible-desc"
-              className="w-full h-full" 
-              viewBox="0 0 600 200" 
+              className="w-full h-full"
+              viewBox="0 0 600 200"
               preserveAspectRatio="none"
             >
               <line x1="0" y1="50" x2="600" y2="50" stroke="#1F2937" strokeWidth="0.5" strokeDasharray="4 4" />
               <line x1="0" y1="100" x2="600" y2="100" stroke="#1F2937" strokeWidth="0.5" strokeDasharray="4 4" />
               <line x1="0" y1="150" x2="600" y2="150" stroke="#1F2937" strokeWidth="0.5" strokeDasharray="4 4" />
-              
-              
+
+
               <path d={smoothBezierPath('ux')} fill="none" stroke="#818CF8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               <path d={smoothBezierPath('latency')} fill="none" stroke="#4B5563" strokeWidth="1.5" strokeDasharray="5 5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
             <figcaption id="chart-accessible-desc" className="sr-only">
               Line chart plotting enterprise performance indicators. UX issues curve indicates a downward operational optimization trend closing at index 70.
             </figcaption>
-            
+
             <div className="flex justify-between text-[10px] text-gray-500 font-bold font-mono mt-3 px-1">
               {chartData.map((d, i) => <span key={i}>{d.label}</span>)}
             </div>
           </figure>
         </div>
 
-       
+
         <div className="lg:col-span-4 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
           <h3 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono mb-4">
             📊 Sentiment Distribution
@@ -210,7 +208,7 @@ const Analytics = () => {
               <circle cx="50" cy="50" r="40" stroke="#9CA3AF" strokeWidth="10" fill="transparent" strokeDasharray={sentiment.circumference} strokeDashoffset={sentiment.neutralOffset} />
               <circle cx="50" cy="50" r="40" stroke="#FCA5A5" strokeWidth="10" fill="transparent" strokeDasharray={sentiment.circumference} strokeDashoffset={sentiment.negativeOffset} />
             </svg>
-            
+
             <div className="absolute flex flex-col items-center justify-center">
               <span className="text-2xl font-black text-white tracking-tight">78%</span>
               <span className="text-[9px] uppercase font-bold tracking-widest text-green-400 mt-0.5">Positive</span>
@@ -225,10 +223,10 @@ const Analytics = () => {
         </div>
       </div>
 
-      
+
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-        
-        
+
+
         <div className="md:col-span-7 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono flex items-center gap-2">
@@ -256,7 +254,7 @@ const Analytics = () => {
           </div>
         </div>
 
-        
+
         <div className="md:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
           <div className="flex items-center justify-between mb-4">
             <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono">

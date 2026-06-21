@@ -3,16 +3,33 @@
 const BASE_URL = "http://127.0.0.1:8000/api/v1";
 
 /**
- *  Helper to retrieve JWT Token from localStorage
+ * Helper to retrieve JWT Token from localStorage
  */
 const getAuthHeader = () => {
   const token = localStorage.getItem("token");
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
+/**
+ * Global 401 guard — when any authenticated request gets a 401, the stale
+ * token is cleared and the user is hard-redirected to /login.
+ * This eliminates the infinite auth loop caused by expired tokens.
+ */
+const handleResponse = async (response) => {
+  if (response.status === 401) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user_role");
+    if (window.location.pathname !== "/login") {
+      window.location.href = "/login";
+    }
+    throw new Error("Session expired. Please log in again.");
+  }
+  return response;
+};
+
 export const apiService = {
   /**
-   *  1. Authenticate User and Store Token
+   * 1. Authenticate user and store JWT token
    */
   login: async (email, password) => {
     const formData = new URLSearchParams();
@@ -21,116 +38,178 @@ export const apiService = {
 
     const response = await fetch(`${BASE_URL}/auth/login`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error("Authentication failed! Please check credentials.");
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || "Authentication failed. Please check your credentials.");
     }
 
     const data = await response.json();
     if (data.access_token) {
       localStorage.setItem("token", data.access_token);
     }
+    if (data.user?.role) {
+      localStorage.setItem("user_role", data.user.role);
+    }
     return data;
   },
 
   /**
-   *  2. Initialize a Brand New Chat Room/Session
+   * 2. Create a new chat session
    */
   createChatSession: async (title) => {
-    const response = await fetch(`${BASE_URL}/chat/session`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...getAuthHeader(),
-      },
-      body: JSON.stringify({ title }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Failed to initialize enterprise chat workspace.");
-    }
-
-    return await response.json(); // Returns { id, user_id, title, ... }
+    const response = await handleResponse(
+      await fetch(`${BASE_URL}/chat/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
+        body: JSON.stringify({ title }),
+      })
+    );
+    if (!response.ok) throw new Error("Failed to create chat workspace.");
+    return await response.json();
   },
 
   /**
-   *  3. Trigger & Consume Live Server-Sent Events (SSE) Stream
-   * This uses readable streams to read token-by-token from Groq Cloud
+   * 3. Retrieve all chat sessions for the authenticated user
+   */
+  getUserSessions: async () => {
+    const response = await handleResponse(
+      await fetch(`${BASE_URL}/chat/session`, {
+        method: "GET",
+        headers: getAuthHeader(),
+      })
+    );
+    if (!response.ok) throw new Error("Failed to retrieve chat sessions.");
+    return await response.json();
+  },
+
+  /**
+   * 4. Soft-delete a chat session
+   */
+  deleteChatSession: async (sessionId) => {
+    const response = await handleResponse(
+      await fetch(`${BASE_URL}/chat/session/${sessionId}`, {
+        method: "DELETE",
+        headers: getAuthHeader(),
+      })
+    );
+    if (!response.ok) throw new Error("Failed to delete chat session.");
+    return await response.json();
+  },
+
+  /**
+   * 5. Trigger live SSE streaming response from the RAG agent
    */
   streamChatResponse: async (sessionId, prompt, onChunkReceived, onStreamComplete, onError) => {
     try {
       const response = await fetch(`${BASE_URL}/chat/stream/${sessionId}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeader(),
-        },
+        headers: { "Content-Type": "application/json", ...getAuthHeader() },
         body: JSON.stringify({ user_prompt: prompt }),
       });
 
+      await handleResponse(response);
+
       if (!response.ok) {
-        throw new Error("Streaming connection interrupted by core engine.");
+        throw new Error("Streaming connection failed.");
       }
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
       let buffer = "";
 
-      // Continuous stream reading loop
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
-
-        // Save the last incomplete line back to buffer
-        buffer = lines.pop();
+        buffer = lines.pop(); // Hold last incomplete line
 
         for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-
-          // Catch raw streaming chunks coming from our FastAPI server
-          if (trimmed.startsWith("data:")) {
-            const rawData = trimmed.replace("data:", "").trim();
-            
-            // Filter out system stream events if any, or pass text directly
-            if (rawData.startsWith('{"event":')) {
-              const eventObj = JSON.parse(rawData);
-              if (eventObj.event === "stream_failed") {
-                throw new Error(eventObj.error || "Stream cluster failure");
-              }
-            } else {
-              // Pass the clean text token to our UI updater callback
-              onChunkReceived(rawData);
-            }
+          if (!line || line === "\r") continue;
+          if (line.startsWith("data:")) {
+            let rawData = line.substring(5);
+            if (rawData.startsWith(" ")) rawData = rawData.substring(1);
+            if (rawData.endsWith("\r")) rawData = rawData.slice(0, -1);
+            if (rawData) onChunkReceived(rawData);
           }
         }
       }
 
       if (onStreamComplete) onStreamComplete();
     } catch (err) {
-      if (onError) onError(err.message || err);
+      if (onError) onError(err.message || String(err));
     }
   },
+
   /**
-   * 4. Fetch Historical Messages for a specific session
+   * 6. Fetch historical messages for a session
    */
   getChatHistory: async (sessionId) => {
-    const response = await fetch(`${BASE_URL}/chat/session/${sessionId}/messages`, {
-      method: "GET",
-      headers: getAuthHeader(),
-    });
+    const response = await handleResponse(
+      await fetch(`${BASE_URL}/chat/session/${sessionId}/messages`, {
+        method: "GET",
+        headers: getAuthHeader(),
+      })
+    );
+    if (!response.ok) throw new Error("Failed to load chat history.");
+    return await response.json();
+  },
+
+  /**
+   * 7. Commit a file to the vector DB (background-indexed)
+   */
+  indexPayload: async (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await handleResponse(
+      await fetch(`${BASE_URL}/chat/index-payload`, {
+        method: "POST",
+        headers: getAuthHeader(), // No Content-Type — browser sets multipart boundary
+        body: formData,
+      })
+    );
 
     if (!response.ok) {
-      throw new Error("Failed to pull historical session logs.");
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || "Failed to upload file to pipeline.");
     }
-    return await response.json(); // Expected: Array of { role, content }
-  }
+    return await response.json();
+  },
+
+  /**
+   * 8. Get list of indexed documents from Qdrant for the current user
+   */
+  getUploadedFiles: async () => {
+    const response = await handleResponse(
+      await fetch(`${BASE_URL}/chat/uploaded-files`, {
+        method: "GET",
+        headers: getAuthHeader(),
+      })
+    );
+    if (!response.ok) throw new Error("Failed to retrieve uploaded file list.");
+    return await response.json();
+  },
+
+  /**
+   * 9. Purge a document's vectors from Qdrant by document_id
+   */
+  deleteFile: async (documentId) => {
+    const response = await handleResponse(
+      await fetch(`${BASE_URL}/chat/delete-file/${documentId}`, {
+        method: "DELETE",
+        headers: getAuthHeader(),
+      })
+    );
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.detail || "Failed to delete file from vector store.");
+    }
+    return await response.json();
+  },
 };

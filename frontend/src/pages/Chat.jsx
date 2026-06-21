@@ -11,10 +11,10 @@ const Chat = () => {
   const [isStreaming, setIsStreaming] = useState(false);
   const [newChatTitle, setNewChatTitle] = useState("");
   const [creating, setCreating] = useState(false);
-  const [errorBanner, setErrorBanner] = useState(null); // Production UI Error Banner
+  const [errorBanner, setErrorBanner] = useState(null);
 
   const chatBottomRef = useRef(null);
-  const bufferRef = useRef(""); // High Performance Token Buffer Matrix
+  const bufferRef = useRef(""); 
   const throttleTimerRef = useRef(null);
 
   // Auto Scroll Engine
@@ -22,11 +22,29 @@ const Chat = () => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Load User Chat Sessions on Mount
+  useEffect(() => {
+    const fetchUserSessions = async () => {
+      try {
+        const historySessions = await apiService.getUserSessions();
+        setSessions(historySessions);
+      } catch (err) {
+        setErrorBanner(`Failed to load chat workspace list: ${err.message}`);
+      }
+    };
+    fetchUserSessions();
+  }, []);
+
   /**
-   * Advanced Session Switching (Pulls Real History from Neon DB)
+   * Advanced Session Switching (Pulls Real History from DB)
    */
   const handleSessionSwitch = async (id) => {
     if (isStreaming) return;
+
+    // 🧹 UX Guard: Flush buffer and clear previous messages list instantly
+    bufferRef.current = "";
+    setMessages([]);
+
     setActiveSessionId(id);
     setErrorBanner(null);
     
@@ -35,6 +53,27 @@ const Chat = () => {
       setMessages(history);
     } catch (err) {
       setErrorBanner(`Failed to populate chat architecture: ${err.message}`);
+    }
+  };
+
+  /**
+   * soft-delete active/inactive session matrices cleanly
+   */
+  const handleDeleteSession = async (id) => {
+    if (isStreaming) return;
+    setErrorBanner(null);
+    try {
+      await apiService.deleteChatSession(id);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+      
+      // 🔒 Active Session Deletion Guard: clear UI state instantly if the open session is deleted
+      if (activeSessionId === id) {
+        setActiveSessionId(null);
+        setMessages([]);
+        bufferRef.current = "";
+      }
+    } catch (err) {
+      setErrorBanner(`Failed to terminate workspace container: ${err.message}`);
     }
   };
 
@@ -111,7 +150,7 @@ const Chat = () => {
         setIsStreaming(false);
         if (throttleTimerRef.current) clearTimeout(throttleTimerRef.current);
       },
-      // ❌ Error Trigger Node
+      //  Error Trigger Node
       (errorMsg) => {
         setIsStreaming(false);
         setErrorBanner(`Streaming Fault Detected: ${errorMsg}`);
@@ -126,6 +165,7 @@ const Chat = () => {
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSessionSwitch={handleSessionSwitch}
+        onSessionDelete={handleDeleteSession}
         newChatTitle={newChatTitle}
         setNewChatTitle={setNewChatTitle}
         onCreateSession={handleCreateSession}

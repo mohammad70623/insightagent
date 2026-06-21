@@ -1,29 +1,37 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff, ShieldCheck, Activity } from 'lucide-react';
+import { apiService } from '../services/api'; 
 
 export default function Login() {
   const navigate = useNavigate();
-  
 
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [loginError, setLoginError] = useState(null); 
 
-  
-  const handleLoginSubmit = (e) => {
+  /**
+   * Core Trigger Point: Fire Real Authentication Request to FastAPI Gate
+   */
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) return;
 
     setIsLoading(true);
+    setLoginError(null); // Clear previous errors
 
-    
-    setTimeout(() => {
-      localStorage.setItem('token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.mockToken');
+    try {
+      const data = await apiService.login(email, password);
+      if (data && data.access_token) {
+        setIsLoading(false);
+        navigate('/app/chat'); 
+      }
+    } catch (err) {
       setIsLoading(false);
-      navigate('/dashboard');
-    }, 800);
+      setLoginError(err.message || "Authentication failed. Please check your credentials.");
+    }
   };
 
   return (
@@ -100,7 +108,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/*  RIGHT PANEL:  (40% Width) */}
+      {/* RIGHT PANEL: (40% Width) */}
       <div className="relative flex flex-1 flex-col justify-center px-8 py-12 sm:px-16 lg:w-[40%] lg:flex-none bg-main">
         
         <div className="mx-auto w-full max-w-sm">
@@ -108,6 +116,13 @@ export default function Login() {
             <h3 className="text-2xl font-semibold tracking-tight text-white">Welcome back</h3>
             <p className="text-xs text-brand-muted mt-1.5">Enter your credentials to access the dashboard</p>
           </div>
+
+          {/* Render Validation Error Banner if Authentication Crashes */}
+          {loginError && (
+            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-xs font-mono tracking-wide">
+              ⚠️ {loginError}
+            </div>
+          )}
 
           <button 
             type="button"
@@ -183,16 +198,16 @@ export default function Login() {
             </button>
           </form>
 
-         <div className="text-center text-xs font-medium border-t border-gray-850/40 pt-4">
-  <span className="text-brand-muted">Don't have an account? </span>
-  <button
-    type="button"
-    onClick={() => navigate('/register')} 
-    className="text-brand-primary hover:underline font-bold bg-transparent border-none outline-none cursor-pointer"
-  >
-    Request Access
-  </button>
-</div>
+          <div className="text-center text-xs font-medium border-t border-gray-850/40 pt-4">
+            <span className="text-brand-muted">Don't have an account? </span>
+            <button
+              type="button"
+              onClick={() => navigate('/register')} 
+              className="text-brand-primary hover:underline font-bold bg-transparent border-none outline-none cursor-pointer"
+            >
+              Request Access
+            </button>
+          </div>
 
           <div className="mt-16 flex justify-center gap-6 text-[10px] text-gray-600 border-t border-gray-900 pt-4 font-semibold">
             <a href="#support" className="hover:text-gray-400 transition-colors">Support</a>
