@@ -17,8 +17,12 @@ const DashboardLayout = () => {
     { name: 'Data Upload', path: '/app/upload', icon: CloudUpload },
     { name: 'AI Chat', path: '/app/chat', icon: MessageSquare },
     { name: 'Billing', path: '/app/billing', icon: CreditCard },
-    { name: 'Admin', path: '/app/admin', icon: Shield },
   ];
+
+  const userRole = localStorage.getItem('user_role') || 'user';
+  if (userRole === 'admin') {
+    menuItems.push({ name: 'Admin', path: '/app/admin', icon: Shield });
+  }
 
   const handleLogout = () => {
     localStorage.removeItem('token');
