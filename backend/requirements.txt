@@ -37,4 +37,9 @@ watchfiles==1.2.0
 websockets==16.0
 sqlmodel
 qdrant-client
-pydantic-settings
+groq
+tavily-python
+langchain
+langchain-core
+langchain-community
+langgraph
