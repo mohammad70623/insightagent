@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History, CheckCircle2, X } from 'lucide-react';
+import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings as SettingsIcon, HelpCircle, Plus, Search, Bell, History, CheckCircle2, X, User, Building, LogOut } from 'lucide-react';
 import axios from 'axios';
 
 /**
@@ -12,8 +12,22 @@ const DashboardLayout = () => {
   const location = useLocation();
 
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [currentTier, setCurrentTier] = useState("Free");
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsProfileDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // On mount, fetch current tier to know what to display
   useEffect(() => {
@@ -219,13 +233,13 @@ const DashboardLayout = () => {
           </button>
           
           {/* Logout Trigger */}
-          <button 
-            type="button"
-            onClick={handleLogout} 
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 cursor-pointer transition-all"
-          >
-            <Settings size={16} /> Logout
-          </button>
+            <button 
+              type="button"
+              onClick={handleLogout} 
+              className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 cursor-pointer transition-all"
+            >
+              <SettingsIcon size={16} /> Logout
+            </button>
         </div>
       </aside>
 
@@ -258,10 +272,41 @@ const DashboardLayout = () => {
             <button type="button" aria-label="Notifications" className="text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none"><Bell size={16} /></button>
             <button type="button" aria-label="History logs" className="text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none"><History size={16} /></button>
             
-            <div className="avatar">
-              <div className="w-8 rounded-full border border-gray-800 overflow-hidden">
-                <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&q=80" alt="user avatar profile" />
-              </div>
+            <div className="relative" ref={dropdownRef}>
+              <button 
+                type="button" 
+                onClick={() => setIsProfileDropdownOpen(!isProfileDropdownOpen)}
+                className="avatar cursor-pointer bg-transparent border-none outline-none focus:ring-2 focus:ring-brand-primary rounded-full"
+              >
+                <div className="w-8 rounded-full border border-gray-800 overflow-hidden">
+                  <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=100&q=80" alt="user avatar profile" />
+                </div>
+              </button>
+              
+              {isProfileDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-56 rounded-xl border border-gray-800 bg-[#0B0F19] shadow-2xl overflow-hidden z-50 animate-fade-in origin-top-right">
+                  <div className="p-3 border-b border-gray-850/40">
+                    <p className="text-xs font-bold text-white truncate">InsightAgent User</p>
+                    <p className="text-[10px] text-brand-muted truncate">Active Workspace</p>
+                  </div>
+                  <div className="p-1">
+                    <button 
+                      onClick={() => { setIsProfileDropdownOpen(false); navigate('/app/settings'); }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold text-gray-300 hover:bg-gray-900/60 hover:text-white transition-colors cursor-pointer"
+                    >
+                      ⚙️ Settings & Profile
+                    </button>
+                  </div>
+                  <div className="p-1 border-t border-gray-850/40">
+                    <button 
+                      onClick={() => { setIsProfileDropdownOpen(false); handleLogout(); }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs font-semibold text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+                    >
+                      🚪 Logout
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

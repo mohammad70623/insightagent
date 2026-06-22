@@ -14,7 +14,7 @@ const Chat = () => {
   const [errorBanner, setErrorBanner] = useState(null);
 
   const chatBottomRef = useRef(null);
-  const bufferRef = useRef(""); 
+  const bufferRef = useRef("");
   const throttleTimerRef = useRef(null);
 
   // Auto Scroll Engine
@@ -47,7 +47,7 @@ const Chat = () => {
 
     setActiveSessionId(id);
     setErrorBanner(null);
-    
+
     try {
       const history = await apiService.getChatHistory(id);
       setMessages(history);
@@ -65,7 +65,7 @@ const Chat = () => {
     try {
       await apiService.deleteChatSession(id);
       setSessions((prev) => prev.filter((s) => s.id !== id));
-      
+
       // 🔒 Active Session Deletion Guard: clear UI state instantly if the open session is deleted
       if (activeSessionId === id) {
         setActiveSessionId(null);
@@ -90,7 +90,7 @@ const Chat = () => {
       const newSession = await apiService.createChatSession(newChatTitle.trim());
       setSessions((prev) => [newSession, ...prev]);
       setActiveSessionId(newSession.id);
-      setMessages([]); 
+      setMessages([]);
       setNewChatTitle("");
     } catch (err) {
       setErrorBanner(`Workspace Initialization Error: ${err.message}`);
@@ -107,7 +107,7 @@ const Chat = () => {
     if (!inputPrompt.trim() || !activeSessionId || isStreaming) return;
 
     const userPromptText = inputPrompt.trim();
-    setInputPrompt(""); 
+    setInputPrompt("");
     setErrorBanner(null);
 
     const userMessageObj = { role: "user", content: userPromptText };
@@ -115,7 +115,7 @@ const Chat = () => {
 
     // Fix 1: Batch state mutations cleanly to secure single layout updates
     setMessages((prev) => [...prev, userMessageObj, aiPlaceholderObj]);
-    
+
     setIsStreaming(true);
     bufferRef.current = ""; // Flush previous operational buffer
 
@@ -160,8 +160,8 @@ const Chat = () => {
 
   return (
     <div className="flex h-screen bg-[#111827] text-gray-100 font-sans">
-      
-      <Sidebar 
+
+      <Sidebar
         sessions={sessions}
         activeSessionId={activeSessionId}
         onSessionSwitch={handleSessionSwitch}
@@ -182,7 +182,7 @@ const Chat = () => {
           </div>
         )}
 
-        <ChatWindow 
+        <ChatWindow
           activeSessionId={activeSessionId}
           messages={messages}
           isStreaming={isStreaming}
