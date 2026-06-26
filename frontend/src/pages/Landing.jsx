@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart3, MessageSquare, ShieldCheck, ArrowRight, CheckCircle2, Globe, ArrowUpRight } from 'lucide-react';
 import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 import TermsOfServiceModal from '../components/TermsOfServiceModal';
+import SecurityModal from '../components/SecurityModal';
 
 /**
  * @description Enterprise SaaS Landing & Pricing Page Component
@@ -12,6 +13,7 @@ const Landing = () => {
   const navigate = useNavigate();
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showSecurityModal, setShowSecurityModal] = useState(false);
 
  
   const pricingPlans = useMemo(() => [
@@ -221,7 +223,7 @@ const Landing = () => {
         <div className="flex flex-wrap gap-4 font-semibold">
           <button type="button" onClick={() => setShowPrivacyModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Privacy Policy</button>
           <button type="button" onClick={() => setShowTermsModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Terms of Service</button>
-          <a href="#security" className="hover:text-white transition-colors">Security</a>
+          <button type="button" onClick={() => setShowSecurityModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Security</button>
           <a href="#contact" className="hover:text-white transition-colors">Contact</a>
         </div>
         <div className="flex gap-3 text-gray-500">
@@ -239,6 +241,12 @@ const Landing = () => {
       <TermsOfServiceModal 
         isOpen={showTermsModal} 
         onClose={() => setShowTermsModal(false)} 
+      />
+
+      {/* ─── SECURITY GLOBAL MODAL ─── */}
+      <SecurityModal 
+        isOpen={showSecurityModal} 
+        onClose={() => setShowSecurityModal(false)} 
       />
     </div>
   );
