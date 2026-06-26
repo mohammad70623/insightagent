@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 import { Shield, Database, Cpu, HardDrive, Trash2, RefreshCcw, KeyRound, Server, Activity } from 'lucide-react';
 
 const Admin = () => {
@@ -9,10 +9,7 @@ const Admin = () => {
   useEffect(() => {
     const fetchTenants = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get('http://127.0.0.1:8000/api/v1/admin/users', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await api.get('/admin/users');
         setTenants(response.data.users || []);
       } catch (error) {
         console.error("Failed to fetch tenant registry", error);
@@ -31,10 +28,7 @@ const Admin = () => {
 
   const handleRemoveTenant = async (userId) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`http://127.0.0.1:8000/api/v1/admin/tenant/${userId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.delete(`/admin/tenant/${userId}`);
       setTenants((prev) => prev.filter(t => t.id !== userId));
       alert("Tenant ecosystem successfully flushed and terminated.");
     } catch (error) {

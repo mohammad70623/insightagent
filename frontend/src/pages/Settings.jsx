@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 import { User, Building, ShieldCheck, Upload, Save, CheckCircle2 } from 'lucide-react';
 
 const Settings = () => {
@@ -28,10 +28,7 @@ const Settings = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get('http://127.0.0.1:8000/api/v1/profile/me', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const response = await api.get('/profile/me');
         const data = response.data;
         setFormData({
           email: data.email || '',
@@ -82,10 +79,7 @@ const Settings = () => {
     setIsSaving(true);
     setSuccessMessage('');
     try {
-      const token = localStorage.getItem('token');
-      await axios.put('http://127.0.0.1:8000/api/v1/profile/update', formData, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await api.put('/profile/update', formData);
       setSuccessMessage('Profile and Workspace settings saved successfully.');
       setTimeout(() => setSuccessMessage(''), 4000);
     } catch (error) {
@@ -106,12 +100,9 @@ const Settings = () => {
     setIsSaving(true);
     setSuccessMessage('');
     try {
-      const token = localStorage.getItem('token');
-      await axios.post('http://127.0.0.1:8000/api/v1/profile/change-password', {
+      await api.post('/profile/change-password', {
         current_password: passwords.current_password,
         new_password: passwords.new_password
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       });
       setSuccessMessage('Security settings updated successfully.');
       setPasswords({ current_password: '', new_password: '', confirm_password: '' });

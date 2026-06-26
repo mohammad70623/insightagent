@@ -1,6 +1,7 @@
-// 🌐 InsightAgent Enterprise API Gateway Service
+import axios from "axios";
 
-const BASE_URL = "http://127.0.0.1:8000/api/v1";
+// 🌐 InsightAgent Enterprise API Gateway Service
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1";
 
 /**
  * Helper to retrieve JWT Token from localStorage
@@ -11,7 +12,36 @@ const getAuthHeader = () => {
 };
 
 /**
- * Global 401 guard — when any authenticated request gets a 401, the stale
+ * Centralized Axios Instance for generic API calls
+ */
+export const api = axios.create({
+  baseURL: BASE_URL,
+});
+
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, (error) => Promise.reject(error));
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user_role");
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * Global 401 guard for fetch responses — when any authenticated request gets a 401, the stale
  * token is cleared and the user is hard-redirected to /login.
  * This eliminates the infinite auth loop caused by expired tokens.
  */

@@ -103,6 +103,14 @@ async def index_payload(
     to prevent memory-spikes, invokes layout-aware extraction, and awaits solid Qdrant insertion.
     """
     try:
+        # ── Qdrant health-gate ────────────────────────────────────────────────
+        ok, err_msg = vector_store.is_available()
+        if not ok:
+            raise HTTPException(
+                status_code=503,
+                detail=f"Vector database offline. {err_msg}"
+            )
+
         # Check Expiration & Limits
         now_utc = datetime.now(timezone.utc)
         if current_user.subscription_expires_at and now_utc > current_user.subscription_expires_at:
@@ -167,6 +175,14 @@ async def index_payload(
 async def get_uploaded_files(current_user: User = Depends(deps.get_current_user)):
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
     try:
+        # ── Qdrant health-gate ────────────────────────────────────────────────
+        ok, err_msg = vector_store.is_available()
+        if not ok:
+            # Return empty list with a header so the frontend can show a warning
+            # instead of crashing (the UI shows "No documents" gracefully).
+            logger.warning(f'{{"event": "qdrant_unavailable_for_file_list", "detail": "{err_msg}"}}')
+            return []
+
         documents = await asyncio.to_thread(
             vector_store.list_user_documents,
             collection_name=tenant_collection,
@@ -191,3 +207,46 @@ async def delete_file_pipeline(document_id: str, current_user: User = Depends(de
     except Exception as e:
         logger.error(f'{{"event": "delete_file_failed", "document_id": "{document_id}", "error": "{str(e)}"}}')
         raise HTTPException(status_code=500, detail=f"Purge routine failed to mutate database: {str(e)}")
+
+
+# ── INGESTION STATUS POLLING ENDPOINT ─────────────────────────────────────────
+# Called by Analytics.jsx every 2.5 s after /index-payload returns document_id.
+# Checks whether at least one vector chunk with that document_id exists in Qdrant,
+# which confirms the background indexing job completed successfully.
+@router.get("/ingestion-status/{document_id}")
+async def get_ingestion_status(document_id: str, current_user: User = Depends(deps.get_current_user)):
+    tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
+    try:
+        from qdrant_client import QdrantClient
+        from qdrant_client.models import Filter, FieldCondition, MatchValue
+        from app.core.config import settings
+
+        client = QdrantClient(url=settings.VECTOR_DB_URL)
+
+        if not client.collection_exists(collection_name=tenant_collection):
+            # Collection not yet created — indexing still in progress
+            return {"status": "processing", "progress": 10}
+
+        # Scroll for at least one point belonging to this document_id
+        results, _ = client.scroll(
+            collection_name=tenant_collection,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="user_id",     match=MatchValue(value=str(current_user.id))),
+                    FieldCondition(key="document_id", match=MatchValue(value=document_id)),
+                ]
+            ),
+            limit=1,
+            with_payload=False,
+            with_vectors=False,
+        )
+
+        if results:
+            return {"status": "completed", "progress": 100}
+        else:
+            return {"status": "processing", "progress": 50}
+
+    except Exception as e:
+        logger.error(f'{{"event": "ingestion_status_failed", "document_id": "{document_id}", "error": "{str(e)}"}}')
+        return {"status": "processing", "progress": 30}
+

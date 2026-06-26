@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import axios from 'axios';
-import { apiService } from '../services/api';
+import { api, apiService } from '../services/api';
 
 // Status badge helper
 const StatusBadge = ({ status, progress }) => {
@@ -76,13 +75,7 @@ const Upload = () => {
     setIsCommitting(true);
     setErrorMessage('');
 
-    // Isolated local Axios config to track chunks without polluting global headers
-    const uploadAxios = axios.create({
-      baseURL: 'http://127.0.0.1:8000/api/v1',
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`
-      }
-    });
+    // We now use the central API instance
 
     for (const fileObj of readyFiles) {
       // Mark as INDEXING
@@ -94,7 +87,7 @@ const Upload = () => {
         const formData = new FormData();
         formData.append('file', fileObj.rawFile);
 
-        await uploadAxios.post('/chat/index-payload', formData, {
+        await api.post('/chat/index-payload', formData, {
           onUploadProgress: (progressEvent) => {
             const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
             setQueuedFiles((prev) =>

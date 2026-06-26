@@ -7,10 +7,36 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
 class VectorStoreService:
     def __init__(self):
         self.client = QdrantClient(url=settings.VECTOR_DB_URL)
-        self.vector_dimension = 384 
+        self.vector_dimension = 384
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # HEALTH CHECK — call this before any Qdrant operation.
+    # Returns (True, None) when Qdrant is reachable.
+    # Returns (False, error_message) when it is not.
+    # ─────────────────────────────────────────────────────────────────────────
+    def is_available(self) -> tuple[bool, Optional[str]]:
+        """
+        Pings Qdrant with a lightweight collections list.
+        Catches WinError 10061 (connection refused) and any other network error.
+        """
+        try:
+            self.client.get_collections()
+            return True, None
+        except Exception as e:
+            err = str(e)
+            if "10061" in err or "Connection refused" in err or "actively refused" in err:
+                msg = (
+                    "Qdrant vector database is not running. "
+                    "Start it with: docker run -p 6333:6333 qdrant/qdrant"
+                )
+            else:
+                msg = f"Qdrant is unreachable: {err}"
+            logger.error(f'{{"event": "qdrant_unavailable", "error": "{err}"}}')
+            return False, msg
 
     def _ensure_collection(self, collection_name: str):
         if not self.client.collection_exists(collection_name=collection_name):
@@ -30,7 +56,7 @@ class VectorStoreService:
                 collection_name=collection_name,
                 points_selector=Filter(
                     must=[
-                        FieldCondition(key="user_id", match=MatchValue(value=str(user_id))),
+                        FieldCondition(key="user_id",     match=MatchValue(value=str(user_id))),
                         FieldCondition(key="document_id", match=MatchValue(value=str(document_id)))
                     ]
                 )
@@ -39,24 +65,28 @@ class VectorStoreService:
         except Exception as e:
             logger.error(f'{{"event": "vector_deletion_failed", "document_id": "{str(document_id)}", "error": "{str(e)}"}}')
 
-    def search_tenant_vectors(self, collection_name: str, user_id: uuid.UUID, query_vector: List[float], top_k: int = 5) -> List[Dict[str, Any]]:
+    def search_tenant_vectors(
+        self,
+        collection_name: str,
+        user_id: uuid.UUID,
+        query_vector: List[float],
+        top_k: int = 5
+    ) -> List[Dict[str, Any]]:
         if not self.client.collection_exists(collection_name=collection_name):
             return []
-            
+
         search_results = self.client.query_points(
             collection_name=collection_name,
             query=query_vector,
             query_filter=Filter(must=[FieldCondition(key="user_id", match=MatchValue(value=str(user_id)))]),
             limit=top_k
         ).points
-        #  Safe fallback pattern: extracts payload using getattr and default dict fallback
         return [getattr(p, 'payload', {}) or {} for p in search_results if p is not None]
 
     def list_user_documents(self, collection_name: str, user_id: uuid.UUID) -> List[Dict[str, Any]]:
         """
         Scrolls through the Qdrant collection and returns de-duplicated document metadata
         (document_id + filename) for a specific tenant user.
-        This is the source of truth since uploaded files are tracked only via vector payloads.
         """
         if not self.client.collection_exists(collection_name=collection_name):
             return []
@@ -65,11 +95,10 @@ class VectorStoreService:
         documents = []
 
         try:
-            # Scroll through all points belonging to this user
             scroll_filter = Filter(
                 must=[FieldCondition(key="user_id", match=MatchValue(value=str(user_id)))]
             )
-            
+
             offset = None
             while True:
                 results, next_offset = self.client.scroll(
@@ -80,26 +109,30 @@ class VectorStoreService:
                     with_payload=True,
                     with_vectors=False,
                 )
-                
+
                 for point in results:
                     payload = getattr(point, 'payload', {}) or {}
-                    doc_id = payload.get("document_id")
+                    doc_id   = payload.get("document_id")
                     filename = payload.get("filename", "Unknown File")
-                    
+
                     if doc_id and doc_id not in seen_document_ids:
                         seen_document_ids.add(doc_id)
                         documents.append({
                             "document_id": doc_id,
-                            "filename": filename,
+                            "filename":    filename,
                         })
-                
+
                 if next_offset is None:
                     break
                 offset = next_offset
 
         except Exception as e:
-            logger.error(f'{{"event": "list_user_documents_failed", "user_id": "{str(user_id)}", "error": "{str(e)}"}}')
+            logger.error(
+                f'{{"event": "list_user_documents_failed", '
+                f'"user_id": "{str(user_id)}", "error": "{str(e)}"}}'
+            )
 
         return documents
+
 
 vector_store = VectorStoreService()

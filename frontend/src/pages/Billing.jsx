@@ -1,5 +1,5 @@
 import React, { useMemo, memo, useState, useEffect } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 import { CreditCard, Zap, Download, ArrowUpRight, ShieldAlert, CheckCircle2, X } from 'lucide-react';
 
 const STATUS_STYLES = {
@@ -44,10 +44,7 @@ const Billing = () => {
 
   const fetchInvoices = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://127.0.0.1:8000/api/v1/billing/invoices', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await api.get('/billing/invoices');
       setInvoices(response.data.invoices || []);
     } catch (error) {
       console.error("Failed to fetch invoices", error);
@@ -68,10 +65,8 @@ const Billing = () => {
   const handleUpgrade = async (planName) => {
     try {
       setIsUpgrading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.post('http://127.0.0.1:8000/api/v1/auth/upgrade-tier',
-        { plan_name: planName },
-        { headers: { Authorization: `Bearer ${token}` } }
+      const response = await api.post('/auth/upgrade-tier',
+        { plan_name: planName }
       );
 
       setCurrentTier(response.data.tier);

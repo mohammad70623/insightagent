@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../services/api';
 import { UploadCloud, MessageSquare, Settings2, MoreVertical, Database, Cpu, HardDrive, X, ShieldAlert } from 'lucide-react';
 
 const Dashboard = () => {
@@ -12,10 +12,7 @@ const Dashboard = () => {
   useEffect(() => {
     const fetchLiveAnomalies = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/anomalies', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await api.get('/chat/analytics/anomalies');
         setAnomalies(response.data.alerts);
       } catch (error) {
         console.error("Failed to fetch live business anomalies:", error);

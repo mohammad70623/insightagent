@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../services/api';
 import { Eye, EyeOff, ShieldCheck, Activity, AlertCircle, ArrowLeft } from 'lucide-react';
 
 export default function Login() {
@@ -41,7 +41,7 @@ export default function Login() {
       formData.append('username', email);
       formData.append('password', password);
 
-      const response = await axios.post('http://127.0.0.1:8000/api/v1/auth/login', formData, {
+      const response = await api.post('/auth/login', formData, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
 
@@ -65,7 +65,7 @@ export default function Login() {
     setErrorMsg('');
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/api/v1/auth/verify-otp', {
+      const response = await api.post('/auth/verify-otp', {
         email: email,
         otp_code: verificationCode,
         purpose: 'login'
@@ -93,7 +93,7 @@ export default function Login() {
     setSuccessMsg('');
 
     try {
-      await axios.post('http://127.0.0.1:8000/api/v1/auth/forgot-password', { email });
+      await api.post('/auth/forgot-password', { email });
       setSuccessMsg('If an account with that email exists, a password reset link has been dispatched.');
     } catch (err) {
       // Backend returns 200 regardless, so we shouldn't hit this often, but fallback:
@@ -361,7 +361,7 @@ export default function Login() {
                       const formDataParams = new URLSearchParams();
                       formDataParams.append('username', email);
                       formDataParams.append('password', password);
-                      await axios.post('http://127.0.0.1:8000/api/v1/auth/login', formDataParams);
+                      await api.post('/auth/login', formDataParams);
                       alert("Code resent successfully!");
                     } catch(e) {}
                   }}

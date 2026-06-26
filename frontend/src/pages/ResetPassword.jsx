@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../services/api';
 import { Eye, EyeOff, ShieldCheck, Activity, AlertCircle, CheckCircle2, Lock } from 'lucide-react';
 
 export default function ResetPassword() {
@@ -61,7 +61,7 @@ export default function ResetPassword() {
     setErrorMsg('');
 
     try {
-      await axios.post('http://127.0.0.1:8000/api/v1/auth/reset-password', {
+      await api.post('/auth/reset-password', {
         token,
         new_password: password
       });

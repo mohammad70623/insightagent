@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import { api } from '../services/api';
 import { TrendingUp, AlertTriangle, Clock, ArrowUpRight, MessageSquare, Mail, MessageCircle, Upload, Trash2, Loader2, Database, FileText } from 'lucide-react';
 
 import MetricsGrid from '../components/analytics/MetricsGrid';
@@ -7,7 +7,6 @@ import TrendChart from '../components/analytics/TrendChart';
 import SentimentCircle from '../components/analytics/SentimentCircle';
 import BenchmarkingMatrix from '../components/analytics/BenchmarkingMatrix';
 import ForecastSimulator from '../components/analytics/ForecastSimulator';
-import SwotModal from '../components/analytics/SwotModal';
 import UrgentFeedbacks from '../components/analytics/UrgentFeedbacks';
 import TopProducts from '../components/analytics/TopProducts';
 
@@ -17,10 +16,6 @@ const Analytics = () => {
   const [benchmarks, setBenchmarks] = useState([]);
   const [searchMeta, setSearchMeta] = useState({ query: '', time: '' });
   const [loading, setLoading] = useState(true);
-  
-  const [swotData, setSwotData] = useState(null);
-  const [isSwotOpen, setIsSwotOpen] = useState(false);
-  const [swotLoading, setSwotLoading] = useState(false);
 
   // What-If Simulation States
   const [priceMultiplier, setPriceMultiplier] = useState(0); // Range: -50% to +50%
@@ -35,10 +30,7 @@ const Analytics = () => {
 
   const fetchUploadedFiles = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://127.0.0.1:8000/api/v1/chat/uploaded-files', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const response = await api.get('/chat/uploaded-files');
       setActiveFiles(response.data);
     } catch (error) {
       console.error("Failed to fetch active vector base files", error);
@@ -48,13 +40,10 @@ const Analytics = () => {
   useEffect(() => {
     const fetchAnalyticsForecastAndBenchmarking = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const headers = { 'Authorization': `Bearer ${token}` };
-        
         const [metricsRes, forecastRes, benchmarkingRes] = await Promise.all([
-          axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/metrics', { headers }),
-          axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/forecast', { headers }),
-          axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/benchmarking', { headers })
+          api.get('/chat/analytics/metrics'),
+          api.get('/chat/analytics/forecast'),
+          api.get('/chat/analytics/benchmarking')
         ]);
         
         setLiveMetrics(metricsRes.data);
@@ -90,10 +79,8 @@ const Analytics = () => {
     formData.append('file', uploadFile);
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post('http://127.0.0.1:8000/api/v1/chat/index-payload', formData, {
+      const response = await api.post('/chat/index-payload', formData, {
         headers: { 
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
         }
       });
@@ -111,10 +98,7 @@ const Analytics = () => {
     if (pollingDocId) {
       interval = setInterval(async () => {
         try {
-          const token = localStorage.getItem('token');
-          const response = await axios.get(`http://127.0.0.1:8000/api/v1/chat/ingestion-status/${pollingDocId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
+          const response = await api.get(`/chat/ingestion-status/${pollingDocId}`);
           const { status, progress } = response.data;
           
           setUploadProgress(progress);
@@ -144,36 +128,13 @@ const Analytics = () => {
 
   const handleDeleteFile = async (documentId) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`http://127.0.0.1:8000/api/v1/chat/delete-file/${documentId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      await api.delete(`/chat/delete-file/${documentId}`);
       fetchUploadedFiles();
     } catch (error) {
       console.error("Failed to delete file", error);
     }
   };
 
-  const fetchSwotAnalysis = async () => {
-    if (swotData) {
-      setIsSwotOpen(true);
-      return;
-    }
-    setSwotLoading(true);
-    setIsSwotOpen(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('http://127.0.0.1:8000/api/v1/chat/analytics/swot', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setSwotData(response.data.swot_markdown);
-    } catch (error) {
-      console.error("Failed to fetch SWOT intelligence matrix:", error);
-      setSwotData("Failed to load SWOT analysis report. Please verify authorization.");
-    } finally {
-      setSwotLoading(false);
-    }
-  };
 
   const metrics = useMemo(() => {
     if (!liveMetrics) return [];
@@ -399,14 +360,6 @@ const Analytics = () => {
           </div>
         </div>
       </div>
-
-      <SwotModal 
-        swotData={swotData}
-        isSwotOpen={isSwotOpen}
-        setIsSwotOpen={setIsSwotOpen}
-        swotLoading={swotLoading}
-        fetchSwotAnalysis={fetchSwotAnalysis}
-      />
     </div>
   );
 };

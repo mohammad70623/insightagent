@@ -6,14 +6,35 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+def _smtp_send(msg: EmailMessage):
+    """Blocking SMTP send – runs in a thread via asyncio.to_thread."""
+    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+        server.send_message(msg)
+
 async def send_otp_email(to_email: str, otp_code: str, purpose: str):
     """
     Sends a beautifully formatted HTML email containing the cryptographic OTP code.
+    In DEV_MODE the email is skipped and the OTP is printed to the console instead.
     """
+    if settings.DEV_MODE:
+        logger.warning(
+            f"[DEV_MODE] Skipping real email. OTP for {to_email} ({purpose}): {otp_code}"
+        )
+        print(f"\n{'='*60}")
+        print(f"  [DEV_MODE] OTP for {to_email} | purpose={purpose}")
+        print(f"  Code: {otp_code}  (or use master OTP: {settings.MASTER_OTP})")
+        print(f"{'='*60}\n")
+        return
+
     try:
         msg = EmailMessage()
         msg["Subject"] = f"InsightAgent: Your {purpose.capitalize()} Verification Code"
-        msg["From"] = settings.SMTP_USER
+        msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
         msg["To"] = to_email
 
         html_content = f"""
@@ -131,25 +152,32 @@ async def send_otp_email(to_email: str, otp_code: str, purpose: str):
 
         msg.add_alternative(html_content, subtype="html")
 
-        def _send():
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-                server.starttls()
-                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-                server.send_message(msg)
-                
-        await asyncio.to_thread(_send)
+        await asyncio.to_thread(_smtp_send, msg)
         logger.info(f"Successfully dispatched {purpose} OTP to {to_email}")
     except Exception as e:
-        logger.error(f"Failed to dispatch OTP email to {to_email}: {str(e)}")
+        logger.error(f"SMTP failure – could not send OTP to {to_email}: {e}", exc_info=True)
+        # Re-raise so the caller knows the email didn't go out.
+        raise
 
 async def send_password_reset_email(to_email: str, reset_token: str):
     """
     Sends an HTML email with a secure link to reset the user's password.
+    In DEV_MODE the link is printed to the console instead.
     """
+    reset_link = f"http://localhost:5173/reset-password?token={reset_token}"
+
+    if settings.DEV_MODE:
+        logger.warning(f"[DEV_MODE] Skipping real email. Password reset link for {to_email}: {reset_link}")
+        print(f"\n{'='*60}")
+        print(f"  [DEV_MODE] Reset link for {to_email}")
+        print(f"  {reset_link}")
+        print(f"{'='*60}\n")
+        return
+
     try:
         msg = EmailMessage()
         msg["Subject"] = "🔑 Action Required: Reset Your InsightAgent Password"
-        msg["From"] = settings.SMTP_USER
+        msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
         msg["To"] = to_email
         
         reset_link = f"http://localhost:5173/reset-password?token={reset_token}"
@@ -257,13 +285,8 @@ async def send_password_reset_email(to_email: str, reset_token: str):
 
         msg.add_alternative(html_content, subtype="html")
 
-        def _send():
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-                server.starttls()
-                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-                server.send_message(msg)
-                
-        await asyncio.to_thread(_send)
+        await asyncio.to_thread(_smtp_send, msg)
         logger.info(f"Successfully dispatched password reset email to {to_email}")
     except Exception as e:
-        logger.error(f"Failed to dispatch password reset email to {to_email}: {str(e)}")
+        logger.error(f"SMTP failure – could not send password reset email to {to_email}: {e}", exc_info=True)
+        raise

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { api } from '../services/api';
 import { Shield, KeyRound, Mail, User, ArrowRight, Sparkles, ShieldCheck, AlertCircle } from 'lucide-react';
 
 /**
@@ -46,7 +46,7 @@ const Register = () => {
     setErrorMsg('');
 
     try {
-      await axios.post('http://127.0.0.1:8000/api/v1/auth/signup', {
+      await api.post('/auth/signup', {
         first_name: formData.firstName,
         last_name: formData.lastName,
         email: formData.email,
@@ -69,7 +69,7 @@ const Register = () => {
     setErrorMsg('');
 
     try {
-      await axios.post('http://127.0.0.1:8000/api/v1/auth/verify-otp', {
+      await api.post('/auth/verify-otp', {
         email: formData.email,
         otp_code: verificationCode,
         purpose: 'registration'
@@ -288,7 +288,7 @@ const Register = () => {
                   className="text-brand-primary hover:underline font-bold bg-transparent border-none outline-none cursor-pointer"
                   onClick={async () => {
                     try {
-                      await axios.post('http://127.0.0.1:8000/api/v1/auth/signup', {
+                      await api.post('/auth/signup', {
                         first_name: formData.firstName,
                         last_name: formData.lastName,
                         email: formData.email,

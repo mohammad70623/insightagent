@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
 import DashboardLayout from '../components/DashboardLayout';
+import RouteErrorBoundary from '../components/RouteErrorBoundary';
 
 
 const Landing = lazy(() => import('../pages/Landing')); 
@@ -42,19 +43,23 @@ const router = createBrowserRouter([
   {
     
     path: "/",
-    element: <Suspense fallback={<LazyFallback />}><Landing /></Suspense>
+    element: <Suspense fallback={<LazyFallback />}><Landing /></Suspense>,
+    errorElement: <RouteErrorBoundary />
   },
   {
     path: "/login",
-    element: <Login />
+    element: <Login />,
+    errorElement: <RouteErrorBoundary />
   },
   {
     path: "/register", 
-    element: <Suspense fallback={<LazyFallback />}><Register /></Suspense>
+    element: <Suspense fallback={<LazyFallback />}><Register /></Suspense>,
+    errorElement: <RouteErrorBoundary />
   },
   {
     path: "/reset-password",
-    element: <Suspense fallback={<LazyFallback />}><ResetPassword /></Suspense>
+    element: <Suspense fallback={<LazyFallback />}><ResetPassword /></Suspense>,
+    errorElement: <RouteErrorBoundary />
   },
   {
     
@@ -66,6 +71,7 @@ const router = createBrowserRouter([
         </Suspense>
       </RequireAuth>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         path: "dashboard", 

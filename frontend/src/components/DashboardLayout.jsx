@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History } from 'lucide-react';
+import SwotButton from './analytics/SwotButton';
 
 /**
  * @description Enterprise Core Dashboard Layout Component
@@ -137,9 +138,12 @@ const DashboardLayout = () => {
 
         
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-main p-8">
-          <Outlet /> 
+          <Outlet />
         </main>
       </div>
+
+      {/* Global SWOT floating button — visible on every page */}
+      <SwotButton />
     </div>
   );
 };

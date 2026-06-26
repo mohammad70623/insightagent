@@ -32,7 +32,7 @@ async def create_and_send_otp(db: AsyncSession, email: str, purpose: str):
     otp_code = generate_otp()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
     
-    # Store in DB
+    # Store in DB first so the record exists even if email delivery fails
     otp_record = OTPVerification(
         email=email,
         otp_code=otp_code,
@@ -42,8 +42,14 @@ async def create_and_send_otp(db: AsyncSession, email: str, purpose: str):
     db.add(otp_record)
     await db.commit()
     
-    # Dispatch Async Email
-    await send_otp_email(email, otp_code, purpose)
+    # Dispatch Async Email (raises on failure so the caller gets a real error)
+    try:
+        await send_otp_email(email, otp_code, purpose)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email delivery failed. Check SMTP configuration or enable DEV_MODE."
+        ) from exc
 
 # 1. USER REGISTRATION (SIGN-UP)
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -140,16 +146,22 @@ async def verify_otp(
     result = await db.execute(statement)
     latest_otp = result.scalars().first()
 
-    if not latest_otp or latest_otp.otp_code != payload.otp_code:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification code.")
-        
-    if datetime.now(timezone.utc) > latest_otp.expires_at:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code has expired.")
+    # ── DEV_MODE master OTP bypass ──────────────────────────────────────────
+    # In DEV_MODE the master OTP ('000000' by default) is always accepted,
+    # even if no real OTP record exists yet.  Remove before production.
+    if settings.DEV_MODE and payload.otp_code == settings.MASTER_OTP:
+        pass  # skip normal OTP record validation below
+    else:
+        if not latest_otp or latest_otp.otp_code != payload.otp_code:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification code.")
 
-    # Mark as used
-    latest_otp.is_used = True
-    db.add(latest_otp)
-    
+        if datetime.now(timezone.utc) > latest_otp.expires_at:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code has expired.")
+
+        # Mark as used
+        latest_otp.is_used = True
+        db.add(latest_otp)
+
     user = await UserRepository.get_by_email(db, email=normalized_email)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account not found.")
