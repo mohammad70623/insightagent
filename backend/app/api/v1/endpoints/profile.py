@@ -13,6 +13,7 @@ class ProfileUpdateSchema(BaseModel):
     last_name: str
     workspace_name: Optional[str] = None
     workspace_logo: Optional[str] = None
+    profile_picture: Optional[str] = None
     is_2fa_enabled: bool = False
 
 class PasswordChangeSchema(BaseModel):
@@ -27,6 +28,7 @@ async def get_profile(current_user: User = Depends(deps.get_current_user)):
         "last_name": current_user.last_name,
         "workspace_name": current_user.workspace_name,
         "workspace_logo": current_user.workspace_logo,
+        "profile_picture": current_user.profile_picture,
         "is_2fa_enabled": current_user.is_2fa_enabled,
         "role": current_user.role,
         "subscription_tier": current_user.subscription_tier,
@@ -48,6 +50,9 @@ async def update_profile(
     # If the payload sends None, it might mean no change, but the UI should handle sending the existing one or omitting it.
     if payload.workspace_logo is not None:
         current_user.workspace_logo = payload.workspace_logo
+        
+    if payload.profile_picture is not None:
+        current_user.profile_picture = payload.profile_picture
         
     current_user.is_2fa_enabled = payload.is_2fa_enabled
 

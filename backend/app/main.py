@@ -28,6 +28,18 @@ if settings.BACKEND_CORS_ORIGINS:
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
+@app.on_event("startup")
+async def startup_event():
+    from app.db.session import engine
+    from sqlalchemy import text
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS profile_picture VARCHAR;'))
+            print("✅ Database migration: ADD COLUMN profile_picture successful!")
+    except Exception as e:
+        print(f"⚠️ Database migration info/error: {e}")
+
+
 @app.get("/", tags=["Health Check"])
 async def root_health_check():
     """System-wide infrastructure health check telemetry gateway."""
