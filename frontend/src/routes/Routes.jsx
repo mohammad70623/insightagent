@@ -101,6 +101,7 @@ const router = createBrowserRouter([
         path: "settings", 
         element: <Suspense fallback={<LazyFallback />}><Settings /></Suspense>
       },
+
       {
         path: "",
         

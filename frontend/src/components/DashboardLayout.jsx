@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History } from 'lucide-react';
 import SwotButton from './analytics/SwotButton';
 import { api } from '../services/api';
+import PrivacyPolicyModal from './PrivacyPolicyModal';
 
 /**
  * @description Enterprise Core Dashboard Layout Component
@@ -14,6 +15,7 @@ const DashboardLayout = () => {
 
   const [profile, setProfile] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
   const [formData, setFormData] = useState({ first_name: '', last_name: '', profile_picture: '' });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -142,6 +144,18 @@ const DashboardLayout = () => {
         {/* ─── LOWER CONTROLS PANEL ─── */}
         <div className="space-y-1 border-t border-gray-800/40 pt-4">
          
+          <button 
+            type="button"
+            onClick={() => setShowPrivacyPolicyModal(true)} 
+            className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium transition-all cursor-pointer ${
+              showPrivacyPolicyModal
+                ? 'bg-brand-primary/10 text-brand-primary border-l-2 border-brand-primary rounded-l-none'
+                : 'text-brand-muted hover:bg-gray-900/60 hover:text-white'
+            }`}
+          >
+            <Shield size={16} /> Privacy Policy
+          </button>
+
           <button 
             type="button"
             onClick={() => navigate('/app/billing')} 
@@ -322,6 +336,12 @@ const DashboardLayout = () => {
           </div>
         </div>
       )}
+
+      {/* ─── PRIVACY POLICY GLOBAL MODAL ─── */}
+      <PrivacyPolicyModal 
+        isOpen={showPrivacyPolicyModal} 
+        onClose={() => setShowPrivacyPolicyModal(false)} 
+      />
     </div>
   );
 };

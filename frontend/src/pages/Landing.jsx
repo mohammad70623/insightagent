@@ -1,6 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, MessageSquare, ShieldCheck, ArrowRight, CheckCircle2, Globe, ArrowUpRight } from 'lucide-react';
+import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 
 /**
  * @description Enterprise SaaS Landing & Pricing Page Component
@@ -8,6 +9,7 @@ import { BarChart3, MessageSquare, ShieldCheck, ArrowRight, CheckCircle2, Globe,
  */
 const Landing = () => {
   const navigate = useNavigate();
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
  
   const pricingPlans = useMemo(() => [
@@ -215,7 +217,7 @@ const Landing = () => {
           <span>© 2026 InsightAgent AI Corp. All rights reserved.</span>
         </div>
         <div className="flex flex-wrap gap-4 font-semibold">
-          <a href="#privacy" className="hover:text-white transition-colors">Privacy Policy</a>
+          <button type="button" onClick={() => setShowPrivacyModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Privacy Policy</button>
           <a href="#terms" className="hover:text-white transition-colors">Terms of Service</a>
           <a href="#security" className="hover:text-white transition-colors">Security</a>
           <a href="#contact" className="hover:text-white transition-colors">Contact</a>
@@ -225,6 +227,11 @@ const Landing = () => {
         </div>
       </footer>
 
+      {/* ─── PRIVACY POLICY GLOBAL MODAL ─── */}
+      <PrivacyPolicyModal 
+        isOpen={showPrivacyModal} 
+        onClose={() => setShowPrivacyModal(false)} 
+      />
     </div>
   );
 };
