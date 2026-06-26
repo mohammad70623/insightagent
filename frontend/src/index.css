@@ -12,6 +12,8 @@
   
   --animate-modal-enter: modal-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   --animate-backdrop-fade: backdrop-fade 0.3s ease-out forwards;
+  --animate-modal-enter-slow: modal-enter-slow 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-backdrop-fade-slow: backdrop-fade-slow 0.8s ease-out forwards;
 
   @keyframes modal-enter {
     from {
@@ -26,12 +28,36 @@
     }
   }
 
+  @keyframes modal-enter-slow {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(40px);
+      filter: blur(8px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+      filter: blur(0);
+    }
+  }
+
   @keyframes backdrop-fade {
     from {
       opacity: 0;
     }
     to {
       opacity: 1;
+    }
+  }
+
+  @keyframes backdrop-fade-slow {
+    from {
+      opacity: 0;
+      backdrop-filter: blur(0px);
+    }
+    to {
+      opacity: 1;
+      backdrop-filter: blur(12px);
     }
   }
 }

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, MessageSquare, ShieldCheck, ArrowRight, CheckCircle2, Globe, ArrowUpRight } from 'lucide-react';
 import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
+import TermsOfServiceModal from '../components/TermsOfServiceModal';
 
 /**
  * @description Enterprise SaaS Landing & Pricing Page Component
@@ -10,6 +11,7 @@ import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 const Landing = () => {
   const navigate = useNavigate();
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
  
   const pricingPlans = useMemo(() => [
@@ -218,7 +220,7 @@ const Landing = () => {
         </div>
         <div className="flex flex-wrap gap-4 font-semibold">
           <button type="button" onClick={() => setShowPrivacyModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Privacy Policy</button>
-          <a href="#terms" className="hover:text-white transition-colors">Terms of Service</a>
+          <button type="button" onClick={() => setShowTermsModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Terms of Service</button>
           <a href="#security" className="hover:text-white transition-colors">Security</a>
           <a href="#contact" className="hover:text-white transition-colors">Contact</a>
         </div>
@@ -231,6 +233,12 @@ const Landing = () => {
       <PrivacyPolicyModal 
         isOpen={showPrivacyModal} 
         onClose={() => setShowPrivacyModal(false)} 
+      />
+
+      {/* ─── TERMS OF SERVICE GLOBAL MODAL ─── */}
+      <TermsOfServiceModal 
+        isOpen={showTermsModal} 
+        onClose={() => setShowTermsModal(false)} 
       />
     </div>
   );
