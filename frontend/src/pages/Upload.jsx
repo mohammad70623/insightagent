@@ -168,10 +168,26 @@ const Upload = () => {
 
         {/* Error Banner */}
         {errorMessage && (
-          <div className="bg-red-500/20 text-red-400 border border-red-500/50 p-3 rounded mb-4 text-xs font-mono flex items-start gap-2">
-            <span>⚠️</span>
-            <span className="flex-1">{errorMessage}</span>
-            <button onClick={() => setErrorMessage('')} className="font-bold hover:text-white ml-1">×</button>
+          <div className="mb-4">
+            <div className="bg-red-500/20 text-red-400 border border-red-500/50 p-3 rounded text-xs font-mono flex items-start gap-2">
+              <span>⚠️</span>
+              <span className="flex-1">{errorMessage}</span>
+              <button onClick={() => setErrorMessage('')} className="font-bold hover:text-white ml-1 text-base leading-none">×</button>
+            </div>
+            {errorMessage.includes("PAYWALL_LIMIT_REACHED") && (
+              <div className="mt-3 bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="text-xs text-gray-300">
+                  <span className="font-bold text-white block mb-0.5">⚠️ Subscription Ingestion Limit Reached!</span>
+                  You have exceeded your plan's upload threshold. Upgrade or renew your subscription tier to continue indexing.
+                </div>
+                <a 
+                  href="/app/billing" 
+                  className="px-4 py-2 bg-[#38bdf8] hover:bg-[#7dd3fc] text-black font-bold rounded-lg text-xs transition-all shrink-0 no-underline inline-block text-center"
+                >
+                  Upgrade / Renew Plan
+                </a>
+              </div>
+            )}
           </div>
         )}
 

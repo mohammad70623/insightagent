@@ -194,7 +194,11 @@ async def get_uploaded_files(current_user: User = Depends(deps.get_current_user)
         return []
 
 @router.delete("/delete-file/{document_id:path}")
-async def delete_file_pipeline(document_id: str, current_user: User = Depends(deps.get_current_user)):
+async def delete_file_pipeline(
+    document_id: str,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
     try:
         await asyncio.to_thread(
@@ -203,6 +207,11 @@ async def delete_file_pipeline(document_id: str, current_user: User = Depends(de
             user_id=current_user.id,
             document_id=document_id
         )
+        if current_user.uploaded_files_count > 0:
+            current_user.uploaded_files_count -= 1
+            db.add(current_user)
+            await db.commit()
+            
         return {"success": True, "message": "Document vectors purged from core cluster registry successfully."}
     except Exception as e:
         logger.error(f'{{"event": "delete_file_failed", "document_id": "{document_id}", "error": "{str(e)}"}}')

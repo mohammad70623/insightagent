@@ -90,6 +90,12 @@ const Analytics = () => {
     } catch (error) {
       console.error("Upload failed", error);
       setUploading(false);
+      const errorMsg = error.response?.data?.detail || error.message;
+      if (errorMsg.includes("PAYWALL_LIMIT_REACHED")) {
+        alert("Subscription Ingestion Limit Reached! Please upgrade or renew your subscription tier on the Billing & Subscriptions page to upload more files.");
+      } else {
+        alert(`Failed to upload document: ${errorMsg}`);
+      }
     }
   };
 

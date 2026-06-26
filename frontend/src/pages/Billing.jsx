@@ -38,9 +38,21 @@ const Billing = () => {
 
   const [showPlansModal, setShowPlansModal] = useState(false);
 
-  // Dummy local state until global context is fully wired
   const [currentUsage, setCurrentUsage] = useState(0);
   const [maxUsage, setMaxUsage] = useState(5);
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await api.get('/profile/me');
+      if (response.data) {
+        setCurrentTier(response.data.subscription_tier || "Free");
+        setCurrentUsage(response.data.uploaded_files_count || 0);
+        setExpiration(response.data.subscription_expires_at || null);
+      }
+    } catch (error) {
+      console.error("Failed to fetch profile", error);
+    }
+  };
 
   const fetchInvoices = async () => {
     try {
@@ -52,6 +64,7 @@ const Billing = () => {
   };
 
   useEffect(() => {
+    fetchUserProfile();
     fetchInvoices();
   }, []);
 
@@ -74,6 +87,7 @@ const Billing = () => {
 
       setShowPlansModal(false);
       fetchInvoices();
+      await fetchUserProfile();
 
       // Simulate global fetchCurrentUser refresh
       window.dispatchEvent(new Event('user-context-refresh'));

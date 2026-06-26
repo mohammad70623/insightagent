@@ -29,7 +29,9 @@ async def get_profile(current_user: User = Depends(deps.get_current_user)):
         "workspace_logo": current_user.workspace_logo,
         "is_2fa_enabled": current_user.is_2fa_enabled,
         "role": current_user.role,
-        "subscription_tier": current_user.subscription_tier
+        "subscription_tier": current_user.subscription_tier,
+        "uploaded_files_count": current_user.uploaded_files_count,
+        "subscription_expires_at": current_user.subscription_expires_at
     }
 
 @router.put("/update")
