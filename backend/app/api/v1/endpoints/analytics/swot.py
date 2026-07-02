@@ -3,6 +3,7 @@ import asyncio
 import os
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.responses import StreamingResponse
 from app.api import deps
 from app.models.user import User
@@ -25,13 +26,20 @@ class SWOTAnalysisResponse(BaseModel):
 
 @router.get("/swot", response_model=SWOTAnalysisResponse)
 async def generate_floating_swot_matrix(
-    current_user: User = Depends(deps.get_current_user)
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
     """
     Retrieves real document chunks from the user's Qdrant vector store via
     semantic search, then asks the LLM to produce a detailed SWOT analysis.
     Zero dummy data — if no documents are uploaded, returns a clear message.
     """
+    # User successfully triggered SWOT insights, mark onboarding step complete
+    if not current_user.has_explored_insights:
+        current_user.has_explored_insights = True
+        db.add(current_user)
+        await db.commit()
+
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
 
     try:

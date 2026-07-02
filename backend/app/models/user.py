@@ -22,6 +22,12 @@ class User(Base):
     workspace_logo: Mapped[str] = mapped_column(String, nullable=True)
     profile_picture: Mapped[str] = mapped_column(String, nullable=True)
     is_2fa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
+    # Onboarding Progress Checklist Flags
+    has_uploaded_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    has_processed_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    has_explored_insights: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
     created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")

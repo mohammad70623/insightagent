@@ -140,6 +140,11 @@ async def index_payload(
         if not raw_text or not raw_text.strip():
             raise HTTPException(status_code=400, detail="Could not extract structured layout text from document asset.")
             
+        # 1. File upload stream landing and layout extraction successful
+        current_user.has_uploaded_data = True
+        db.add(current_user)
+        await db.commit()
+            
         document_id = uuid.uuid4()
         tenant_collection_namespace = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
         
@@ -155,6 +160,8 @@ async def index_payload(
         if not success:
             raise HTTPException(status_code=500, detail="Vector warehouse sync rejected the operation payload.")
             
+        # 2. Embedding generation and vector database indexing successful
+        current_user.has_processed_data = True
         current_user.uploaded_files_count += 1
         db.add(current_user)
         await db.commit()
