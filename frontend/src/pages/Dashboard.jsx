@@ -16,7 +16,27 @@ const Dashboard = () => {
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
 
+  // Transition and onboarding states
+  const [onboardingStep, setOnboardingStep] = useState(1);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [currentStep, setCurrentStep] = useState('idle'); // 'idle' | 'uploading' | 'processing' | 'completed'
+
   useEffect(() => {
+    const handleOnboardingComplete = () => {
+      // Force the LiveStreamEngine to show success logs first
+      setCurrentStep('completed');
+      setIsAnalyzing(true);
+      setOnboardingStep(2); // Keep checklist visible with step 2 completed during 6s transition
+
+      // Hard minimum 6-second delay, then force flip everything
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        setCurrentStep('idle'); // Reset engine to dark skeleton
+        setOnboardingStep(3);   // FORCE flip left panel to RECENT DATA INVENTORY TABLE
+      }, 6000);
+    };
+
     const fetchLiveAnomalies = async () => {
       try {
         const response = await api.get('/chat/analytics/anomalies');
@@ -34,21 +54,71 @@ const Dashboard = () => {
         setOnboardingStatus(response.data);
         
         const { has_uploaded_data, has_processed_data, has_explored_insights } = response.data;
+        
         if (has_uploaded_data && has_processed_data && has_explored_insights) {
-          setLoadingFiles(true);
-          const filesResponse = await api.get('/chat/uploaded-files');
-          setUploadedFiles(filesResponse.data);
+          setOnboardingStep(3);
+          setIsProcessing(false);
+          setIsAnalyzing(false);
+          setCurrentStep('idle');
+        } else if (has_uploaded_data && !has_processed_data) {
+          setOnboardingStep(2);
+          setIsProcessing(true);
+          setIsAnalyzing(true);
+          setCurrentStep('processing');
+        } else if (has_uploaded_data && has_processed_data) {
+          // Ingestion pipeline finished! Trigger the master transition controller.
+          handleOnboardingComplete();
+        } else {
+          setOnboardingStep(1);
+          setIsProcessing(false);
+          setIsAnalyzing(false);
+          setCurrentStep('idle');
         }
       } catch (error) {
         console.error("Failed to fetch onboarding progress or inventory:", error);
-      } finally {
-        setLoadingFiles(false);
       }
     };
 
     fetchLiveAnomalies();
     fetchOnboardingAndInventory();
   }, []);
+
+  // Fetch uploaded files once onboarding Step 3 is activated
+  useEffect(() => {
+    if (onboardingStep === 3) {
+      const fetchInventory = async () => {
+        try {
+          setLoadingFiles(true);
+          const filesResponse = await api.get('/chat/uploaded-files');
+          setUploadedFiles(filesResponse.data);
+        } catch (error) {
+          console.error("Failed to fetch inventory:", error);
+        } finally {
+          setLoadingFiles(false);
+        }
+      };
+      fetchInventory();
+    }
+  }, [onboardingStep]);
+
+  const handleAnalyzeFile = (filename) => {
+    if (currentStep !== 'idle') return; // Ignore clicks if currently running a simulation
+
+    // 1. Trigger AI indexing / vectorization logs
+    setCurrentStep('processing');
+    setIsProcessing(true);
+
+    // 2. Wait 6 seconds, then show pipeline completion SUCCESS logs
+    setTimeout(() => {
+      setIsProcessing(false);
+      setCurrentStep('completed');
+
+      // 3. Wait another 6 seconds, then reset back to standby/idle state
+      setTimeout(() => {
+        setCurrentStep('idle');
+      }, 6000);
+    }, 6000);
+  };
 
   const isAllCompleted = onboardingStatus.has_uploaded_data && onboardingStatus.has_processed_data && onboardingStatus.has_explored_insights;
 
@@ -94,7 +164,7 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         
-        {isAllCompleted ? (
+        {onboardingStep === 3 ? (
           <div className="lg:col-span-7 rounded-xl border border-gray-800/40 bg-surface p-8 shadow-xl flex flex-col justify-between transition-all duration-500 ease-in-out min-h-[300px]">
             <div>
               <h3 className="text-sm font-bold uppercase tracking-wider text-brand-muted mb-4 font-mono flex items-center gap-2">
@@ -130,7 +200,7 @@ const Dashboard = () => {
                           <td className="bg-transparent text-right pr-0 py-3">
                             <button
                               type="button"
-                              onClick={() => navigate('/app/chat')}
+                              onClick={() => handleAnalyzeFile(file.filename)}
                               className="text-brand-primary hover:text-brand-primary/80 hover:underline text-[11px] font-bold cursor-pointer"
                             >
                               Analyze
@@ -205,24 +275,59 @@ const Dashboard = () => {
         <div className="lg:col-span-5 relative flex min-h-[260px] items-center justify-center rounded-xl border border-gray-800/40 bg-surface p-6 overflow-hidden shadow-xl">
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff01_1px,transparent_1px),linear-gradient(to_bottom,#ffffff02_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
           
-          <div className="relative w-full max-w-sm rounded-lg border border-gray-800/80 bg-[#0B0F19]/90 p-4 shadow-2xl backdrop-blur-sm">
-            <div className="flex items-center justify-between border-b border-gray-800/80 pb-2 mb-4">
+          <div className="relative w-full max-w-sm rounded-lg border border-gray-800/80 bg-[#111625] p-4 shadow-2xl backdrop-blur-sm transition-all duration-500">
+            <div className="flex items-center justify-between border-b border-gray-850 pb-2 mb-4">
               <div className="flex gap-1.5">
                 <div className="h-2 w-2 rounded-full bg-red-500/50" />
                 <div className="h-2 w-2 rounded-full bg-yellow-500/50" />
                 <div className="h-2 w-2 rounded-full bg-green-500/50" />
               </div>
-              <span className="text-[9px] font-mono tracking-widest text-gray-600 uppercase font-bold">Live_Stream_Engine</span>
+              <span className="text-[9px] font-mono tracking-widest text-gray-500 uppercase font-bold">LIVE_STREAM_ENGINE</span>
             </div>
             
-            <div className="space-y-3">
-              <div className="h-2.5 w-1/3 rounded bg-gray-800/80 animate-pulse" />
-              <div className="h-20 w-full rounded border border-gray-800/40 bg-gray-900/40 flex items-center justify-center">
-                <Database size={24} className="text-brand-primary/30 animate-pulse" />
+            <div className="space-y-4">
+              {/* Dynamic Database Icon Glow Container */}
+              <div className="h-24 w-full rounded border border-gray-800/40 bg-gray-950/40 flex items-center justify-center transition-all duration-500">
+                <Database 
+                  size={36} 
+                  className={`transition-all duration-500 ${
+                    currentStep === 'uploading'
+                      ? "text-blue-400 animate-pulse drop-shadow-[0_0_12px_rgba(96,165,250,0.6)]"
+                      : currentStep === 'processing'
+                      ? "text-cyan-400 animate-pulse drop-shadow-[0_0_18px_rgba(34,211,238,0.9)]"
+                      : currentStep === 'completed'
+                      ? "text-emerald-400 drop-shadow-[0_0_15px_rgba(52,211,153,0.7)]"
+                      : "text-gray-650 animate-pulse"
+                  }`} 
+                />
               </div>
-              <div className="space-y-1.5 pt-1">
-                <div className="h-1.5 w-full rounded bg-gray-800/40" />
-                <div className="h-1.5 w-4/5 rounded bg-gray-800/20" />
+              
+              {/* Terminal Logs */}
+              <div className="font-mono text-[10px] space-y-1.5 p-3 rounded bg-black/40 border border-gray-900/60 text-gray-400 min-h-[50px] flex flex-col justify-center transition-all duration-500">
+                {currentStep === 'idle' && (
+                  <>
+                    <div className="text-gray-400 font-semibold">[STANDBY]: Ready to receive payload stream.</div>
+                    <div className="text-gray-600">[SYSTEM]: Ingestion pipeline listener active.</div>
+                  </>
+                )}
+                {currentStep === 'uploading' && (
+                  <>
+                    <div className="text-blue-400 animate-pulse font-semibold">[INGESTION]: Ingesting raw enterprise dataset...</div>
+                    <div className="text-gray-500">[SYSTEM]: Stream writing blocks to secure storage.</div>
+                  </>
+                )}
+                {currentStep === 'processing' && (
+                  <>
+                    <div className="text-cyan-400 animate-pulse font-semibold">[QDRANT]: Vectorizing text chunks & upserting...</div>
+                    <div className="text-cyan-500/80">[LLAMA3]: Initiating RAG agentic workflow reasoning.</div>
+                  </>
+                )}
+                {currentStep === 'completed' && (
+                  <>
+                    <div className="text-emerald-400 font-semibold">[SUCCESS]: Multi-agent core pipeline initialized.</div>
+                    <div className="text-emerald-500/70">[SYSTEM]: Unlocking full-stack Workspace Core Inventory...</div>
+                  </>
+                )}
               </div>
             </div>
           </div>
