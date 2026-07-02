@@ -1,6 +1,7 @@
 import uuid
 import logging
 import asyncio
+from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, Field, constr
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -45,6 +46,17 @@ async def create_chat_workspace(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
+    stmt = select(ChatSession).where(
+        ChatSession.user_id == current_user.id,
+        ChatSession.title == payload.title,
+        ChatSession.deleted_at == None
+    )
+    res = await db.execute(stmt)
+    if res.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session name already exists"
+        )
     return await chat_history_service.create_new_session(db, user_id=current_user.id, title=payload.title)
 
 
@@ -69,11 +81,16 @@ async def get_chat_workspace_history(
         ChatSession.deleted_at == None
     )
     session_check = await db.execute(session_query)
-    if not session_check.scalar_one_or_none():
+    session = session_check.scalar_one_or_none()
+    if not session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Chat session not found or access is unauthorized."
         )
+
+    # Force-bump the session's activity clock when opened/clicked
+    session.updated_at = datetime.utcnow()
+    await db.commit()
 
     history_frames = await chat_history_service.get_cursor_paginated_history(db, session_id=session_id, limit=50)
     history_frames.reverse()
@@ -131,6 +148,12 @@ async def trigger_live_agent_stream(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied: session does not exist or is unauthorized."
         )
+
+    # User successfully triggered a RAG analysis prompt, mark onboarding step complete
+    if not current_user.has_explored_insights:
+        current_user.has_explored_insights = True
+        db.add(current_user)
+        await db.commit()
 
     history_frames = await chat_history_service.get_cursor_paginated_history(
         db, session_id=session_id, limit=15

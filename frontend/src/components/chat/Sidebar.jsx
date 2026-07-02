@@ -1,5 +1,34 @@
 import React from "react";
 
+const formatRelativeTime = (dateString) => {
+  if (!dateString) return "";
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffSecs < 60) {
+      return "Last active: Just now";
+    } else if (diffMins < 60) {
+      return `Last active: ${diffMins} min${diffMins > 1 ? "s" : ""} ago`;
+    } else if (diffHours < 24) {
+      return `Last active: ${diffHours} hour${diffHours > 1 ? "s" : ""} ago`;
+    } else if (diffDays < 7) {
+      return `Last active: ${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
+    } else {
+      return `Active: ${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+  } catch (e) {
+    return "";
+  }
+};
+
 const Sidebar = ({ 
   sessions, 
   activeSessionId, 
@@ -43,7 +72,7 @@ const Sidebar = ({
             sessions.map((sess) => (
               <div
                 key={sess.id}
-                className={`group flex items-center justify-between px-3 py-1 rounded text-sm transition font-medium ${
+                className={`group flex items-center justify-between px-3 py-1.5 rounded text-sm transition font-medium ${
                   activeSessionId === sess.id
                     ? "bg-[#38bdf8] text-gray-900 shadow-lg"
                     : "bg-[#374151] text-gray-300 hover:bg-[#4b5563]"
@@ -52,9 +81,16 @@ const Sidebar = ({
                 <button
                   onClick={() => onSessionSwitch(sess.id)}
                   disabled={isStreaming}
-                  className="flex-1 text-left truncate py-1.5 outline-none cursor-pointer"
+                  className="flex-1 text-left truncate py-1 outline-none cursor-pointer flex flex-col"
                 >
-                  📁 {sess.title}
+                  <span className="truncate">📁 {sess.title}</span>
+                  <span className={`text-[10px] mt-0.5 ${
+                    activeSessionId === sess.id
+                      ? "text-gray-800/80 font-medium"
+                      : "text-gray-400 group-hover:text-gray-300 transition-colors"
+                  }`}>
+                    {formatRelativeTime(sess.updated_at || sess.created_at)}
+                  </span>
                 </button>
                 <button
                   onClick={(e) => {

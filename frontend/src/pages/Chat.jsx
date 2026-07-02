@@ -27,13 +27,35 @@ const Chat = () => {
     const fetchUserSessions = async () => {
       try {
         const historySessions = await apiService.getUserSessions();
-        setSessions(historySessions);
+        // Sort sessions descending by updated_at (with created_at as fallback)
+        const sorted = [...historySessions].sort((a, b) => {
+          const dateA = new Date(a.updated_at || a.created_at);
+          const dateB = new Date(b.updated_at || b.created_at);
+          return dateB - dateA;
+        });
+        setSessions(sorted);
       } catch (err) {
         setErrorBanner(`Failed to load chat workspace list: ${err.message}`);
       }
     };
     fetchUserSessions();
   }, []);
+
+  const bumpSessionActivity = (sessionId) => {
+    setSessions((prevSessions) => {
+      const updatedSessions = prevSessions.map((session) => {
+        if (session.id === sessionId) {
+          return { ...session, updated_at: new Date().toISOString() };
+        }
+        return session;
+      });
+      return [...updatedSessions].sort((a, b) => {
+        const dateA = new Date(a.updated_at || a.created_at);
+        const dateB = new Date(b.updated_at || b.created_at);
+        return dateB - dateA;
+      });
+    });
+  };
 
   /**
    * Advanced Session Switching (Pulls Real History from DB)
@@ -47,6 +69,9 @@ const Chat = () => {
 
     setActiveSessionId(id);
     setErrorBanner(null);
+
+    // Bump session activity to move it to the top immediately
+    bumpSessionActivity(id);
 
     try {
       const history = await apiService.getChatHistory(id);
@@ -118,6 +143,9 @@ const Chat = () => {
 
     setIsStreaming(true);
     bufferRef.current = ""; // Flush previous operational buffer
+
+    // Immediately shift the active session folder straight to the very top dynamically
+    bumpSessionActivity(activeSessionId);
 
     await apiService.streamChatResponse(
       activeSessionId,

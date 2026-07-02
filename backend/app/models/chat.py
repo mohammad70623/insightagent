@@ -1,7 +1,7 @@
 import uuid
 import enum
 from datetime import datetime
-from sqlalchemy import String, ForeignKey, DateTime, CheckConstraint, Index, UniqueConstraint, Enum
+from sqlalchemy import String, ForeignKey, DateTime, CheckConstraint, Index, UniqueConstraint, Enum, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from app.db.base_class import Base
@@ -30,7 +30,13 @@ class ChatSession(Base):
         
         Index("ix_chat_session_user_created", "user_id", "created_at"),
         Index("ix_chat_session_active_lookup", "id", "deleted_at"),
-        UniqueConstraint("user_id", "title", name="uq_user_session_title"),
+        Index(
+            'uq_user_session_title_active',
+            'user_id', 
+            'title',
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL")
+        ),
     )
 
 

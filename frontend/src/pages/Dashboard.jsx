@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
-import { UploadCloud, MessageSquare, Settings2, MoreVertical, Database, Cpu, HardDrive, X, ShieldAlert } from 'lucide-react';
+import { UploadCloud, MessageSquare, Settings2, MoreVertical, Database, Cpu, HardDrive, X, ShieldAlert, CheckCircle, FileText } from 'lucide-react';
 
 const Dashboard = () => {
   const navigate = useNavigate(); 
   const [showTip, setShowTip] = useState(true);
   const [anomalies, setAnomalies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [onboardingStatus, setOnboardingStatus] = useState({
+    has_uploaded_data: false,
+    has_processed_data: false,
+    has_explored_insights: false,
+  });
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
 
   useEffect(() => {
     const fetchLiveAnomalies = async () => {
@@ -20,8 +27,30 @@ const Dashboard = () => {
         setLoading(false);
       }
     };
+
+    const fetchOnboardingAndInventory = async () => {
+      try {
+        const response = await api.get('/user/onboarding-status');
+        setOnboardingStatus(response.data);
+        
+        const { has_uploaded_data, has_processed_data, has_explored_insights } = response.data;
+        if (has_uploaded_data && has_processed_data && has_explored_insights) {
+          setLoadingFiles(true);
+          const filesResponse = await api.get('/chat/uploaded-files');
+          setUploadedFiles(filesResponse.data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch onboarding progress or inventory:", error);
+      } finally {
+        setLoadingFiles(false);
+      }
+    };
+
     fetchLiveAnomalies();
+    fetchOnboardingAndInventory();
   }, []);
+
+  const isAllCompleted = onboardingStatus.has_uploaded_data && onboardingStatus.has_processed_data && onboardingStatus.has_explored_insights;
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans">
@@ -65,49 +94,113 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         
-        <div className="lg:col-span-7 rounded-xl border border-gray-800/40 bg-surface p-8 shadow-xl flex flex-col justify-center">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-brand-muted mb-6 font-mono">
-            Onboarding Checklist
-          </h3>
-          
-          <div className="space-y-6">
-            <div className="flex items-start gap-4 border-l-2 border-brand-primary pl-4 transition-all">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-brand-primary bg-brand-primary/10 text-brand-primary font-mono text-sm font-black shadow-[0_0_12px_rgba(129,140,248,0.15)]">
-                1
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-white tracking-wide">Upload Data</h4>
-                <p className="text-xs text-brand-muted mt-1 leading-relaxed">
-                  Ingest CSV or JSON files via the native secure Ingest Engine.
-                </p>
-              </div>
-            </div>
+        {isAllCompleted ? (
+          <div className="lg:col-span-7 rounded-xl border border-gray-800/40 bg-surface p-8 shadow-xl flex flex-col justify-between transition-all duration-500 ease-in-out min-h-[300px]">
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-brand-muted mb-4 font-mono flex items-center gap-2">
+                <FileText size={16} className="text-brand-primary" /> Recent Data Inventory Table
+              </h3>
+              <p className="text-xs text-brand-muted mb-6 leading-relaxed">
+                Below are the active document modules synchronized in your vector store.
+              </p>
 
-            <div className="flex items-start gap-4 border-l-2 border-transparent pl-4">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-800 bg-main text-gray-500 font-mono text-sm font-bold">
-                2
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-gray-400 tracking-wide">Automated AI Processing</h4>
-                <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                  InsightAgent's RAG and deep LLMs automatically tag, analyze, and index your ingested feedback.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 border-l-2 border-transparent pl-4">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-800 bg-main text-gray-500 font-mono text-sm font-bold">
-                3
-              </div>
-              <div>
-                <h4 className="text-sm font-bold text-gray-400 tracking-wide">Explore Insights</h4>
-                <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                  Access the core interactive analytics canvas and trigger conversation models with data blocks.
-                </p>
+              <div className="overflow-x-auto text-xs w-full flex-1 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+                {loadingFiles ? (
+                  <div className="text-gray-500 font-mono text-[11px] py-4 animate-pulse">Synchronizing vector index status...</div>
+                ) : uploadedFiles.length === 0 ? (
+                  <div className="text-gray-500 font-mono text-[11px] py-4">No data files found in your inventory. Get started by uploading one!</div>
+                ) : (
+                  <table aria-label="Uploaded data inventory grid" className="table table-xs w-full border-none">
+                    <thead>
+                      <tr className="border-b border-gray-800 text-brand-muted font-bold text-left uppercase text-[10px] font-mono">
+                        <th scope="col" className="bg-transparent pl-0 py-2">Document ID</th>
+                        <th scope="col" className="bg-transparent py-2">Filename</th>
+                        <th scope="col" className="bg-transparent text-right pr-0 py-2">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {uploadedFiles.map((file) => (
+                        <tr key={file.document_id} className="border-b border-gray-850/40 last:border-none">
+                          <td className="bg-transparent pl-0 font-mono text-gray-500 py-3 truncate max-w-[120px]" title={file.document_id}>
+                            {file.document_id}
+                          </td>
+                          <td className="bg-transparent text-gray-300 font-medium py-3 truncate max-w-[200px]" title={file.filename}>
+                            {file.filename}
+                          </td>
+                          <td className="bg-transparent text-right pr-0 py-3">
+                            <button
+                              type="button"
+                              onClick={() => navigate('/app/chat')}
+                              className="text-brand-primary hover:text-brand-primary/80 hover:underline text-[11px] font-bold cursor-pointer"
+                            >
+                              Analyze
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="lg:col-span-7 rounded-xl border border-gray-800/40 bg-surface p-8 shadow-xl flex flex-col justify-center">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-brand-muted mb-6 font-mono">
+              Onboarding Checklist
+            </h3>
+            
+            <div className="space-y-6">
+              <div className="flex items-start gap-4 border-l-2 border-brand-primary pl-4 transition-all">
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                  onboardingStatus.has_uploaded_data
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                    : 'border-brand-primary bg-brand-primary/10 text-brand-primary'
+                } font-mono text-sm font-black shadow-[0_0_12px_rgba(129,140,248,0.15)]`}>
+                  {onboardingStatus.has_uploaded_data ? <CheckCircle size={16} className="text-emerald-400" /> : '1'}
+                </div>
+                <div>
+                  <h4 className={`text-sm font-bold tracking-wide ${onboardingStatus.has_uploaded_data ? 'text-gray-500 line-through font-normal' : 'text-white'}`}>Upload Data</h4>
+                  <p className={`text-xs mt-1 leading-relaxed ${onboardingStatus.has_uploaded_data ? 'text-gray-600' : 'text-brand-muted'}`}>
+                    Ingest CSV or JSON files via the native secure Ingest Engine.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 border-l-2 border-transparent pl-4">
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                  onboardingStatus.has_processed_data
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                    : 'border-gray-800 bg-[#0B0F19] text-gray-500 font-mono text-sm font-bold'
+                }`}>
+                  {onboardingStatus.has_processed_data ? <CheckCircle size={16} className="text-emerald-400" /> : '2'}
+                </div>
+                <div>
+                  <h4 className={`text-sm font-bold tracking-wide ${onboardingStatus.has_processed_data ? 'text-gray-500 line-through font-normal' : 'text-gray-400'}`}>Automated AI Processing</h4>
+                  <p className={`text-xs mt-1 leading-relaxed ${onboardingStatus.has_processed_data ? 'text-gray-600' : 'text-gray-600'}`}>
+                    InsightAgent's RAG and deep LLMs automatically tag, analyze, and index your ingested feedback.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-4 border-l-2 border-transparent pl-4">
+                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+                  onboardingStatus.has_explored_insights
+                    ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400'
+                    : 'border-gray-800 bg-[#0B0F19] text-gray-500 font-mono text-sm font-bold'
+                }`}>
+                  {onboardingStatus.has_explored_insights ? <CheckCircle size={16} className="text-emerald-400" /> : '3'}
+                </div>
+                <div>
+                  <h4 className={`text-sm font-bold tracking-wide ${onboardingStatus.has_explored_insights ? 'text-gray-500 line-through font-normal' : 'text-gray-400'}`}>Explore Insights</h4>
+                  <p className={`text-xs mt-1 leading-relaxed ${onboardingStatus.has_explored_insights ? 'text-gray-600' : 'text-gray-600'}`}>
+                    Access the core interactive analytics canvas and trigger conversation models with data blocks.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="lg:col-span-5 relative flex min-h-[260px] items-center justify-center rounded-xl border border-gray-800/40 bg-surface p-6 overflow-hidden shadow-xl">
           <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff01_1px,transparent_1px),linear-gradient(to_bottom,#ffffff02_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />

@@ -152,8 +152,12 @@ class RAGEngine:
             if context_str:
                 system_instruction = (
                     "You are InsightAgent, an enterprise AI assistant.\n"
-                    "Answer the user's question using ONLY the context below. "
-                    "Be concise and accurate. If the answer is not in the context, say so clearly.\n\n"
+                    "CRITICAL CONTEXT EVALUATION AND PROTOCOL RULES:\n"
+                    "1. Evaluate ALL provided context chunks carefully and independently. Do NOT merge context logic unless they explicitly refer to the same document topic.\n"
+                    "2. Map exact system protocols first. Pay strict attention to numeric sections, limit values, and constraints. Do NOT mix up rules or limits from one section (e.g., Section 2 limits) with examples, notes, or parameters from another section (e.g., Section 10 user examples).\n"
+                    "3. Strictly prevent mixing raw system validation answers with troubleshooting FAQs. Validation logic takes precedence over troubleshooting exceptions.\n"
+                    "4. Answer the user's question using ONLY the context provided below. Be concise, precise, and completely accurate. If the answer cannot be determined directly from the context, state that clearly.\n"
+                    "5. Respond strictly in clean, professional English. Do NOT mix in any other language or dialect unless the user explicitly asks for a translation.\n\n"
                     f"--- CONTEXT ---\n{context_str}\n--- END CONTEXT ---"
                 )
             else:
@@ -161,7 +165,8 @@ class RAGEngine:
                 system_instruction = (
                     "You are InsightAgent, an enterprise AI assistant.\n"
                     "No relevant documents were found in the knowledge base for this query. "
-                    "Answer from your general knowledge if appropriate, or inform the user to upload relevant documents first."
+                    "Answer from your general knowledge if appropriate, or inform the user to upload relevant documents first.\n"
+                    "Respond strictly in clean, professional English. Do NOT mix in any other language or dialect unless the user explicitly asks for a translation."
                 )
 
             messages = [
