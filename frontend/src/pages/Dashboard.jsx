@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
+import CriticalRiskAlerts from '../components/analytics/CriticalRiskAlerts';
 import { UploadCloud, MessageSquare, Settings2, MoreVertical, Database, Cpu, HardDrive, X, ShieldAlert, CheckCircle, FileText } from 'lucide-react';
 
 const Dashboard = () => {
   const navigate = useNavigate(); 
   const [showTip, setShowTip] = useState(true);
-  const [anomalies, setAnomalies] = useState([]);
+  const [riskAlerts, setRiskAlerts] = useState([]);
+  const [isScanningAlerts, setIsScanningAlerts] = useState(false);
   const [loading, setLoading] = useState(true);
   const [onboardingStatus, setOnboardingStatus] = useState({
     has_uploaded_data: false,
@@ -39,11 +41,13 @@ const Dashboard = () => {
 
     const fetchLiveAnomalies = async () => {
       try {
+        setIsScanningAlerts(true);
         const response = await api.get('/chat/analytics/anomalies');
-        setAnomalies(response.data.alerts);
+        setRiskAlerts(response.data.alerts || []);
       } catch (error) {
         console.error("Failed to fetch live business anomalies:", error);
       } finally {
+        setIsScanningAlerts(false);
         setLoading(false);
       }
     };
@@ -101,23 +105,46 @@ const Dashboard = () => {
     }
   }, [onboardingStep]);
 
-  const handleAnalyzeFile = (filename) => {
-    if (currentStep !== 'idle') return; // Ignore clicks if currently running a simulation
+  const handleAnalyzeClick = async (documentId) => {
+    if (!documentId) return;
 
-    // 1. Trigger AI indexing / vectorization logs
+    // 1. Trigger active processing layout states immediately
+    setIsAnalyzing(true);
     setCurrentStep('processing');
-    setIsProcessing(true);
+    setRiskAlerts([]); // Clear previous table rows instantly during new scan
 
-    // 2. Wait 6 seconds, then show pipeline completion SUCCESS logs
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      // 2. Fire the real API call to the RAG Anomaly Detection Core backend
+      const response = await fetch(`http://localhost:8000/api/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ document_id: documentId })
+      });
+
+      if (!response.ok) throw new Error('RAG Analysis Execution Failed');
+
+      const data = await response.json();
+      // Expected incoming JSON structure: { success: true, alerts: [ { type: "GDPR Compliance", description: "...", severity: "CRITICAL" }, ... ] }
+
+      // 3. Flash the green success state indicator on the LIVE_STREAM_ENGINE
       setCurrentStep('completed');
+      
+      // 4. Commit the dynamic, variable-length AI-predicted risk array to our table state
+      setRiskAlerts(data.alerts || []);
 
-      // 3. Wait another 6 seconds, then reset back to standby/idle state
+    } catch (error) {
+      console.error("Full-Stack API Integration Error:", error);
+      setCurrentStep('idle');
+    } finally {
+      // 5. Provide a smooth 1.5-second visual delay for the success state before resetting the stream engine to standby
       setTimeout(() => {
+        setIsAnalyzing(false);
         setCurrentStep('idle');
-      }, 6000);
-    }, 6000);
+        setOnboardingStep(3); // Unlocks standard workspace dashboard layout view
+      }, 1500);
+    }
   };
 
   const isAllCompleted = onboardingStatus.has_uploaded_data && onboardingStatus.has_processed_data && onboardingStatus.has_explored_insights;
@@ -200,8 +227,9 @@ const Dashboard = () => {
                           <td className="bg-transparent text-right pr-0 py-3">
                             <button
                               type="button"
-                              onClick={() => handleAnalyzeFile(file.filename)}
+                              onClick={() => handleAnalyzeClick(file.document_id)}
                               className="text-brand-primary hover:text-brand-primary/80 hover:underline text-[11px] font-bold cursor-pointer"
+                              disabled={isAnalyzing}
                             >
                               Analyze
                             </button>
@@ -336,47 +364,11 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         
-        <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-red-400 flex items-center gap-2 font-mono">
-              <ShieldAlert size={14} className="text-red-400" /> Critical Risk Alerts
-            </h4>
-            <button type="button" aria-label="More actions" className="text-gray-600 hover:text-white transition-colors cursor-pointer bg-transparent border-none outline-none"><MoreVertical size={16}/></button>
-          </div>
-          
-          <div className="overflow-x-auto text-xs w-full flex-1">
-            {loading ? (
-              <div className="text-gray-500 font-mono text-[11px] py-4 animate-pulse">Running security fraud scans...</div>
-            ) : anomalies.length === 0 ? (
-              <div className="text-gray-500 font-mono text-[11px] py-4">No critical operational anomalies identified.</div>
-            ) : (
-              <table aria-label="Live anomaly alerts data grid" className="table table-xs w-full border-none">
-                <thead>
-                  <tr className="border-b border-gray-800 text-brand-muted font-bold text-left uppercase text-[10px] font-mono">
-                    <th scope="col" className="bg-transparent pl-0 py-2">Metric Vector</th>
-                    <th scope="col" className="bg-transparent py-2">Risk Description</th>
-                    <th scope="col" className="bg-transparent text-right pr-0 py-2">Severity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {anomalies.map((alert) => (
-                    <tr key={alert.id} className="border-b border-gray-850/40 last:border-none">
-                      <td className="bg-transparent pl-0 font-medium py-3 text-white max-w-[120px] truncate">{alert.metric}</td>
-                      <td className="bg-transparent text-gray-300 py-3 max-w-[200px] truncate" title={alert.message}>{alert.message}</td>
-                      <td className="bg-transparent text-right pr-0 py-3">
-                        <span className={`inline-flex items-center text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border ${
-                          alert.severity === 'CRITICAL' ? 'text-red-400 bg-red-500/10 border-red-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                        }`}>
-                          {alert.severity}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
+        <CriticalRiskAlerts 
+          riskAlerts={riskAlerts} 
+          isAnalyzing={isAnalyzing || isScanningAlerts} 
+          currentStep={currentStep} 
+        />
 
         <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
           <div className="flex items-center justify-between mb-2">
