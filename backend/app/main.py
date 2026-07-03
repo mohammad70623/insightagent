@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.api.v1.api import api_router
+from app.api.v1.endpoints.analytics.analyze import router as analyze_router
 
 # Initialize Enterprise FastAPI Application Engine
 app = FastAPI(
@@ -26,6 +27,7 @@ if settings.BACKEND_CORS_ORIGINS:
 
 # Inject the assembled V1 Router cluster into the main app core runtime
 app.include_router(api_router, prefix=settings.API_V1_STR)
+app.include_router(analyze_router, prefix="/api")
 
 
 @app.on_event("startup")
