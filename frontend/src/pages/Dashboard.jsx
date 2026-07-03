@@ -8,6 +8,7 @@ const Dashboard = () => {
   const navigate = useNavigate(); 
   const [showTip, setShowTip] = useState(true);
   const [riskAlerts, setRiskAlerts] = useState([]);
+  const [mitigations, setMitigations] = useState([]);
   const [isScanningAlerts, setIsScanningAlerts] = useState(false);
   const [loading, setLoading] = useState(true);
   const [onboardingStatus, setOnboardingStatus] = useState({
@@ -44,6 +45,7 @@ const Dashboard = () => {
         setIsScanningAlerts(true);
         const response = await api.get('/chat/analytics/anomalies');
         setRiskAlerts(response.data.alerts || []);
+        setMitigations(response.data.mitigations || []);
       } catch (error) {
         console.error("Failed to fetch live business anomalies:", error);
       } finally {
@@ -112,6 +114,7 @@ const Dashboard = () => {
     setIsAnalyzing(true);
     setCurrentStep('processing');
     setRiskAlerts([]); // Clear previous table rows instantly during new scan
+    setMitigations([]); // Clear mitigations as well
 
     try {
       // 2. Fire the real API call to the RAG Anomaly Detection Core backend
@@ -126,13 +129,14 @@ const Dashboard = () => {
       if (!response.ok) throw new Error('RAG Analysis Execution Failed');
 
       const data = await response.json();
-      // Expected incoming JSON structure: { success: true, alerts: [ { type: "GDPR Compliance", description: "...", severity: "CRITICAL" }, ... ] }
+      // Expected incoming JSON structure: { success: true, alerts: [...], mitigations: [...] }
 
       // 3. Flash the green success state indicator on the LIVE_STREAM_ENGINE
       setCurrentStep('completed');
       
-      // 4. Commit the dynamic, variable-length AI-predicted risk array to our table state
+      // 4. Commit the dynamic, variable-length AI-predicted risk array and mitigations to state
       setRiskAlerts(data.alerts || []);
+      setMitigations(data.mitigations || []);
 
     } catch (error) {
       console.error("Full-Stack API Integration Error:", error);
@@ -366,6 +370,7 @@ const Dashboard = () => {
         
         <CriticalRiskAlerts 
           riskAlerts={riskAlerts} 
+          mitigationPlans={mitigations}
           isAnalyzing={isAnalyzing || isScanningAlerts} 
           currentStep={currentStep} 
         />
