@@ -12,6 +12,7 @@ import TopProducts from '../components/analytics/TopProducts';
 
 const Analytics = () => {
   const [liveMetrics, setLiveMetrics] = useState(null);
+  const [kpiSummary, setKpiSummary] = useState(null);
   const [baseForecastData, setBaseForecastData] = useState([]);
   const [benchmarks, setBenchmarks] = useState([]);
   const [searchMeta, setSearchMeta] = useState({ query: '', time: '' });
@@ -32,6 +33,9 @@ const Analytics = () => {
     try {
       const response = await api.get('/chat/uploaded-files');
       setActiveFiles(response.data);
+      
+      const kpiRes = await api.get('/chat/analytics/kpi-summary');
+      setKpiSummary(kpiRes.data);
     } catch (error) {
       console.error("Failed to fetch active vector base files", error);
     }
@@ -40,15 +44,17 @@ const Analytics = () => {
   useEffect(() => {
     const fetchAnalyticsForecastAndBenchmarking = async () => {
       try {
-        const [metricsRes, forecastRes, benchmarkingRes] = await Promise.all([
+        const [metricsRes, forecastRes, benchmarkingRes, kpiRes] = await Promise.all([
           api.get('/chat/analytics/metrics'),
           api.get('/chat/analytics/forecast'),
-          api.get('/chat/analytics/benchmarking')
+          api.get('/chat/analytics/benchmarking'),
+          api.get('/chat/analytics/kpi-summary')
         ]);
         
         setLiveMetrics(metricsRes.data);
         setBaseForecastData(forecastRes.data.forecast_data);
         setBenchmarks(benchmarkingRes.data.benchmarks);
+        setKpiSummary(kpiRes.data);
         setSearchMeta({
           query: benchmarkingRes.data.search_query_used,
           time: benchmarkingRes.data.last_scraped_at
@@ -144,13 +150,48 @@ const Analytics = () => {
 
   const metrics = useMemo(() => {
     if (!liveMetrics) return [];
+    
+    const totalInteractionsVal = kpiSummary && kpiSummary.total_interactions !== undefined
+      ? kpiSummary.total_interactions.toLocaleString()
+      : liveMetrics.total_interactions;
+
+    const trendPct = kpiSummary && kpiSummary.trend_percentage
+      ? kpiSummary.trend_percentage
+      : '+12.4%';
+
+    const avgSentimentVal = kpiSummary && kpiSummary.avg_sentiment_score !== undefined
+      ? `${kpiSummary.avg_sentiment_score}%`
+      : `${liveMetrics.sentiment_score}%`;
+
+    const sentimentTrendPct = kpiSummary && kpiSummary.sentiment_trend
+      ? kpiSummary.sentiment_trend
+      : '+3.1%';
+
+    const activeComplaintsVal = kpiSummary && kpiSummary.active_complaints !== undefined
+      ? String(kpiSummary.active_complaints)
+      : String(liveMetrics.active_complaints);
+
+    const complaintsTrendPct = kpiSummary && kpiSummary.complaints_trend
+      ? kpiSummary.complaints_trend
+      : '-4.2%';
+
+    const responseTimeVal = kpiSummary && kpiSummary.response_time !== undefined
+      ? `${kpiSummary.response_time}s`
+      : liveMetrics.response_time.endsWith('m')
+      ? `${(parseFloat(liveMetrics.response_time) * 60).toFixed(0)}s`
+      : liveMetrics.response_time;
+
+    const latencyTrendPct = kpiSummary && kpiSummary.latency_trend
+      ? kpiSummary.latency_trend
+      : '+18.5%';
+
     return [
-      { title: 'Total Interactions', value: liveMetrics.total_interactions, change: '+12.4%', isPositive: true, icon: MessageSquare },
-      { title: 'Avg. Sentiment Score', value: `${liveMetrics.sentiment_score}%`, change: '+3.1%', isPositive: true, icon: TrendingUp },
-      { title: 'Active Complaints', value: String(liveMetrics.active_complaints), change: '-4.2%', isPositive: false, icon: AlertTriangle },
-      { title: 'Response Time', value: liveMetrics.response_time, change: '+18.5%', isPositive: true, icon: Clock },
+      { title: 'Total Interactions', value: totalInteractionsVal, change: trendPct, isPositive: true, icon: MessageSquare },
+      { title: 'Avg. Sentiment Score', value: avgSentimentVal, change: sentimentTrendPct, isPositive: true, icon: TrendingUp },
+      { title: 'Active Complaints', value: activeComplaintsVal, change: complaintsTrendPct, isPositive: false, icon: AlertTriangle },
+      { title: 'Response Time', value: responseTimeVal, change: latencyTrendPct, isPositive: true, icon: Clock },
     ];
-  }, [liveMetrics]);
+  }, [liveMetrics, kpiSummary]);
 
   const chartData = useMemo(() => {
     if (!liveMetrics || !liveMetrics.chart_data || liveMetrics.chart_data.length === 0) {

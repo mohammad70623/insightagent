@@ -1,5 +1,68 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react';
+
+const AnimatedValue = ({ value }) => {
+  const [displayValue, setDisplayValue] = useState(value);
+
+  useEffect(() => {
+    const valueStr = String(value);
+    
+    // Extract trailing non-numeric characters as suffix (e.g. "%" or "s" or "ms")
+    const numMatch = valueStr.match(/^-?[\d,.]+/);
+    const numericPart = numMatch ? numMatch[0] : "";
+    const suffixPart = valueStr.substring(numericPart.length);
+    
+    const cleanStr = numericPart.replace(/,/g, '');
+    const num = parseFloat(cleanStr);
+    
+    if (!isNaN(num) && isFinite(num) && /^-?\d+(\.\d+)?$/.test(cleanStr)) {
+      let start = 0;
+      const end = num;
+      if (start === end) {
+        setDisplayValue(value);
+        return;
+      }
+      
+      const duration = 1000; // 1s animation duration
+      const startTime = performance.now();
+      
+      const animate = (currentTime) => {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        
+        // Easing function: easeOutQuad
+        const easeProgress = progress * (2 - progress);
+        const currentVal = start + (end - start) * easeProgress;
+        
+        let formattedVal = "";
+        if (cleanStr.includes('.')) {
+          const decimals = cleanStr.split('.')[1].length;
+          formattedVal = Number(currentVal.toFixed(decimals)).toLocaleString();
+        } else {
+          formattedVal = Math.floor(currentVal).toLocaleString();
+        }
+        
+        setDisplayValue(formattedVal + suffixPart);
+        
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          setDisplayValue(value);
+        }
+      };
+      
+      requestAnimationFrame(animate);
+    } else {
+      setDisplayValue(value);
+    }
+  }, [value]);
+
+  return (
+    <span className="text-2xl font-bold tracking-tight text-white transition-all duration-300">
+      {displayValue}
+    </span>
+  );
+};
 
 const MetricsGrid = ({ metrics }) => {
   return (
@@ -13,7 +76,7 @@ const MetricsGrid = ({ metrics }) => {
               <Icon size={16} className="text-gray-500" />
             </div>
             <div className="mt-4 flex items-baseline justify-between">
-              <span className="text-2xl font-bold tracking-tight text-white">{item.value}</span>
+              <AnimatedValue value={item.value} />
               <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${
                 item.isPositive ? 'text-green-400' : 'text-red-400'
               }`}>
