@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import { api } from '../services/api';
 import CriticalRiskAlerts from '../components/analytics/CriticalRiskAlerts';
 import InfrastructureHealth from '../components/analytics/InfrastructureHealth';
@@ -7,6 +7,7 @@ import { UploadCloud, MessageSquare, Settings2, MoreVertical, Database, X, Shiel
 
 const Dashboard = () => {
   const navigate = useNavigate(); 
+  const { profilePicRef } = useOutletContext() || {};
   const [showTip, setShowTip] = useState(true);
   const [riskAlerts, setRiskAlerts] = useState([]);
   const [mitigations, setMitigations] = useState([]);
@@ -152,6 +153,14 @@ const Dashboard = () => {
     }
   };
 
+  const handleAccountSettingsClick = () => {
+    if (profilePicRef && profilePicRef.current) {
+      profilePicRef.current.click();
+    } else {
+      navigate('/app/admin');
+    }
+  };
+
   const isAllCompleted = onboardingStatus.has_uploaded_data && onboardingStatus.has_processed_data && onboardingStatus.has_explored_insights;
 
   return (
@@ -186,7 +195,7 @@ const Dashboard = () => {
           
           <button 
             type="button"
-            onClick={() => navigate('/app/admin')} 
+            onClick={handleAccountSettingsClick} 
             className="btn btn-sm bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary/20 gap-2 font-semibold capitalize rounded-lg transition-all active:scale-[0.98] cursor-pointer"
           >
             <Settings2 size={15} /> Account Settings

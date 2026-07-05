@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History } from 'lucide-react';
 import SwotButton from './analytics/SwotButton';
@@ -12,6 +12,7 @@ import PrivacyPolicyModal from './PrivacyPolicyModal';
 const DashboardLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const profilePicRef = useRef(null);
 
   const [profile, setProfile] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -205,6 +206,7 @@ const DashboardLayout = () => {
             <button type="button" aria-label="History logs" className="text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none"><History size={16} /></button>
             
             <button 
+              ref={profilePicRef}
               type="button"
               onClick={() => setShowProfileModal(true)}
               className="avatar cursor-pointer bg-transparent border-none p-0 focus:outline-none hover:scale-105 active:scale-95 transition-all"
@@ -225,7 +227,7 @@ const DashboardLayout = () => {
 
         
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-main p-8">
-          <Outlet />
+          <Outlet context={{ profilePicRef }} />
         </main>
       </div>
 
