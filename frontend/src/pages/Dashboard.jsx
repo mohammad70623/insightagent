@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import CriticalRiskAlerts from '../components/analytics/CriticalRiskAlerts';
-import { UploadCloud, MessageSquare, Settings2, MoreVertical, Database, Cpu, HardDrive, X, ShieldAlert, CheckCircle, FileText } from 'lucide-react';
+import InfrastructureHealth from '../components/analytics/InfrastructureHealth';
+import { UploadCloud, MessageSquare, Settings2, MoreVertical, Database, X, ShieldAlert, CheckCircle, FileText } from 'lucide-react';
 
 const Dashboard = () => {
   const navigate = useNavigate(); 
@@ -375,47 +376,11 @@ const Dashboard = () => {
           currentStep={currentStep} 
         />
 
-        <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted flex items-center gap-2 font-mono">
-              Enterprise Infrastructure Health
-            </h4>
-            <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-brand-primary bg-brand-primary/10 border border-brand-primary/20 px-2 py-0.5 rounded-md">
-              ● Live Monitor
-            </span>
-          </div>
-          
-          <div className="h-16 w-full flex items-end my-2 overflow-hidden">
-            <svg aria-label="Infrastructure pulse line monitor" className="w-full h-full" viewBox="0 0 400 60" preserveAspectRatio="none">
-              <defs>
-                <linearGradient id="waveGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#818CF8" stopOpacity="0.25"/>
-                  <stop offset="100%" stopColor="#818CF8" stopOpacity="0"/>
-                </linearGradient>
-              </defs>
-              <path d="M0 45 Q 60 15, 120 35 T 240 25 T 360 40 T 400 30 L 400 60 L 0 60 Z" fill="url(#waveGrad)" />
-              <path d="M0 45 Q 60 15, 120 35 T 240 25 T 360 40 T 400 30" fill="none" stroke="#818CF8" strokeWidth="2" className="animate-pulse" />
-            </svg>
-          </div>
-          
-          <div className="grid grid-cols-3 gap-3 text-center mt-2">
-            <div className="rounded-lg bg-[#0B0F19]/50 p-2.5 border border-gray-850/40">
-              <p className="text-[9px] uppercase tracking-wider text-brand-muted font-bold font-mono">Model</p>
-              <p className="text-xs font-bold mt-1 text-white flex items-center justify-center gap-1"><Cpu size={12} className="text-brand-primary"/> Ent. Ultra</p>
-              <span className="text-[9px] text-gray-500 font-semibold">99.1% Opt</span>
-            </div>
-            <div className="rounded-lg bg-[#0B0F19]/50 p-2.5 border border-gray-850/40">
-              <p className="text-[9px] uppercase tracking-wider text-brand-muted font-bold font-mono">Latency</p>
-              <p className="text-xs font-bold mt-1 text-white flex items-center justify-center gap-1"><HardDrive size={12} className="text-brand-primary"/> 12ms</p>
-              <span className="text-[9px] text-gray-500 font-semibold">Postgres/Vector</span>
-            </div>
-            <div className="rounded-lg bg-[#0B0F19]/50 p-2.5 border border-gray-850/40">
-              <p className="text-[9px] uppercase tracking-wider text-brand-muted font-bold font-mono">Threads</p>
-              <p className="text-xs font-bold mt-1 text-white">Active</p>
-              <span className="text-[9px] text-gray-500 font-semibold">12/12 Live</span>
-            </div>
-          </div>
-        </div>
+        <InfrastructureHealth 
+          riskAlerts={riskAlerts} 
+          isAnalyzing={isAnalyzing || isScanningAlerts} 
+          currentStep={currentStep} 
+        />
 
       </div>
 
