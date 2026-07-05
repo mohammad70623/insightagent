@@ -6,11 +6,16 @@ const AnimatedValue = ({ value }) => {
 
   useEffect(() => {
     const valueStr = String(value);
-    const hasPercent = valueStr.endsWith('%');
-    const cleanStr = valueStr.replace(/,/g, '').replace(/%/g, '');
+    
+    // Extract trailing non-numeric characters as suffix (e.g. "%" or "s" or "ms")
+    const numMatch = valueStr.match(/^-?[\d,.]+/);
+    const numericPart = numMatch ? numMatch[0] : "";
+    const suffixPart = valueStr.substring(numericPart.length);
+    
+    const cleanStr = numericPart.replace(/,/g, '');
     const num = parseFloat(cleanStr);
     
-    if (!isNaN(num) && isFinite(num) && /^\d+(\.\d+)?$/.test(cleanStr)) {
+    if (!isNaN(num) && isFinite(num) && /^-?\d+(\.\d+)?$/.test(cleanStr)) {
       let start = 0;
       const end = num;
       if (start === end) {
@@ -37,11 +42,7 @@ const AnimatedValue = ({ value }) => {
           formattedVal = Math.floor(currentVal).toLocaleString();
         }
         
-        if (hasPercent) {
-          setDisplayValue(formattedVal + '%');
-        } else {
-          setDisplayValue(formattedVal);
-        }
+        setDisplayValue(formattedVal + suffixPart);
         
         if (progress < 1) {
           requestAnimationFrame(animate);

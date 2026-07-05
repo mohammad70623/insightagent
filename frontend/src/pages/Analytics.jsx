@@ -175,11 +175,21 @@ const Analytics = () => {
       ? kpiSummary.complaints_trend
       : '-4.2%';
 
+    const responseTimeVal = kpiSummary && kpiSummary.response_time !== undefined
+      ? `${kpiSummary.response_time}s`
+      : liveMetrics.response_time.endsWith('m')
+      ? `${(parseFloat(liveMetrics.response_time) * 60).toFixed(0)}s`
+      : liveMetrics.response_time;
+
+    const latencyTrendPct = kpiSummary && kpiSummary.latency_trend
+      ? kpiSummary.latency_trend
+      : '+18.5%';
+
     return [
       { title: 'Total Interactions', value: totalInteractionsVal, change: trendPct, isPositive: true, icon: MessageSquare },
       { title: 'Avg. Sentiment Score', value: avgSentimentVal, change: sentimentTrendPct, isPositive: true, icon: TrendingUp },
       { title: 'Active Complaints', value: activeComplaintsVal, change: complaintsTrendPct, isPositive: false, icon: AlertTriangle },
-      { title: 'Response Time', value: liveMetrics.response_time, change: '+18.5%', isPositive: true, icon: Clock },
+      { title: 'Response Time', value: responseTimeVal, change: latencyTrendPct, isPositive: true, icon: Clock },
     ];
   }, [liveMetrics, kpiSummary]);
 
