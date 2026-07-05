@@ -159,9 +159,17 @@ const Analytics = () => {
       ? kpiSummary.trend_percentage
       : '+12.4%';
 
+    const avgSentimentVal = kpiSummary && kpiSummary.avg_sentiment_score !== undefined
+      ? `${kpiSummary.avg_sentiment_score}%`
+      : `${liveMetrics.sentiment_score}%`;
+
+    const sentimentTrendPct = kpiSummary && kpiSummary.sentiment_trend
+      ? kpiSummary.sentiment_trend
+      : '+3.1%';
+
     return [
       { title: 'Total Interactions', value: totalInteractionsVal, change: trendPct, isPositive: true, icon: MessageSquare },
-      { title: 'Avg. Sentiment Score', value: `${liveMetrics.sentiment_score}%`, change: '+3.1%', isPositive: true, icon: TrendingUp },
+      { title: 'Avg. Sentiment Score', value: avgSentimentVal, change: sentimentTrendPct, isPositive: true, icon: TrendingUp },
       { title: 'Active Complaints', value: String(liveMetrics.active_complaints), change: '-4.2%', isPositive: false, icon: AlertTriangle },
       { title: 'Response Time', value: liveMetrics.response_time, change: '+18.5%', isPositive: true, icon: Clock },
     ];

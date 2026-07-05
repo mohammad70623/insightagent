@@ -5,8 +5,9 @@ const AnimatedValue = ({ value }) => {
   const [displayValue, setDisplayValue] = useState(value);
 
   useEffect(() => {
-    // Strip out commas to test if it's a pure numeric value
-    const cleanStr = String(value).replace(/,/g, '');
+    const valueStr = String(value);
+    const hasPercent = valueStr.endsWith('%');
+    const cleanStr = valueStr.replace(/,/g, '').replace(/%/g, '');
     const num = parseFloat(cleanStr);
     
     if (!isNaN(num) && isFinite(num) && /^\d+(\.\d+)?$/.test(cleanStr)) {
@@ -28,11 +29,18 @@ const AnimatedValue = ({ value }) => {
         const easeProgress = progress * (2 - progress);
         const currentVal = start + (end - start) * easeProgress;
         
+        let formattedVal = "";
         if (cleanStr.includes('.')) {
           const decimals = cleanStr.split('.')[1].length;
-          setDisplayValue(Number(currentVal.toFixed(decimals)).toLocaleString());
+          formattedVal = Number(currentVal.toFixed(decimals)).toLocaleString();
         } else {
-          setDisplayValue(Math.floor(currentVal).toLocaleString());
+          formattedVal = Math.floor(currentVal).toLocaleString();
+        }
+        
+        if (hasPercent) {
+          setDisplayValue(formattedVal + '%');
+        } else {
+          setDisplayValue(formattedVal);
         }
         
         if (progress < 1) {
