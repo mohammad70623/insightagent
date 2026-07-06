@@ -55,6 +55,21 @@ const Analytics = () => {
     }
   };
 
+  const fetchCompetitorMatrix = async () => {
+    try {
+      const response = await api.get('/chat/analytics/competitor-matrix');
+      if (response.data.success) {
+        setBenchmarks(response.data.matrix || []);
+        setSearchMeta({
+          query: response.data.scraping_query,
+          time: response.data.scraped_at
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch competitor matrix:", error);
+    }
+  };
+
   const fetchUploadedFiles = async () => {
     try {
       const response = await api.get('/chat/uploaded-files');
@@ -65,7 +80,8 @@ const Analytics = () => {
 
       await Promise.all([
         fetchComplaintsTimeline(),
-        fetchSentimentDistribution()
+        fetchSentimentDistribution(),
+        fetchCompetitorMatrix()
       ]);
     } catch (error) {
       console.error("Failed to fetch active vector base files", error);
@@ -75,21 +91,15 @@ const Analytics = () => {
   useEffect(() => {
     const fetchAnalyticsForecastAndBenchmarking = async () => {
       try {
-        const [metricsRes, forecastRes, benchmarkingRes, kpiRes] = await Promise.all([
+        const [metricsRes, forecastRes, kpiRes] = await Promise.all([
           api.get('/chat/analytics/metrics'),
           api.get('/chat/analytics/forecast'),
-          api.get('/chat/analytics/benchmarking'),
           api.get('/chat/analytics/kpi-summary')
         ]);
         
         setLiveMetrics(metricsRes.data);
         setBaseForecastData(forecastRes.data.forecast_data);
-        setBenchmarks(benchmarkingRes.data.benchmarks);
         setKpiSummary(kpiRes.data);
-        setSearchMeta({
-          query: benchmarkingRes.data.search_query_used,
-          time: benchmarkingRes.data.last_scraped_at
-        });
       } catch (error) {
         console.error("Failed to fetch full enterprise analytical suite logs:", error);
       } finally {

@@ -1,82 +1,104 @@
 import React from 'react';
 import { Globe, Zap } from 'lucide-react';
 
-const BenchmarkingMatrix = ({ searchMeta, benchmarks }) => {
-  return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-      <div className="lg:col-span-12 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-gray-850 pb-4 mb-6">
-          <div className="flex items-center gap-2.5">
-            <Globe size={16} className="text-brand-primary animate-pulse" />
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-widest text-white font-mono">
-                Live Competitor Benchmarking Matrix
-              </h4>
-              <p className="text-[10px] text-brand-muted mt-0.5">
-                Real-time intelligence scraped from global vectors. Query: <span className="text-gray-400 italic">"{searchMeta.query}"</span>
-              </p>
-            </div>
-          </div>
-          <span className="text-[9px] font-mono font-black text-gray-500 uppercase tracking-widest bg-[#0B0F19] px-2 py-1 rounded border border-gray-850">
-            ⚡ Scraped At: {searchMeta.time || 'N/A'}
-          </span>
-        </div>
+const BenchmarkingMatrix = ({ searchMeta, benchmarks = [] }) => {
+  const query = searchMeta?.query || "Dynamic Web Matrix";
+  const timestamp = searchMeta?.time || "2026-07-06 17:09:32 UTC";
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+  return (
+    <div className="lg:col-span-12 bg-[#111625] p-6 rounded-xl border border-[#1e293b] w-full text-white">
+      {/* Dynamic Header Metrics Context */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-[#1e293b] pb-4 mb-6">
+        <div className="flex items-center gap-2.5">
+          <Globe size={16} className="text-indigo-400 animate-pulse" />
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-widest text-white font-mono">
+              🌐 Live Competitor Benchmarking Matrix
+            </h3>
+            <p className="text-[10px] text-slate-400 mt-1 italic font-mono">
+              Query: "{query}"
+            </p>
+          </div>
+        </div>
+        <div className="bg-slate-900 px-3 py-1.5 rounded-md border border-[#1e293b] text-[9px] font-mono text-amber-400">
+          ⚡ SCRAPED AT: {timestamp}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Left Column: Progress Bars */}
+        <div>
+          <h4 className="text-xs font-semibold tracking-widest text-[#64748b] uppercase mb-4">
+            Market Share Comparison (%)
+          </h4>
           <div className="space-y-4">
-            <h5 className="text-[11px] font-bold tracking-wider text-brand-muted font-mono uppercase">
-              Market Share Shareholder Comparison (%)
-            </h5>
-            <div className="space-y-3.5">
-              {benchmarks.map((comp, idx) => (
-                <div key={idx} className="space-y-1.5">
+            {benchmarks.length === 0 ? (
+              <div className="text-xs text-indigo-400 p-6 font-mono animate-pulse">
+                ⚡ Activating LangGraph State Machine & Tavily 2026 Scraper...
+              </div>
+            ) : (
+              benchmarks.map((item) => (
+                <div key={item.name} className="space-y-1.5">
                   <div className="flex justify-between text-xs">
-                    <span className={`font-medium ${comp.company_name.includes('Our SaaS') || comp.company_name.includes('InsightAgent') ? 'text-brand-primary font-bold' : 'text-gray-300'}`}>
-                      {comp.company_name}
+                    <span className={item.is_user ? "text-indigo-400 font-bold" : "text-slate-300"}>
+                      {item.name}
                     </span>
-                    <span className="font-mono text-white font-bold">{comp.market_share_percentage}%</span>
+                    <span className="font-semibold font-mono">{item.market_share}%</span>
                   </div>
-                  <div className="w-full bg-[#0B0F19] h-2 rounded-md overflow-hidden border border-gray-850/60">
+                  <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
                     <div 
-                      style={{ width: `${comp.market_share_percentage}%` }}
-                      className={`h-full rounded-md transition-all duration-1000 ${
-                        comp.company_name.includes('Our SaaS') || comp.company_name.includes('InsightAgent') ? 'bg-brand-primary' : 'bg-gray-700'
-                      }`} 
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        item.is_user ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]' : 'bg-slate-600'
+                      }`}
+                      style={{ width: `${item.market_share * 2.5}%` }}
                     />
                   </div>
                 </div>
-              ))}
-            </div>
+              ))
+            )}
           </div>
+        </div>
 
-          <div className="overflow-x-auto text-[11px] w-full flex flex-col justify-between">
-            <h5 className="text-[11px] font-bold tracking-wider text-brand-muted font-mono uppercase mb-3">
-              Core Scalability Performance Metrics
-            </h5>
-            <table aria-label="Competitor metadata grid" className="table table-xs w-full border-none">
+        {/* Right Column: Performance Table */}
+        <div>
+          <h4 className="text-xs font-semibold tracking-widest text-[#64748b] uppercase mb-4">
+            Core Scalability Performance Metrics
+          </h4>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-gray-800 text-brand-muted font-bold text-left uppercase text-[10px] font-mono">
-                  <th className="bg-transparent pl-0 py-2">Vendor Asset</th>
-                  <th className="bg-transparent py-2 text-center">Satisfaction Index</th>
-                  <th className="bg-transparent text-right pr-0 py-2">API Latency Vector</th>
+                <tr className="border-b border-[#1e293b] text-[10px] tracking-wider uppercase text-[#64748b]">
+                  <th className="pb-2 font-semibold">Vendor Asset</th>
+                  <th className="pb-2 font-semibold text-center">Satisfaction Index</th>
+                  <th className="pb-2 font-semibold text-right">API Latency Vector</th>
                 </tr>
               </thead>
-              <tbody>
-                {benchmarks.map((comp, idx) => (
-                  <tr key={idx} className="border-b border-gray-850/30 last:border-none hover:bg-gray-900/10 transition-colors">
-                    <td className={`bg-transparent pl-0 py-3 font-semibold ${comp.company_name.includes('Our SaaS') || comp.company_name.includes('InsightAgent') ? 'text-brand-primary' : 'text-white'}`}>
-                      {comp.company_name}
-                    </td>
-                    <td className="bg-transparent text-center py-3 font-mono font-bold text-green-400">
-                      {comp.customer_satisfaction_score}%
-                    </td>
-                    <td className="bg-transparent text-right pr-0 py-3 font-mono font-semibold text-gray-300">
-                      <span className="inline-flex items-center gap-1">
-                        <Zap size={10} className="text-amber-400" /> {comp.api_latency_ms}ms
-                      </span>
+              <tbody className="divide-y divide-[#1e293b] text-xs">
+                {benchmarks.length === 0 ? (
+                  <tr>
+                    <td colSpan="3" className="py-4 text-center text-slate-500 font-mono text-[10px]">
+                      No active competitor data synced.
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  benchmarks.map((item) => (
+                    <tr key={item.name} className="hover:bg-slate-900/40 transition-colors">
+                      <td className={`py-3 ${item.is_user ? "text-indigo-400 font-bold" : "text-slate-300"}`}>
+                        {item.name}
+                      </td>
+                      <td className={`py-3 text-center font-semibold font-mono ${
+                        item.is_user ? "text-emerald-400" : "text-slate-400"
+                      }`}>
+                        {item.satisfaction}%
+                      </td>
+                      <td className="py-3 text-right font-mono text-amber-500 font-medium">
+                        <span className="inline-flex items-center gap-1">
+                          <Zap size={10} className="text-amber-400" /> {item.latency}ms
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
