@@ -1,10 +1,19 @@
 import logging
+from dotenv import load_dotenv
+import os
+
+# Explicitly load the .env file from the project root
+load_dotenv()
+
 import asyncio
 import json
-import os
 import httpx
 import re
 import uuid
+import imaplib
+import email
+from email.header import decode_header
+from email.utils import parseaddr, parsedate_to_datetime
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, TypedDict
 from pydantic import BaseModel, Field
@@ -794,3 +803,183 @@ async def get_live_competitor_matrix(
     except Exception as err:
         logger.error(f"Graph architecture runtime failure: {str(err)}")
         raise HTTPException(status_code=500, detail=f"Graph architecture runtime failure: {str(err)}")
+
+
+GMAIL_USER = os.getenv("SMTP_USER")
+GMAIL_APP_PASS = os.getenv("SMTP_PASSWORD")
+
+class CrisisState(TypedDict):
+    raw_email_body: str
+    sender: str
+    subject: str
+    snippet: str
+    severity: str
+    requires_emergency_response: bool
+
+# --- LANGGRAPH CRITICAL TRIAZING NODE ---
+def triage_email_node(state: CrisisState) -> Dict[str, Any]:
+    """Analyzes customer emails to detect system down emergencies, payment failures, or severe churn signals."""
+    if not llm:
+        return {"snippet": state["raw_email_body"][:40], "severity": "MEDIUM", "requires_emergency_response": False}
+        
+    prompt = f"""
+    You are an automated emergency triage agent for a software platform dashboard. Analyze this customer email text:
+    Subject: "{state['subject']}"
+    Content: "{state['raw_email_body']}"
+    
+    Determine if the customer is reporting a critical system breakdown, server crash, payment/checkout loop failure, or highly aggressive negative feedback that requires instant developer intervention.
+    
+    Return ONLY a valid JSON object matching exactly this schema:
+    {{
+        "snippet": "Max 7-word scannable summary of the user issue",
+        "severity": "CRITICAL" or "HIGH" or "MEDIUM",
+        "requires_emergency_response": true or false
+    }}
+    """
+    try:
+        response = llm.invoke(prompt)
+        data = json.loads(response.content)
+    except Exception:
+        data = {
+            "snippet": state["subject"][:40] if state["subject"] else "Support Ticket Logs",
+            "severity": "MEDIUM",
+            "requires_emergency_response": False
+        }
+        
+    return {
+        "snippet": data.get("snippet", "Support Request Logs"),
+        "severity": data.get("severity", "MEDIUM"),
+        "requires_emergency_response": data.get("requires_emergency_response", False)
+    }
+
+# Wire LangGraph State Machine
+workflow_crisis = StateGraph(CrisisState)
+workflow_crisis.add_node("triage", triage_email_node)
+workflow_crisis.set_entry_point("triage")
+workflow_crisis.add_edge("triage", END)
+crisis_agent = workflow_crisis.compile()
+
+@router.get("/urgent-feedbacks")
+async def fetch_urgent_feedbacks_queue():
+    """Live IMAP engine polling that streams unread mailbox records into a prioritized UI display queue."""
+    compiled_queue = []
+    
+    # Secure Fallback Mechanism - returns empty queue if credentials are not configured
+    if not GMAIL_USER or not GMAIL_APP_PASS:
+        logger.warning("Gmail credentials SMTP_USER or SMTP_PASSWORD are not configured.")
+        return {"success": True, "feedbacks": []}
+        
+    try:
+        # Secure SSL handshake with Gmail IMAP server using async executor
+        def poll_inbox():
+            mail = imaplib.IMAP4_SSL("imap.gmail.com")
+            mail.login(GMAIL_USER, GMAIL_APP_PASS)
+            mail.select("inbox")
+            
+            # Pull UNREAD flags from the mailbox using UID
+            try:
+                status, messages = mail.uid('search', None, 'UNREAD')
+                is_uid = True
+                if status != "OK":
+                    status, messages = mail.search(None, 'ALL')
+                    is_uid = False
+            except Exception:
+                status, messages = mail.search(None, 'ALL')
+                is_uid = False
+                
+            inbox_list = []
+            if status == "OK" and messages[0]:
+                mail_ids = messages[0].split()
+                # Fetch up to the last 5 latest unread messages to maintain fast processing speeds
+                for m_id in mail_ids[-5:]:
+                    if is_uid:
+                        _, msg_data = mail.uid('fetch', m_id, '(RFC822)')
+                    else:
+                        _, msg_data = mail.fetch(m_id, "(RFC822)")
+                    for part in msg_data:
+                        if isinstance(part, tuple):
+                            msg = email.message_from_bytes(part[1])
+                            subject_header = decode_header(msg.get("Subject", ""))[0]
+                            subject = subject_header[0]
+                            encoding = subject_header[1]
+                            if isinstance(subject, bytes):
+                                subject = subject.decode(encoding or "utf-8", errors="ignore")
+                            sender = msg.get("From", "Anonymous Client")
+                            
+                            body = ""
+                            if msg.is_multipart():
+                                for sub_part in msg.walk():
+                                    if sub_part.get_content_type() == "text/plain":
+                                        body_bytes = sub_part.get_payload(decode=True)
+                                        if body_bytes:
+                                            body = body_bytes.decode("utf-8", errors="ignore")
+                                        break
+                            else:
+                                body_bytes = msg.get_payload(decode=True)
+                                if body_bytes:
+                                    body = body_bytes.decode("utf-8", errors="ignore")
+                            
+                            inbox_list.append({
+                                "id": int(m_id.decode()),
+                                "sender": sender,
+                                "subject": subject,
+                                "body": body,
+                                "date_header": msg.get("Date")
+                            })
+            mail.close()
+            mail.logout()
+            return inbox_list
+
+        inbox_records = await asyncio.to_thread(poll_inbox)
+
+        for record in inbox_records:
+            # Process thread payload within our LangGraph AI engine
+            initial_state = {
+                "raw_email_body": record["body"][:400], 
+                "sender": record["sender"], 
+                "subject": record["subject"], 
+                "snippet": "", 
+                "severity": "", 
+                "requires_emergency_response": False
+            }
+            agent_res = await asyncio.to_thread(crisis_agent.invoke, initial_state)
+            
+            # Only include CRITICAL or HIGH severity threats
+            if agent_res.get("severity") in ["CRITICAL", "HIGH"]:
+                sender_name = record["sender"].split("<")[0].strip()
+                if not sender_name:
+                    sender_name = record["sender"]
+                
+                # Format date header into '00:35' or '5 Jul'
+                formatted_time = "Just now"
+                if record["date_header"]:
+                    try:
+                        dt = parsedate_to_datetime(record["date_header"])
+                        now = datetime.now(dt.tzinfo)
+                        if dt.date() == now.date():
+                            formatted_time = dt.strftime("%H:%M")
+                        else:
+                            formatted_time = dt.strftime("%d %b").lstrip("0")
+                    except Exception:
+                        pass
+                
+                compiled_queue.append({
+                    "id": record["id"],
+                    "source": "Email",
+                    "sender_name": sender_name,
+                    "subject": record["subject"],
+                    "message_snippet": agent_res["snippet"],
+                    "severity": agent_res["severity"],
+                    "timestamp": formatted_time,
+                    "red_flag": True,
+                    "body": record["body"]
+                })
+            
+    except Exception as e:
+        logger.error(f"IMAP Error: {str(e)}")
+        
+    # Standard Priority Sorting Queue: CRITICAL -> HIGH (Newest ID first)
+    severity_order = {"CRITICAL": 0, "HIGH": 1}
+    compiled_queue.sort(key=lambda x: (severity_order.get(x["severity"], 2), -x["id"]))
+    
+    return {"success": True, "feedbacks": compiled_queue}

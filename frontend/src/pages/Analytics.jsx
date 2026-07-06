@@ -31,6 +31,16 @@ const Analytics = () => {
   const [complaintsTimeline, setComplaintsTimeline] = useState([]);
   const [timelineCategories, setTimelineCategories] = useState([]);
   const [sentimentData, setSentimentData] = useState(null);
+  const [urgentFeedbacks, setUrgentFeedbacks] = useState([]);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, severity) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, severity }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5000);
+  };
 
   const fetchComplaintsTimeline = async () => {
     try {
@@ -52,6 +62,27 @@ const Analytics = () => {
       }
     } catch (error) {
       console.error("Failed to fetch sentiment distribution:", error);
+    }
+  };
+
+  const fetchUrgentFeedbacks = async () => {
+    try {
+      const response = await api.get('/chat/analytics/urgent-feedbacks');
+      if (response.data && response.data.success) {
+        const liveData = response.data.feedbacks;
+        
+        // Update the table state so rows become fully dynamic
+        setUrgentFeedbacks(liveData);
+        
+        // Check for incoming emergency to trigger top toast alerts
+        liveData.forEach(item => {
+          if (item.trigger_toast) {
+            addToast(`🚨 EMERGENCY: ${item.message_snippet}`, item.severity);
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching live triage matrix:", error);
     }
   };
 
@@ -77,15 +108,17 @@ const Analytics = () => {
       
       const kpiRes = await api.get('/chat/analytics/kpi-summary');
       setKpiSummary(kpiRes.data);
-
-      await Promise.all([
-        fetchComplaintsTimeline(),
-        fetchSentimentDistribution(),
-        fetchCompetitorMatrix()
-      ]);
     } catch (error) {
       console.error("Failed to fetch active vector base files", error);
     }
+
+    // Call sub-fetches independently to prevent one crash from blocking others
+    Promise.all([
+      fetchComplaintsTimeline().catch(e => console.error(e)),
+      fetchSentimentDistribution().catch(e => console.error(e)),
+      fetchCompetitorMatrix().catch(e => console.error(e)),
+      fetchUrgentFeedbacks().catch(e => console.error(e))
+    ]);
   };
 
   useEffect(() => {
@@ -102,13 +135,29 @@ const Analytics = () => {
         setKpiSummary(kpiRes.data);
       } catch (error) {
         console.error("Failed to fetch full enterprise analytical suite logs:", error);
+      }
+    };
+    
+    const initFetch = async () => {
+      try {
+        await Promise.all([
+          fetchAnalyticsForecastAndBenchmarking(),
+          fetchUploadedFiles()
+        ]);
+      } catch (error) {
+        console.error("Failed to complete initial analytical suite sync:", error);
       } finally {
         setLoading(false);
       }
     };
-    
-    fetchAnalyticsForecastAndBenchmarking();
-    fetchUploadedFiles();
+
+    initFetch();
+  }, []);
+
+  useEffect(() => {
+    if (typeof fetchUrgentFeedbacks === 'function') {
+      fetchUrgentFeedbacks();
+    }
   }, []);
 
   const handleFileChange = (e) => {
@@ -261,12 +310,7 @@ const Analytics = () => {
     { name: 'CloudSync Enterprise', rate: '71.8%', width: 'w-[71.8%]', delta: '-0.5%', isUp: false },
   ], []);
 
-  const urgentFeedbacks = useMemo(() => [
-    { id: 1, source: 'Email', icon: Mail, msg: 'Cannot access checkout page after v2 update...', severity: 'CRITICAL', time: '2 mins ago' },
-    { id: 2, source: 'Chat', icon: MessageSquare, msg: 'API response times are exceeding 5000ms in EU...', severity: 'HIGH', time: '15 mins ago' },
-    { id: 3, source: 'Twitter', icon: MessageCircle, msg: 'App crashing on login for iOS 17.4 users...', severity: 'CRITICAL', time: '24 mins ago' },
-    { id: 4, source: 'Email', icon: Mail, msg: 'Invoice receipt not received for last billing...', severity: 'MEDIUM', time: '1 hr ago' },
-  ], []);
+
 
   const smoothBezierPath = useMemo(() => {
     return (key) => {
@@ -439,6 +483,34 @@ const Analytics = () => {
             </table>
           </div>
         </div>
+      </div>
+
+      {/* Toast Notification Container */}
+      <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 max-w-sm">
+        {toasts.map((toast) => (
+          <div 
+            key={toast.id}
+            className={`p-4 rounded-xl border shadow-2xl flex items-start gap-3 animate-slide-in text-xs font-mono backdrop-blur-md ${
+              toast.severity === 'CRITICAL' 
+                ? 'bg-red-950/80 border-red-500/40 text-red-200' 
+                : 'bg-amber-950/80 border-amber-500/40 text-amber-200'
+            }`}
+          >
+            <AlertTriangle className="flex-shrink-0 animate-bounce mt-0.5" size={14} />
+            <div>
+              <div className="font-bold uppercase tracking-wider text-[9px] mb-0.5 text-white">
+                🚨 {toast.severity} Threat Detected
+              </div>
+              <p className="leading-relaxed">{toast.message}</p>
+            </div>
+            <button 
+              onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+              className="text-slate-400 hover:text-white font-bold ml-auto pl-2"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
