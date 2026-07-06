@@ -28,6 +28,20 @@ const Analytics = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadFile, setUploadFile] = useState(null);
   const [pollingDocId, setPollingDocId] = useState(null);
+  const [complaintsTimeline, setComplaintsTimeline] = useState([]);
+  const [timelineCategories, setTimelineCategories] = useState([]);
+
+  const fetchComplaintsTimeline = async () => {
+    try {
+      const response = await api.get('/chat/analytics/complaints-timeline');
+      if (response.data.success) {
+        setComplaintsTimeline(response.data.data);
+        setTimelineCategories(response.data.categories || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch complaints timeline:", error);
+    }
+  };
 
   const fetchUploadedFiles = async () => {
     try {
@@ -36,6 +50,8 @@ const Analytics = () => {
       
       const kpiRes = await api.get('/chat/analytics/kpi-summary');
       setKpiSummary(kpiRes.data);
+
+      await fetchComplaintsTimeline();
     } catch (error) {
       console.error("Failed to fetch active vector base files", error);
     }
@@ -194,24 +210,23 @@ const Analytics = () => {
   }, [liveMetrics, kpiSummary]);
 
   const chartData = useMemo(() => {
-    if (!liveMetrics || !liveMetrics.chart_data || liveMetrics.chart_data.length === 0) {
-      return [
-        { label: 'OCT 18', ux: 140, latency: 170 },
-        { label: 'OCT 20', ux: 110, latency: 150 },
-        { label: 'OCT 22', ux: 160, latency: 180 },
-        { label: 'OCT 24', ux: 120, latency: 140 },
-        { label: 'OCT 26', ux: 90,  latency: 130 },
-        { label: 'OCT 28', ux: 100, latency: 110 },
-        { label: 'OCT 30', ux: 70,  latency: 120 },
-      ];
+    if (!complaintsTimeline || complaintsTimeline.length === 0) {
+      const offsets = [-12, -10, -8, -6, -4, -2, 0];
+      return offsets.map(offset => {
+        const d = new Date();
+        d.setDate(d.getDate() + offset);
+        const label = d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();
+        return { label };
+      });
     }
-    const baseLabels = ['OCT 18', 'OCT 20', 'OCT 22', 'OCT 24', 'OCT 26', 'OCT 28', 'OCT 30'];
-    return liveMetrics.chart_data.map((val, idx) => ({
-      label: baseLabels[idx] || `POINT ${idx + 1}`,
-      ux: val,
-      latency: Math.max(50, val - 30)
-    }));
-  }, [liveMetrics]);
+    return complaintsTimeline.map(item => {
+      const row = { label: item.date.toUpperCase() };
+      timelineCategories.forEach(cat => {
+        row[cat] = item[cat] || 0;
+      });
+      return row;
+    });
+  }, [complaintsTimeline, timelineCategories]);
 
   const sentiment = useMemo(() => {
     const score = liveMetrics ? liveMetrics.sentiment_score : 78.4;
@@ -243,13 +258,14 @@ const Analytics = () => {
       const svgHeight = 200;
       const padding = 20;
       const usableHeight = svgHeight - padding * 2;
-      const values = chartData.map(d => d[key]);
-      const maxVal = Math.max(...values);
-      const minVal = Math.min(...values);
-      const valueRange = maxVal - minVal || 1;
+      const allCategoryKeys = timelineCategories.length > 0 ? timelineCategories : [key];
+      const allValues = chartData.flatMap(d => allCategoryKeys.map(k => d[k] || 0));
+      const maxVal = Math.max(...allValues, 1);
+      const minVal = 0;
+      const valueRange = maxVal - minVal;
       const points = chartData.map((d, i) => {
         const x = (i * svgWidth) / (chartData.length - 1);
-        const y = svgHeight - (padding + ((d[key] - minVal) / valueRange) * usableHeight);
+        const y = svgHeight - (padding + (((d[key] || 0) - minVal) / valueRange) * usableHeight);
         return { x, y };
       });
       return points.reduce((path, p, i, a) => {
@@ -261,7 +277,7 @@ const Analytics = () => {
         return `${path} C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p.x} ${p.y}`;
       }, "");
     };
-  }, [chartData]);
+  }, [chartData, timelineCategories]);
 
   // Dynamic Mathematical Simulation Pipe over Ingested Forecast Vectors
   const simulatedForecastData = useMemo(() => {
@@ -315,7 +331,7 @@ const Analytics = () => {
       <MetricsGrid metrics={metrics} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <TrendChart chartData={chartData} smoothBezierPath={smoothBezierPath} />
+        <TrendChart chartData={chartData} categories={timelineCategories} smoothBezierPath={smoothBezierPath} />
         <SentimentCircle sentiment={sentiment} liveMetrics={liveMetrics} />
       </div>
 

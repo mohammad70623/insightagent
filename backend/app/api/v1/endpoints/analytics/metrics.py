@@ -5,6 +5,8 @@ import os
 import httpx
 import re
 import uuid
+from datetime import datetime, timedelta
+from typing import Optional
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends
 from qdrant_client.models import Filter, FieldCondition, MatchValue
@@ -287,3 +289,185 @@ async def get_dynamic_business_metrics(
     except Exception as e:
         logger.error(f"Dynamic metrics calculation failed: {str(e)}")
         return fallback_insights
+
+
+def extract_offset_from_text(text: str) -> Optional[int]:
+    """
+    Parses relative offset indicators (e.g. T-2MIN, T-1HR, T-2D, T-12D) or explicit dates
+    (e.g., Jun 24, Jul 06) from raw unstructured text segments.
+    """
+    match = re.search(r'\bT-(\d+)\s*(min|hr|d|day|wk|w|hour|minute|s)s?\b', text, re.IGNORECASE)
+    if match:
+        val = int(match.group(1))
+        unit = match.group(2).lower()
+        if unit.startswith('d'):
+            return -val
+        elif unit.startswith('w'):
+            return -val * 7
+        elif unit.startswith('h') or unit.startswith('m') or unit.startswith('s'):
+            return 0
+
+    months = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    # Check Month Day (e.g., "Jun 24")
+    pattern = r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})\b'
+    match_date = re.search(pattern, text, re.IGNORECASE)
+    if match_date:
+        m_str = match_date.group(1).lower()[:3]
+        day = int(match_date.group(2))
+        try:
+            m_idx = months.index(m_str) + 1
+            now = datetime.now()
+            dt = datetime(2026, m_idx, day) # Current live clock context is 2026
+            return (dt.date() - now.date()).days
+        except Exception:
+            pass
+
+    # Check Day Month (e.g., "24 Jun")
+    pattern_rev = r'\b(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b'
+    match_date_rev = re.search(pattern_rev, text, re.IGNORECASE)
+    if match_date_rev:
+        day = int(match_date_rev.group(1))
+        m_str = match_date_rev.group(2).lower()[:3]
+        try:
+            m_idx = months.index(m_str) + 1
+            now = datetime.now()
+            dt = datetime(2026, m_idx, day)
+            return (dt.date() - now.date()).days
+        except Exception:
+            pass
+
+    return None
+
+
+@router.get("/complaints-timeline")
+async def get_real_complaints_timeline(
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    Scrolls Qdrant to retrieve all text chunks for the tenant user,
+    parses relative timestamps or indicators from the payload text,
+    and returns a dynamic chronological 7-day chronological bucket framework.
+    """
+    tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
+    
+    ok, err_msg = vector_store.is_available()
+    if not ok:
+        logger.warning(f"Qdrant database not available for complaints-timeline: {err_msg}")
+        return {"success": False, "categories": [], "data": []}
+
+    offsets = [-12, -10, -8, -6, -4, -2, 0]
+    now = datetime.now()
+
+    if not vector_store.client.collection_exists(collection_name=tenant_collection):
+        empty_data = [
+            {
+                "date": (now + timedelta(days=offset)).strftime("%b %d")
+            }
+            for offset in offsets
+        ]
+        return {"success": True, "categories": [], "data": empty_data}
+
+    scroll_filter = Filter(
+        must=[FieldCondition(key="user_id", match=MatchValue(value=str(current_user.id)))]
+    )
+
+    date_buckets = {}
+    for offset in offsets:
+        d_str = (now + timedelta(days=offset)).strftime("%b %d")
+        date_buckets[d_str] = {}
+
+    discovered_categories = set()
+
+    try:
+        offset = None
+        while True:
+            results, next_offset = await asyncio.to_thread(
+                vector_store.client.scroll,
+                collection_name=tenant_collection,
+                scroll_filter=scroll_filter,
+                limit=100,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+
+            for point in results:
+                payload = getattr(point, 'payload', {}) or {}
+                text_content = payload.get("text", "")
+                if not text_content:
+                    continue
+
+                text_lower = text_content.lower()
+
+                # 1. Parse issues based on semantic textual indicators
+                is_billing = any(k in text_lower for k in ["billing", "refund", "stripe", "payment", "invoice", "receipt"])
+                is_logistics = any(k in text_lower for k in ["delivery", "package", "logistics", "dispatch", "warehouse", "transit", "shipping"])
+                is_latency = any(k in text_lower for k in ["latency", "5000ms", "timeout", "ms", "spiked", "compute latency", "response time", "slow", "delay"])
+                is_support = any(k in text_lower for k in ["support", "agent", "ticket", "response", "satisfaction", "customer service"])
+                is_security = any(k in text_lower for k in ["security", "password", "auth", "token", "vulnerability", "unencrypted", "encryption", "firewall", "egress"])
+                is_ui_ux = any(k in text_lower for k in ["button", "layout", "checkout", "ui", "ux", "viewport", "crashes", "crash", "rendering", "view"])
+
+                if not (is_billing or is_logistics or is_latency or is_support or is_security or is_ui_ux):
+                    # Check if it has general incident indicator
+                    is_incident = any(k in text_lower for k in ["incident", "error", "failed", "alert", "issue", "problem", "exception", "warning", "critical", "anomaly"])
+                    if is_incident:
+                        category = "Unclassified"
+                    else:
+                        continue
+                else:
+                    if is_billing:
+                        category = "Billing & Payments"
+                    elif is_logistics:
+                        category = "Logistics & Delivery"
+                    elif is_latency:
+                        category = "System Latency"
+                    elif is_support:
+                        category = "Customer Support"
+                    elif is_security:
+                        category = "Account Security"
+                    else:
+                        category = "UI/UX Defects"
+
+                # 2. Extract or determine date offset
+                parsed_offset = extract_offset_from_text(text_content)
+                
+                if parsed_offset is None and "date_offset" in payload:
+                    try:
+                        parsed_offset = int(payload["date_offset"])
+                    except Exception:
+                        pass
+                
+                if parsed_offset is None:
+                    # Fallback to today (0 offset) for active ingestion
+                    parsed_offset = 0
+
+                # 3. Map this offset to the nearest bucket in [-12, -10, -8, -6, -4, -2, 0]
+                closest_offset = min(offsets, key=lambda b: abs(b - parsed_offset))
+                target_date = (now + timedelta(days=closest_offset)).strftime("%b %d")
+
+                if target_date in date_buckets:
+                    discovered_categories.add(category)
+                    date_buckets[target_date][category] = date_buckets[target_date].get(category, 0) + 1
+
+            if next_offset is None:
+                break
+            offset = next_offset
+
+    except Exception as e:
+        logger.error(f"Failed to scroll complaints timeline: {str(e)}")
+        return {"success": False, "categories": [], "data": []}
+
+    # Formulate structural timeline map ensuring cross-categorical zero-fills to prevent line clipping
+    formatted_data = []
+    for offset in offsets:
+        date_key = (now + timedelta(days=offset)).strftime("%b %d")
+        row = {"date": date_key}
+        for cat in discovered_categories:
+            row[cat] = date_buckets[date_key].get(cat, 0)
+        formatted_data.append(row)
+
+    return {
+        "success": True,
+        "categories": list(discovered_categories),
+        "data": formatted_data
+    }
