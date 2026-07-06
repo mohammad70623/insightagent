@@ -28,6 +28,78 @@ const Analytics = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadFile, setUploadFile] = useState(null);
   const [pollingDocId, setPollingDocId] = useState(null);
+  const [complaintsTimeline, setComplaintsTimeline] = useState([]);
+  const [timelineCategories, setTimelineCategories] = useState([]);
+  const [sentimentData, setSentimentData] = useState(null);
+  const [urgentFeedbacks, setUrgentFeedbacks] = useState([]);
+  const [toasts, setToasts] = useState([]);
+
+  const addToast = (message, severity) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, severity }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 5000);
+  };
+
+  const fetchComplaintsTimeline = async () => {
+    try {
+      const response = await api.get('/chat/analytics/complaints-timeline');
+      if (response.data.success) {
+        setComplaintsTimeline(response.data.data);
+        setTimelineCategories(response.data.categories || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch complaints timeline:", error);
+    }
+  };
+
+  const fetchSentimentDistribution = async () => {
+    try {
+      const response = await api.get('/chat/analytics/sentiment-distribution');
+      if (response.data.success) {
+        setSentimentData(response.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch sentiment distribution:", error);
+    }
+  };
+
+  const fetchUrgentFeedbacks = async () => {
+    try {
+      const response = await api.get('/chat/analytics/urgent-feedbacks');
+      if (response.data && response.data.success) {
+        const liveData = response.data.feedbacks;
+        
+        // Update the table state so rows become fully dynamic
+        setUrgentFeedbacks(liveData);
+        
+        // Check for incoming emergency to trigger top toast alerts
+        liveData.forEach(item => {
+          if (item.trigger_toast) {
+            addToast(`🚨 EMERGENCY: ${item.message_snippet}`, item.severity);
+          }
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching live triage matrix:", error);
+    }
+  };
+
+  const fetchCompetitorMatrix = async () => {
+    try {
+      const response = await api.get('/chat/analytics/competitor-matrix');
+      if (response.data.success) {
+        setBenchmarks(response.data.matrix || []);
+        setSearchMeta({
+          query: response.data.scraping_query,
+          time: response.data.scraped_at
+        });
+      }
+    } catch (error) {
+      console.error("Failed to fetch competitor matrix:", error);
+    }
+  };
 
   const fetchUploadedFiles = async () => {
     try {
@@ -39,35 +111,53 @@ const Analytics = () => {
     } catch (error) {
       console.error("Failed to fetch active vector base files", error);
     }
+
+    // Call sub-fetches independently to prevent one crash from blocking others
+    Promise.all([
+      fetchComplaintsTimeline().catch(e => console.error(e)),
+      fetchSentimentDistribution().catch(e => console.error(e)),
+      fetchCompetitorMatrix().catch(e => console.error(e)),
+      fetchUrgentFeedbacks().catch(e => console.error(e))
+    ]);
   };
 
   useEffect(() => {
     const fetchAnalyticsForecastAndBenchmarking = async () => {
       try {
-        const [metricsRes, forecastRes, benchmarkingRes, kpiRes] = await Promise.all([
+        const [metricsRes, forecastRes, kpiRes] = await Promise.all([
           api.get('/chat/analytics/metrics'),
           api.get('/chat/analytics/forecast'),
-          api.get('/chat/analytics/benchmarking'),
           api.get('/chat/analytics/kpi-summary')
         ]);
         
         setLiveMetrics(metricsRes.data);
         setBaseForecastData(forecastRes.data.forecast_data);
-        setBenchmarks(benchmarkingRes.data.benchmarks);
         setKpiSummary(kpiRes.data);
-        setSearchMeta({
-          query: benchmarkingRes.data.search_query_used,
-          time: benchmarkingRes.data.last_scraped_at
-        });
       } catch (error) {
         console.error("Failed to fetch full enterprise analytical suite logs:", error);
+      }
+    };
+    
+    const initFetch = async () => {
+      try {
+        await Promise.all([
+          fetchAnalyticsForecastAndBenchmarking(),
+          fetchUploadedFiles()
+        ]);
+      } catch (error) {
+        console.error("Failed to complete initial analytical suite sync:", error);
       } finally {
         setLoading(false);
       }
     };
-    
-    fetchAnalyticsForecastAndBenchmarking();
-    fetchUploadedFiles();
+
+    initFetch();
+  }, []);
+
+  useEffect(() => {
+    if (typeof fetchUrgentFeedbacks === 'function') {
+      fetchUrgentFeedbacks();
+    }
   }, []);
 
   const handleFileChange = (e) => {
@@ -194,34 +284,25 @@ const Analytics = () => {
   }, [liveMetrics, kpiSummary]);
 
   const chartData = useMemo(() => {
-    if (!liveMetrics || !liveMetrics.chart_data || liveMetrics.chart_data.length === 0) {
-      return [
-        { label: 'OCT 18', ux: 140, latency: 170 },
-        { label: 'OCT 20', ux: 110, latency: 150 },
-        { label: 'OCT 22', ux: 160, latency: 180 },
-        { label: 'OCT 24', ux: 120, latency: 140 },
-        { label: 'OCT 26', ux: 90,  latency: 130 },
-        { label: 'OCT 28', ux: 100, latency: 110 },
-        { label: 'OCT 30', ux: 70,  latency: 120 },
-      ];
+    if (!complaintsTimeline || complaintsTimeline.length === 0) {
+      const offsets = [-12, -10, -8, -6, -4, -2, 0];
+      return offsets.map(offset => {
+        const d = new Date();
+        d.setDate(d.getDate() + offset);
+        const label = d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).toUpperCase();
+        return { label };
+      });
     }
-    const baseLabels = ['OCT 18', 'OCT 20', 'OCT 22', 'OCT 24', 'OCT 26', 'OCT 28', 'OCT 30'];
-    return liveMetrics.chart_data.map((val, idx) => ({
-      label: baseLabels[idx] || `POINT ${idx + 1}`,
-      ux: val,
-      latency: Math.max(50, val - 30)
-    }));
-  }, [liveMetrics]);
+    return complaintsTimeline.map(item => {
+      const row = { label: item.date.toUpperCase() };
+      timelineCategories.forEach(cat => {
+        row[cat] = item[cat] || 0;
+      });
+      return row;
+    });
+  }, [complaintsTimeline, timelineCategories]);
 
-  const sentiment = useMemo(() => {
-    const score = liveMetrics ? liveMetrics.sentiment_score : 78.4;
-    const radius = 40;
-    const circumference = 2 * Math.PI * radius;
-    return {
-      circumference,
-      positiveOffset: circumference - (score / 100) * circumference,
-    };
-  }, [liveMetrics]);
+
 
   const products = useMemo(() => [
     { name: 'AgentPro Workflows', rate: '92.4%', width: 'w-[92.4%]', delta: '+4.2%', isUp: true },
@@ -229,12 +310,7 @@ const Analytics = () => {
     { name: 'CloudSync Enterprise', rate: '71.8%', width: 'w-[71.8%]', delta: '-0.5%', isUp: false },
   ], []);
 
-  const urgentFeedbacks = useMemo(() => [
-    { id: 1, source: 'Email', icon: Mail, msg: 'Cannot access checkout page after v2 update...', severity: 'CRITICAL', time: '2 mins ago' },
-    { id: 2, source: 'Chat', icon: MessageSquare, msg: 'API response times are exceeding 5000ms in EU...', severity: 'HIGH', time: '15 mins ago' },
-    { id: 3, source: 'Twitter', icon: MessageCircle, msg: 'App crashing on login for iOS 17.4 users...', severity: 'CRITICAL', time: '24 mins ago' },
-    { id: 4, source: 'Email', icon: Mail, msg: 'Invoice receipt not received for last billing...', severity: 'MEDIUM', time: '1 hr ago' },
-  ], []);
+
 
   const smoothBezierPath = useMemo(() => {
     return (key) => {
@@ -243,13 +319,14 @@ const Analytics = () => {
       const svgHeight = 200;
       const padding = 20;
       const usableHeight = svgHeight - padding * 2;
-      const values = chartData.map(d => d[key]);
-      const maxVal = Math.max(...values);
-      const minVal = Math.min(...values);
-      const valueRange = maxVal - minVal || 1;
+      const allCategoryKeys = timelineCategories.length > 0 ? timelineCategories : [key];
+      const allValues = chartData.flatMap(d => allCategoryKeys.map(k => d[k] || 0));
+      const maxVal = Math.max(...allValues, 1);
+      const minVal = 0;
+      const valueRange = maxVal - minVal;
       const points = chartData.map((d, i) => {
         const x = (i * svgWidth) / (chartData.length - 1);
-        const y = svgHeight - (padding + ((d[key] - minVal) / valueRange) * usableHeight);
+        const y = svgHeight - (padding + (((d[key] || 0) - minVal) / valueRange) * usableHeight);
         return { x, y };
       });
       return points.reduce((path, p, i, a) => {
@@ -261,7 +338,7 @@ const Analytics = () => {
         return `${path} C ${cpX1} ${cpY1}, ${cpX2} ${cpY2}, ${p.x} ${p.y}`;
       }, "");
     };
-  }, [chartData]);
+  }, [chartData, timelineCategories]);
 
   // Dynamic Mathematical Simulation Pipe over Ingested Forecast Vectors
   const simulatedForecastData = useMemo(() => {
@@ -315,8 +392,8 @@ const Analytics = () => {
       <MetricsGrid metrics={metrics} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-        <TrendChart chartData={chartData} smoothBezierPath={smoothBezierPath} />
-        <SentimentCircle sentiment={sentiment} liveMetrics={liveMetrics} />
+        <TrendChart chartData={chartData} categories={timelineCategories} smoothBezierPath={smoothBezierPath} />
+        <SentimentCircle sentimentData={sentimentData} />
       </div>
 
       <BenchmarkingMatrix searchMeta={searchMeta} benchmarks={benchmarks} />
@@ -406,6 +483,34 @@ const Analytics = () => {
             </table>
           </div>
         </div>
+      </div>
+
+      {/* Toast Notification Container */}
+      <div className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-3 max-w-sm">
+        {toasts.map((toast) => (
+          <div 
+            key={toast.id}
+            className={`p-4 rounded-xl border shadow-2xl flex items-start gap-3 animate-slide-in text-xs font-mono backdrop-blur-md ${
+              toast.severity === 'CRITICAL' 
+                ? 'bg-red-950/80 border-red-500/40 text-red-200' 
+                : 'bg-amber-950/80 border-amber-500/40 text-amber-200'
+            }`}
+          >
+            <AlertTriangle className="flex-shrink-0 animate-bounce mt-0.5" size={14} />
+            <div>
+              <div className="font-bold uppercase tracking-wider text-[9px] mb-0.5 text-white">
+                🚨 {toast.severity} Threat Detected
+              </div>
+              <p className="leading-relaxed">{toast.message}</p>
+            </div>
+            <button 
+              onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+              className="text-slate-400 hover:text-white font-bold ml-auto pl-2"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
