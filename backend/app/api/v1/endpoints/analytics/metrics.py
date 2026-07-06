@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, TypedDict
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 from app.api import deps
 from app.models.user import User
@@ -595,12 +595,17 @@ async def get_real_sentiment_distribution(
     }
 
 
-# Initialize API Clients from Environment Settings
+# Initialize API Clients from Environment Settings with native JSON mode
 TAVILY_API_KEY = settings.TAVILY_API_KEY
 GROQ_API_KEY = settings.GROQ_API_KEY
 
 tavily_client = TavilyClient(api_key=TAVILY_API_KEY) if TAVILY_API_KEY else None
-llm = ChatGroq(model=settings.GROQ_MODEL, groq_api_key=GROQ_API_KEY, temperature=0.2) if GROQ_API_KEY else None
+llm = ChatGroq(
+    model=settings.GROQ_MODEL, 
+    groq_api_key=GROQ_API_KEY, 
+    temperature=0.2,
+    model_kwargs={"response_format": {"type": "json_object"}}
+) if GROQ_API_KEY else None
 
 class AgentState(TypedDict):
     raw_corpus: str
@@ -609,35 +614,28 @@ class AgentState(TypedDict):
     search_results: str
     final_matrix: List[Dict[str, Any]]
 
-# Pydantic Structural Models to Enforce Hard-typed JSON extraction from LLM
-class DomainExtractionSchema(BaseModel):
-    detected_domain: str = Field(description="The precise industry vertical name discovered from text footprints.")
-    extracted_company_name: str = Field(description="The user's or subscriber's business/brand name if explicit, else fallback handle.")
-
-class CompetitorAsset(BaseModel):
-    name: str = Field(description="Authentic real-world competitor brand name active in 2026.")
-    market_share: float = Field(description="Estimated market share percentage.")
-    satisfaction: float = Field(description="Customer satisfaction index score.")
-    latency: int = Field(description="System API Latency vector value in milliseconds.")
-
-class MatrixSynthesisSchema(BaseModel):
-    competitors: List[CompetitorAsset] = Field(description="List containing exactly 4 unique discovered real competitors.")
-
-# --- LANGGRAPH STATEFUL NODES ---
+# --- STABLE LANGGRAPH NODES ---
 
 def extract_domain_node(state: AgentState) -> Dict[str, Any]:
     if not llm:
         raise ValueError("Core LLM pipeline is uninitialized.")
     
     corpus = state["raw_corpus"]
-    structured_llm = llm.with_structured_output(DomainExtractionSchema)
     
-    prompt = f"Analyze the following business text and extract the company name and core industry sector:\n\n{corpus}"
-    ai_output = structured_llm.invoke(prompt)
+    prompt = f"""
+    You are a market classifier. Analyze this business text and identify the core industry vertical/domain.
+    Text: "{corpus}"
     
+    Return a valid JSON object matching exactly this structure:
+    {{
+        "detected_domain": "Name of Industry Sector"
+    }}
+    """
+    
+    ai_response = llm.invoke(prompt)
+    data = json.loads(ai_response.content)
     return {
-        "detected_domain": ai_output.detected_domain,
-        "company_name": ai_output.extracted_company_name if ai_output.extracted_company_name else state["company_name"]
+        "detected_domain": data.get("detected_domain", "Enterprise RAG AI Agents")
     }
 
 def tavily_search_node(state: AgentState) -> Dict[str, Any]:
@@ -645,14 +643,14 @@ def tavily_search_node(state: AgentState) -> Dict[str, Any]:
     scraping_query = f"top 4 real world market competitors names in {domain.lower()} industry 2026 analytics metrics"
     
     if not tavily_client:
-        return {"search_results": "API Uninitialized Fallback Content"}
+        return {"search_results": "Fallback mock content."}
         
     try:
         search_response = tavily_client.search(query=scraping_query, max_results=4, search_depth="advanced")
         web_context = " ".join([res.get("content", "") for res in search_response.get("results", [])])
         return {"search_results": web_context}
     except Exception as e:
-        return {"search_results": f"Web research halted. Reference data extraction failed: {str(e)}"}
+        return {"search_results": f"Fallback web corpus due to rate bounds: {str(e)}"}
 
 def synthesize_metrics_node(state: AgentState) -> Dict[str, Any]:
     if not llm:
@@ -662,46 +660,87 @@ def synthesize_metrics_node(state: AgentState) -> Dict[str, Any]:
     domain = state["detected_domain"]
     tenant = state["company_name"]
     
-    structured_llm = llm.with_structured_output(MatrixSynthesisSchema)
-    
     synthesis_prompt = f"""
-    You are an expert market analyst. Read the following real-world web research context regarding the {domain} industry:
+    You are an expert market analyst tool. Read this 2026 real-world web data context regarding the '{domain}' sector:
     "{web_ctx}"
     
-    Extract exactly 4 real-world competitor brands/companies mentioned in the text.
-    Synthesize realistic 2026 quantitative metrics (market_share, satisfaction, latency) for each based on the data.
+    Extract exactly 4 real-world competitor brands/companies active in this space.
+    For each competitor, provide realistic 2026 qualitative strategy metrics.
+    
+    You MUST return ONLY a valid JSON object with a root key "competitors" containing an array of exactly 4 items. Do not use tools, return raw JSON string matching this exact structure:
+    {{
+      "competitors": [
+        {{
+          "name": "Authentic Competitor Name",
+          "market_share": 24.5,
+          "satisfaction": 85.0,
+          "latency": 45,
+          "strategic_intelligence": {{
+            "operational_strategy": "Summary narrative of their operational focus in 2026.",
+            "revenue_footprint": "Estimated revenue monetization structures.",
+            "core_weakness": "Primary vulnerable gap or critical product flaw.",
+            "battle_plan": "Actionable instructions for our subscriber to beat them."
+          }}
+        }}
+      ]
+    }}
     """
     
-    ai_output = structured_llm.invoke(synthesis_prompt)
+    ai_response = llm.invoke(synthesis_prompt)
+    parsed_json = json.loads(ai_response.content)
+    discovered_competitors = parsed_json.get("competitors", [])
     
-    # Base user payload insertion layout
-    payload = [{ "name": f"{tenant} (You)", "market_share": 28.0, "satisfaction": 92.5, "latency": 12, "is_user": True }]
+    # Anchor base user slot
+    payload = [{ 
+        "name": f"{tenant} (You)", 
+        "market_share": 28.0, 
+        "satisfaction": 92.5, 
+        "latency": 12, 
+        "is_user": True,
+        "strategic_intelligence": {
+            "operational_strategy": "Our operational focus in 2026 is RAG intelligence automation.",
+            "revenue_footprint": "Subscription tiers based on usage volume.",
+            "core_weakness": "None detected.",
+            "battle_plan": "Continue scale-up and security patches."
+        }
+    }]
     
-    # Iterate and build from real LLM dynamic data extraction array
-    for comp in ai_output.competitors[:4]:
+    for comp in discovered_competitors[:4]:
         payload.append({
-            "name": comp.name,
-            "market_share": comp.market_share,
-            "satisfaction": comp.satisfaction,
-            "latency": comp.latency,
+            "name": comp.get("name"),
+            "market_share": comp.get("market_share", 15.0),
+            "satisfaction": comp.get("satisfaction", 80.0),
+            "latency": comp.get("latency", 30),
+            "strategic_intelligence": comp.get("strategic_intelligence", {
+                "operational_strategy": "Strategic positioning active in the current global market framework.",
+                "revenue_footprint": "Monetization active over vendor performance lanes.",
+                "core_weakness": "Vulnerable pipeline metrics uncovered by standard industry telemetry.",
+                "battle_plan": "Optimize customer retention and push structural automation upgrades."
+            }),
             "is_user": False
         })
         
-    # Standard security padding to guarantee 5 slots if LLM output fails requirements bounds
+    # Safeguard padding loop to prevent blank arrays
     while len(payload) < 5:
+        idx = len(payload)
         payload.append({
-            "name": f"Global {domain} Rival {len(payload)}",
-            "market_share": 10.0,
-            "satisfaction": 80.0,
-            "latency": 45,
+            "name": f"Global {domain} Competitor {idx}",
+            "market_share": 10.0, 
+            "satisfaction": 75.0, 
+            "latency": 50,
+            "strategic_intelligence": {
+                "operational_strategy": "Generic market deployment.", 
+                "revenue_footprint": "Subscription tiers.",
+                "core_weakness": "High API integration bounds.", 
+                "battle_plan": "Deploy alternative adaptive agents."
+            },
             "is_user": False
         })
         
     return {"final_matrix": payload}
 
-# --- GRAPH ORCHESTRATION BUILD ---
+# --- LANGGRAPH FLOW CONTEXT BUILD ---
 workflow = StateGraph(AgentState)
-
 workflow.add_node("extract_domain", extract_domain_node)
 workflow.add_node("tavily_search", tavily_search_node)
 workflow.add_node("synthesize_metrics", synthesize_metrics_node)
@@ -720,7 +759,7 @@ async def get_live_competitor_matrix(
 ):
     """
     Scrolls Qdrant to retrieve all text chunks for the tenant user,
-    runs the stateful LangGraph agent pipeline, and returns 5 dynamic competitors.
+    runs the stateful LangGraph agent pipeline using JSON mode, and returns 5 dynamic competitors.
     """
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
     tenant_company = current_user.workspace_name if current_user.workspace_name else "FastTrack Logistics Inc."
@@ -744,9 +783,7 @@ async def get_live_competitor_matrix(
     }
 
     try:
-        # Run stateful LangGraph agent in an async thread pool to keep fastapi event loop non-blocking
         final_output = await asyncio.to_thread(competitor_agent.invoke, initial_state)
-        
         return {
             "success": True,
             "detected_domain": final_output["detected_domain"],
@@ -755,5 +792,5 @@ async def get_live_competitor_matrix(
             "matrix": final_output["final_matrix"]
         }
     except Exception as err:
-        logger.error(f"Graph node computation failure: {str(err)}")
-        raise HTTPException(status_code=500, detail=f"Graph node computation failure: {str(err)}")
+        logger.error(f"Graph architecture runtime failure: {str(err)}")
+        raise HTTPException(status_code=500, detail=f"Graph architecture runtime failure: {str(err)}")
