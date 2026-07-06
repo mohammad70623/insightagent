@@ -30,6 +30,7 @@ const Analytics = () => {
   const [pollingDocId, setPollingDocId] = useState(null);
   const [complaintsTimeline, setComplaintsTimeline] = useState([]);
   const [timelineCategories, setTimelineCategories] = useState([]);
+  const [sentimentData, setSentimentData] = useState(null);
 
   const fetchComplaintsTimeline = async () => {
     try {
@@ -43,6 +44,17 @@ const Analytics = () => {
     }
   };
 
+  const fetchSentimentDistribution = async () => {
+    try {
+      const response = await api.get('/chat/analytics/sentiment-distribution');
+      if (response.data.success) {
+        setSentimentData(response.data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch sentiment distribution:", error);
+    }
+  };
+
   const fetchUploadedFiles = async () => {
     try {
       const response = await api.get('/chat/uploaded-files');
@@ -51,7 +63,10 @@ const Analytics = () => {
       const kpiRes = await api.get('/chat/analytics/kpi-summary');
       setKpiSummary(kpiRes.data);
 
-      await fetchComplaintsTimeline();
+      await Promise.all([
+        fetchComplaintsTimeline(),
+        fetchSentimentDistribution()
+      ]);
     } catch (error) {
       console.error("Failed to fetch active vector base files", error);
     }
@@ -228,15 +243,7 @@ const Analytics = () => {
     });
   }, [complaintsTimeline, timelineCategories]);
 
-  const sentiment = useMemo(() => {
-    const score = liveMetrics ? liveMetrics.sentiment_score : 78.4;
-    const radius = 40;
-    const circumference = 2 * Math.PI * radius;
-    return {
-      circumference,
-      positiveOffset: circumference - (score / 100) * circumference,
-    };
-  }, [liveMetrics]);
+
 
   const products = useMemo(() => [
     { name: 'AgentPro Workflows', rate: '92.4%', width: 'w-[92.4%]', delta: '+4.2%', isUp: true },
@@ -332,7 +339,7 @@ const Analytics = () => {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <TrendChart chartData={chartData} categories={timelineCategories} smoothBezierPath={smoothBezierPath} />
-        <SentimentCircle sentiment={sentiment} liveMetrics={liveMetrics} />
+        <SentimentCircle sentimentData={sentimentData} />
       </div>
 
       <BenchmarkingMatrix searchMeta={searchMeta} benchmarks={benchmarks} />

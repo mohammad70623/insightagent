@@ -471,3 +471,121 @@ async def get_real_complaints_timeline(
         "categories": list(discovered_categories),
         "data": formatted_data
     }
+
+
+@router.get("/sentiment-distribution")
+async def get_real_sentiment_distribution(
+    current_user: User = Depends(deps.get_current_user)
+):
+    """
+    Scrolls Qdrant to retrieve all text chunks for the tenant user,
+    runs a dynamic rule/token keyword-based semantic analysis,
+    and returns a structured distribution of Positive, Neutral, and Negative sentiments.
+    """
+    tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
+    
+    ok, err_msg = vector_store.is_available()
+    if not ok:
+        logger.warning(f"Qdrant database not available for sentiment-distribution: {err_msg}")
+        return {
+            "success": False,
+            "dominant": { "tier": "NEUTRAL", "percentage": 0.0, "color": "#94a3b8" },
+            "distribution": [
+                { "name": "Positive", "value": 0.0, "color": "#818cf8" },
+                { "name": "Neutral", "value": 0.0, "color": "#94a3b8" },
+                { "name": "Negative", "value": 0.0, "color": "#fb7185" }
+            ]
+        }
+
+    if not vector_store.client.collection_exists(collection_name=tenant_collection):
+        return {
+            "success": True,
+            "dominant": { "tier": "NEUTRAL", "percentage": 0.0, "color": "#94a3b8" },
+            "distribution": [
+                { "name": "Positive", "value": 0.0, "color": "#818cf8" },
+                { "name": "Neutral", "value": 0.0, "color": "#94a3b8" },
+                { "name": "Negative", "value": 0.0, "color": "#fb7185" }
+            ]
+        }
+
+    scroll_filter = Filter(
+        must=[FieldCondition(key="user_id", match=MatchValue(value=str(current_user.id)))]
+    )
+
+    pos_count, neu_count, neg_count = 0, 0, 0
+    total = 0
+
+    try:
+        offset = None
+        while True:
+            results, next_offset = await asyncio.to_thread(
+                vector_store.client.scroll,
+                collection_name=tenant_collection,
+                scroll_filter=scroll_filter,
+                limit=100,
+                offset=offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+
+            for point in results:
+                payload = getattr(point, 'payload', {}) or {}
+                text_content = payload.get("text", "")
+                if not text_content:
+                    continue
+
+                total += 1
+                text_lower = text_content.lower()
+
+                # Pure text analysis classifications
+                is_pos = any(k in text_lower for k in ["successfully", "resolved", "patched", "optimal", "stable", "thanks"])
+                is_neg = any(k in text_lower for k in ["failed", "timeout", "failure", "delayed", "spiked", "error", "vulnerability", "breaking", "crashes", "crash"])
+
+                if is_pos:
+                    pos_count += 1
+                elif is_neg:
+                    neg_count += 1
+                else:
+                    neu_count += 1
+
+            if next_offset is None:
+                break
+            offset = next_offset
+
+    except Exception as e:
+        logger.error(f"Failed to scroll sentiment distribution: {str(e)}")
+        return {
+            "success": False,
+            "dominant": { "tier": "NEUTRAL", "percentage": 0.0, "color": "#94a3b8" },
+            "distribution": [
+                { "name": "Positive", "value": 0.0, "color": "#818cf8" },
+                { "name": "Neutral", "value": 0.0, "color": "#94a3b8" },
+                { "name": "Negative", "value": 0.0, "color": "#fb7185" }
+            ]
+        }
+
+    # Safe percentage computations
+    pos_pct = round((pos_count / total * 100), 1) if total > 0 else 0.0
+    neg_pct = round((neg_count / total * 100), 1) if total > 0 else 0.0
+    neu_pct = round((total - (pos_count + neg_count)) / total * 100, 1) if total > 0 else 0.0
+
+    # Determine dominant sentiment cluster for center UI metric injection
+    max_val = max(pos_pct, neu_pct, neg_pct)
+    if max_val == 0.0:
+        dominant_tier = {"tier": "NEUTRAL", "percentage": 0.0, "color": "#94a3b8"}
+    elif max_val == neg_pct:
+        dominant_tier = {"tier": "NEGATIVE", "percentage": neg_pct, "color": "#fb7185"}
+    elif max_val == pos_pct:
+        dominant_tier = {"tier": "POSITIVE", "percentage": pos_pct, "color": "#34d399"}
+    else:
+        dominant_tier = {"tier": "NEUTRAL", "percentage": neu_pct, "color": "#94a3b8"}
+
+    return {
+        "success": True,
+        "dominant": dominant_tier,
+        "distribution": [
+            { "name": "Positive", "value": pos_pct, "color": "#818cf8" },
+            { "name": "Neutral", "value": neu_pct, "color": "#94a3b8" },
+            { "name": "Negative", "value": neg_pct, "color": "#fb7185" }
+        ]
+    }
