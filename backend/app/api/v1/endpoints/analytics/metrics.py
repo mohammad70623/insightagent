@@ -1041,3 +1041,68 @@ async def send_reply_email(
     except Exception as e:
         logger.error(f"Failed to send email reply: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Outbound transmission failed: {str(e)}")
+
+
+class TopProductItem(BaseModel):
+    name: str
+    conversion: float
+    trend: float
+
+
+@router.get("/top-products", response_model=List[TopProductItem])
+async def get_top_products(
+    current_user: User = Depends(deps.get_current_user)
+):
+    tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
+    
+    # 1. Fetch document texts from Qdrant
+    document_texts = await get_user_document_texts(tenant_collection, current_user.id)
+    if not document_texts:
+        return []
+        
+    # Combine documents texts into a unified corpus
+    raw_corpus = " ".join(document_texts.values())[:4000] # Limit to prevent token overflow
+    if not raw_corpus.strip():
+        return []
+
+    # 2. Invoke LLaMA via ChatGroq to parse the products
+    if not llm:
+        return []
+        
+    synthesis_prompt = f"""
+    You are an expert market analyst tool. Analyze the following corporate context document:
+    "{raw_corpus}"
+    
+    Extract top performing products mentioned in the text.
+    For each product, identify:
+    - name: The brand/product name.
+    - conversion: Conversion rate or performance rate as a float number (e.g. 85.2 for 85.2%).
+    - trend: Rate change value as a float number (e.g. 3.1 for +3.1% or -1.2 for -1.2%).
+    
+    You MUST return ONLY a valid JSON array of objects representing products. Do not use markdown wraps or extra conversational text:
+    [
+      {{
+        "name": "Product Name",
+        "conversion": 85.2,
+        "trend": 3.1
+      }}
+    ]
+    If you cannot find any specific products or conversion numbers in the text, you MUST return an empty JSON array: []
+    """
+    
+    try:
+        ai_response = llm.invoke(synthesis_prompt)
+        content = ai_response.content.strip()
+        
+        # Clean JSON markdown blocks if returned
+        if content.startswith("```"):
+            content = re.sub(r'^```[a-zA-Z]*\n', '', content)
+            content = re.sub(r'\n```$', '', content)
+        
+        parsed_products = json.loads(content)
+        if not isinstance(parsed_products, list):
+            return []
+        return parsed_products
+    except Exception as e:
+        logger.error(f"Failed to parse top products: {str(e)}")
+        return []

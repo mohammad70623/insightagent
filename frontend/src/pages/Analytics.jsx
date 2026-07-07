@@ -32,6 +32,7 @@ const Analytics = () => {
   const [timelineCategories, setTimelineCategories] = useState([]);
   const [sentimentData, setSentimentData] = useState(null);
   const [urgentFeedbacks, setUrgentFeedbacks] = useState([]);
+  const [topProducts, setTopProducts] = useState(null);
   const [toasts, setToasts] = useState([]);
 
   const addToast = (message, severity) => {
@@ -121,6 +122,16 @@ const Analytics = () => {
     }
   };
 
+  const fetchTopProducts = async () => {
+    try {
+      const response = await api.get('/chat/analytics/top-products');
+      setTopProducts(response.data || []);
+    } catch (error) {
+      console.error("Failed to fetch top products:", error);
+      setTopProducts([]);
+    }
+  };
+
   const fetchUploadedFiles = async () => {
     try {
       const response = await api.get('/chat/uploaded-files');
@@ -137,7 +148,8 @@ const Analytics = () => {
       fetchComplaintsTimeline().catch(e => console.error(e)),
       fetchSentimentDistribution().catch(e => console.error(e)),
       fetchCompetitorMatrix().catch(e => console.error(e)),
-      fetchUrgentFeedbacks().catch(e => console.error(e))
+      fetchUrgentFeedbacks().catch(e => console.error(e)),
+      fetchTopProducts().catch(e => console.error(e))
     ]);
   };
 
@@ -329,13 +341,6 @@ const Analytics = () => {
 
 
 
-  const products = useMemo(() => [
-    { name: 'AgentPro Workflows', rate: '92.4%', width: 'w-[92.4%]', delta: '+4.2%', isUp: true },
-    { name: 'Insight SDK v4', rate: '84.1%', width: 'w-[84.1%]', delta: '+1.8%', isUp: true },
-    { name: 'CloudSync Enterprise', rate: '71.8%', width: 'w-[71.8%]', delta: '-0.5%', isUp: false },
-  ], []);
-
-
 
   const smoothBezierPath = useMemo(() => {
     return (key) => {
@@ -425,7 +430,41 @@ const Analytics = () => {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
         <UrgentFeedbacks urgentFeedbacks={urgentFeedbacks} onSendReply={handleSendReply} />
-        <TopProducts products={products} />
+        {topProducts === null ? (
+          <div className="md:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between animate-pulse min-h-[220px]">
+            <div className="h-4 bg-gray-800 rounded w-1/3 mb-4"></div>
+            <div className="space-y-4 flex-1 flex flex-col justify-center">
+              <div className="space-y-2">
+                <div className="h-3 bg-gray-800 rounded w-full"></div>
+                <div className="h-1.5 bg-gray-900 rounded-full w-full"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-3 bg-gray-800 rounded w-full"></div>
+                <div className="h-1.5 bg-gray-900 rounded-full w-full"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-3 bg-gray-800 rounded w-full"></div>
+                <div className="h-1.5 bg-gray-900 rounded-full w-full"></div>
+              </div>
+            </div>
+          </div>
+        ) : topProducts.length === 0 ? (
+          <div className="md:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-center items-center text-center py-12 text-slate-500 font-mono text-[10px] leading-relaxed min-h-[220px]">
+            <span className="text-lg mb-2">⚡</span>
+            <span>No document context found. Please ingest a valid performance report via Data Ingestion Control to track metrics.</span>
+          </div>
+        ) : (
+          <TopProducts products={topProducts.map(prod => {
+            const isUp = prod.trend >= 0;
+            return {
+              name: prod.name,
+              rate: `${prod.conversion}%`,
+              delta: `${isUp ? '+' : ''}${prod.trend}%`,
+              isUp,
+              width: `w-[${prod.conversion}%]`
+            };
+          })} />
+        )}
       </div>
 
       <ForecastSimulator 
