@@ -284,19 +284,25 @@ async def get_dynamic_business_metrics(
         """
         
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                json={
-                    "model": "llama3-70b-8192",
-                    "messages": [{"role": "user", "content": llama_prompt}],
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"}
-                },
-                timeout=20.0
-            )
-            if response.status_code == 200:
-                return json.loads(response.json()["choices"][0]["message"]["content"])
+            for attempt in range(3):
+                response = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": "llama3-70b-8192",
+                        "messages": [{"role": "user", "content": llama_prompt}],
+                        "temperature": 0.1,
+                        "response_format": {"type": "json_object"}
+                    },
+                    timeout=20.0
+                )
+                if response.status_code == 200:
+                    return json.loads(response.json()["choices"][0]["message"]["content"])
+                elif response.status_code == 429:
+                    logger.warning(f"Groq API Rate Limit (429) hit. Retrying in {2 ** attempt}s...")
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    break
         return fallback_insights
         
     except Exception as e:
@@ -613,6 +619,7 @@ llm = ChatGroq(
     model=settings.GROQ_MODEL, 
     groq_api_key=GROQ_API_KEY, 
     temperature=0.2,
+    max_retries=5,
     model_kwargs={"response_format": {"type": "json_object"}}
 ) if GROQ_API_KEY else None
 
@@ -874,11 +881,11 @@ async def fetch_urgent_feedbacks_queue():
         def poll_inbox():
             mail = imaplib.IMAP4_SSL("imap.gmail.com")
             mail.login(GMAIL_USER, GMAIL_APP_PASS)
-            mail.select("inbox")
+            mail.select('INBOX')
             
-            # Pull UNREAD flags from the mailbox using UID
+            # Pull ALL messages from the mailbox using UID
             try:
-                status, messages = mail.uid('search', None, 'UNREAD')
+                status, messages = mail.uid('search', None, 'ALL')
                 is_uid = True
                 if status != "OK":
                     status, messages = mail.search(None, 'ALL')
@@ -890,7 +897,7 @@ async def fetch_urgent_feedbacks_queue():
             inbox_list = []
             if status == "OK" and messages[0]:
                 mail_ids = messages[0].split()
-                # Fetch up to the last 5 latest unread messages to maintain fast processing speeds
+                # Fetch up to the last 5 latest messages to maintain fast processing speeds
                 for m_id in mail_ids[-5:]:
                     if is_uid:
                         _, msg_data = mail.uid('fetch', m_id, '(RFC822)')
@@ -904,7 +911,10 @@ async def fetch_urgent_feedbacks_queue():
                             encoding = subject_header[1]
                             if isinstance(subject, bytes):
                                 subject = subject.decode(encoding or "utf-8", errors="ignore")
-                            sender = msg.get("From", "Anonymous Client")
+                            raw_from = msg.get("From", "Anonymous Client")
+                            name, clean_email = parseaddr(raw_from)
+                            sender_email = clean_email.strip() if clean_email else raw_from
+                            sender_name = name.strip() if name.strip() else sender_email
                             
                             body = ""
                             if msg.is_multipart():
@@ -920,8 +930,9 @@ async def fetch_urgent_feedbacks_queue():
                                     body = body_bytes.decode("utf-8", errors="ignore")
                             
                             inbox_list.append({
-                                "id": int(m_id.decode()),
-                                "sender": sender,
+                                "id": m_id.decode(),
+                                "sender": sender_email,
+                                "sender_name": sender_name,
                                 "subject": subject,
                                 "body": body,
                                 "date_header": msg.get("Date")
@@ -946,9 +957,7 @@ async def fetch_urgent_feedbacks_queue():
             
             # Only include CRITICAL or HIGH severity threats
             if agent_res.get("severity") in ["CRITICAL", "HIGH"]:
-                sender_name = record["sender"].split("<")[0].strip()
-                if not sender_name:
-                    sender_name = record["sender"]
+                sender_name = record["sender_name"]
                 
                 # Format date header into '00:35' or '5 Jul'
                 formatted_time = "Just now"
@@ -966,6 +975,7 @@ async def fetch_urgent_feedbacks_queue():
                 compiled_queue.append({
                     "id": record["id"],
                     "source": "Email",
+                    "sender": record["sender"],
                     "sender_name": sender_name,
                     "subject": record["subject"],
                     "message_snippet": agent_res["snippet"],
@@ -980,6 +990,54 @@ async def fetch_urgent_feedbacks_queue():
         
     # Standard Priority Sorting Queue: CRITICAL -> HIGH (Newest ID first)
     severity_order = {"CRITICAL": 0, "HIGH": 1}
-    compiled_queue.sort(key=lambda x: (severity_order.get(x["severity"], 2), -x["id"]))
+    compiled_queue.sort(key=lambda x: (severity_order.get(x["severity"], 2), -int(x["id"])))
     
     return {"success": True, "feedbacks": compiled_queue}
+
+
+class EmailReplyPayload(BaseModel):
+    to_email: str
+    subject: str
+    reply_body: str
+
+
+@router.post("/send-reply")
+async def send_reply_email(
+    payload: EmailReplyPayload,
+    current_user: User = Depends(deps.get_current_user)
+):
+    try:
+        def send_smtp():
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            from email.utils import parseaddr
+            import smtplib
+            
+            _, clean_recipient = parseaddr(payload.to_email)
+            clean_recipient = clean_recipient.strip().replace('\n', '').replace('\r', '')
+            
+            msg = MIMEMultipart()
+            msg['From'] = os.getenv("SMTP_USER", "").strip().replace('\n', '').replace('\r', '')
+            msg['To'] = clean_recipient
+            msg['Subject'] = payload.subject.strip().replace('\n', '').replace('\r', '')
+
+            # The email body can safely contain newlines, so keep it intact:
+            msg.attach(MIMEText(payload.reply_body, 'plain'))
+            
+            host = settings.SMTP_HOST or 'smtp.gmail.com'
+            port = int(settings.SMTP_PORT or 587)
+            user = settings.SMTP_USER or os.getenv("SMTP_USER", "")
+            password = settings.SMTP_PASSWORD or os.getenv("SMTP_PASSWORD", "")
+                
+            with smtplib.SMTP(host, port, timeout=10) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(user, password)
+                server.sendmail(user, [clean_recipient], msg.as_string())
+
+        await asyncio.to_thread(send_smtp)
+        return {"success": True, "message": "Reply dispatched successfully via SMTP."}
+    except Exception as e:
+        logger.error(f"Failed to send email reply: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Outbound transmission failed: {str(e)}")

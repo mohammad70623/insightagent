@@ -1,7 +1,7 @@
 import React, { memo, useState } from 'react';
 import { Mail, MessageSquare, MessageCircle, AlertCircle, ChevronDown, ChevronUp, User, Calendar, Tag, ShieldAlert } from 'lucide-react';
 
-const FeedbackRow = memo(({ item, isExpanded, onToggle }) => {
+const FeedbackRow = memo(({ item, isExpanded, onToggle, replyDrafts, setReplyDrafts, onSendReply }) => {
   // Determine standard source icon dynamically
   let IconComponent;
   if (item.source === 'Email') IconComponent = Mail;
@@ -86,14 +86,40 @@ const FeedbackRow = memo(({ item, isExpanded, onToggle }) => {
               {item.body || item.msg || item.message_snippet || "No ticket content body available."}
             </div>
           </div>
+
+          {/* Quick Reply Form */}
+          <div className="space-y-2 pt-3 border-t border-gray-850/50">
+            <h5 className="text-[10px] uppercase font-mono tracking-wider text-slate-500 font-bold">
+              ⚡ Quick Reply Draft
+            </h5>
+            <textarea
+              rows={5}
+              className="w-full p-3 rounded-lg bg-[#0d1220] border border-slate-800 text-[#d1d5db] font-mono focus:border-indigo-500 focus:outline-none"
+              value={replyDrafts[item.id] !== undefined ? replyDrafts[item.id] : (item.suggested_reply || `Hi ${item.sender || 'Team'},\n\nThank you for reaching out. We have logged this critical security alert and our engineering team is actively investigating the incident.\n\nBest regards,\nOps Team`)}
+              onChange={(e) => setReplyDrafts(prev => ({ ...prev, [item.id]: e.target.value }))}
+            />
+            <div className="flex justify-end">
+              <button
+                onClick={async () => {
+                  const recipient = item.sender;
+                  const bodyText = replyDrafts[item.id] !== undefined ? replyDrafts[item.id] : (item.suggested_reply || `Hi ${item.sender || 'Team'},\n\nThank you for reaching out. We have logged this critical security alert and our engineering team is actively investigating the incident.\n\nBest regards,\nOps Team`);
+                  await onSendReply(item.id, recipient, item.subject, bodyText);
+                }}
+                className="btn btn-sm bg-brand-primary text-black font-bold text-xs rounded-lg px-4 hover:bg-indigo-400 cursor-pointer"
+              >
+                🚀 Send Response Directly
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 });
 
-const UrgentFeedbacks = ({ urgentFeedbacks = [] }) => {
+const UrgentFeedbacks = ({ urgentFeedbacks = [], onSendReply }) => {
   const [expandedId, setExpandedId] = useState(null);
+  const [replyDrafts, setReplyDrafts] = useState({});
 
   // Compute the absolute latest detected alert time dynamically
   const lastDetectedTime = urgentFeedbacks.length > 0 
@@ -130,6 +156,9 @@ const UrgentFeedbacks = ({ urgentFeedbacks = [] }) => {
               item={item} 
               isExpanded={expandedId === item.id}
               onToggle={() => setExpandedId(expandedId === item.id ? null : item.id)}
+              replyDrafts={replyDrafts}
+              setReplyDrafts={setReplyDrafts}
+              onSendReply={onSendReply}
             />
           ))
         )}

@@ -67,22 +67,42 @@ const Analytics = () => {
 
   const fetchUrgentFeedbacks = async () => {
     try {
-      const response = await api.get('/chat/analytics/urgent-feedbacks');
-      if (response.data && response.data.success) {
-        const liveData = response.data.feedbacks;
+      const res = await api.get('/chat/analytics/urgent-feedbacks');
+      const liveData = res.data?.feedbacks || res.data?.data || res.data || [];
+      
+      setUrgentFeedbacks(prev => {
+        // Create a unique index of existing item IDs to avoid duplicates
+        const existingIds = new Set(prev.map(item => item.id));
+        const newUniqueItems = liveData.filter(item => item.id && !existingIds.has(item.id));
         
-        // Update the table state so rows become fully dynamic
-        setUrgentFeedbacks(liveData);
-        
-        // Check for incoming emergency to trigger top toast alerts
-        liveData.forEach(item => {
-          if (item.trigger_toast) {
-            addToast(`🚨 EMERGENCY: ${item.message_snippet}`, item.severity);
-          }
+        // Trigger toast for new unique items
+        newUniqueItems.forEach(item => {
+          addToast(`🚨 EMERGENCY: ${item.message_snippet}`, item.severity);
         });
-      }
-    } catch (error) {
-      console.error("Error fetching live triage matrix:", error);
+        
+        return [...newUniqueItems, ...prev]; // Stack new critical tickets directly on top
+      });
+    } catch (err) {
+      console.error("Error updating triage buffer:", err);
+    }
+  };
+
+  const handleSendReply = async (emailId, recipient, subject, bodyText) => {
+    try {
+      // 1. Dispatch active SMTP payload to backend
+      await api.post('/chat/analytics/send-reply', {
+        to_email: recipient,
+        subject: subject,
+        reply_body: bodyText
+      });
+      
+      // 2. Instantly remove the resolved mail from UI state so it disappears
+      setUrgentFeedbacks(prev => prev.filter(item => item.id !== emailId));
+      
+      alert("Response dispatched successfully! Ticket resolved and cleared from queue.");
+    } catch (err) {
+      console.error("Outbound transmission failed:", err);
+      alert(`Outbound transmission failed: ${err.response?.data?.detail || err.message}`);
     }
   };
 
@@ -155,9 +175,14 @@ const Analytics = () => {
   }, []);
 
   useEffect(() => {
-    if (typeof fetchUrgentFeedbacks === 'function') {
+    fetchUrgentFeedbacks();
+    
+    // Set a clean 30-second interval pool for background checks
+    const interval = setInterval(() => {
       fetchUrgentFeedbacks();
-    }
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleFileChange = (e) => {
@@ -399,7 +424,7 @@ const Analytics = () => {
       <BenchmarkingMatrix searchMeta={searchMeta} benchmarks={benchmarks} />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-        <UrgentFeedbacks urgentFeedbacks={urgentFeedbacks} />
+        <UrgentFeedbacks urgentFeedbacks={urgentFeedbacks} onSendReply={handleSendReply} />
         <TopProducts products={products} />
       </div>
 

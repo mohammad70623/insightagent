@@ -21,7 +21,7 @@ ssl_context.verify_mode = ssl.CERT_NONE
 engine = create_async_engine(
     database_url,
     pool_pre_ping=True,
-    connect_args={"ssl": ssl_context}
+    connect_args={"ssl": ssl_context} if 'ssl_context' in locals() or 'ssl_context' in globals() else {}
 )
 
 # Thread-safe async session factory

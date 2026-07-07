@@ -191,7 +191,8 @@ async def query_support_rag(user_query: str) -> str:
                 chat_model = ChatGroq(
                     api_key=settings.GROQ_API_KEY,
                     model=settings.LLM_MODEL_NAME,
-                    temperature=0.0
+                    temperature=0.0,
+                    max_retries=5
                 )
             except ImportError:
                 try:
@@ -199,7 +200,8 @@ async def query_support_rag(user_query: str) -> str:
                     chat_model = ChatGroq(
                         api_key=settings.GROQ_API_KEY,
                         model=settings.LLM_MODEL_NAME,
-                        temperature=0.0
+                        temperature=0.0,
+                        max_retries=5
                     )
                 except ImportError:
                     pass
