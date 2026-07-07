@@ -13,7 +13,8 @@ import TopProducts from '../components/analytics/TopProducts';
 const Analytics = () => {
   const [liveMetrics, setLiveMetrics] = useState(null);
   const [kpiSummary, setKpiSummary] = useState(null);
-  const [baseForecastData, setBaseForecastData] = useState([]);
+  const [forecastData, setForecastData] = useState(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
   const [benchmarks, setBenchmarks] = useState([]);
   const [searchMeta, setSearchMeta] = useState({ query: '', time: '' });
   const [loading, setLoading] = useState(true);
@@ -156,14 +157,12 @@ const Analytics = () => {
   useEffect(() => {
     const fetchAnalyticsForecastAndBenchmarking = async () => {
       try {
-        const [metricsRes, forecastRes, kpiRes] = await Promise.all([
+        const [metricsRes, kpiRes] = await Promise.all([
           api.get('/chat/analytics/metrics'),
-          api.get('/chat/analytics/forecast'),
           api.get('/chat/analytics/kpi-summary')
         ]);
         
         setLiveMetrics(metricsRes.data);
-        setBaseForecastData(forecastRes.data.forecast_data);
         setKpiSummary(kpiRes.data);
       } catch (error) {
         console.error("Failed to fetch full enterprise analytical suite logs:", error);
@@ -174,7 +173,8 @@ const Analytics = () => {
       try {
         await Promise.all([
           fetchAnalyticsForecastAndBenchmarking(),
-          fetchUploadedFiles()
+          fetchUploadedFiles(),
+          fetchForecast(0, 0)
         ]);
       } catch (error) {
         console.error("Failed to complete initial analytical suite sync:", error);
@@ -185,6 +185,29 @@ const Analytics = () => {
 
     initFetch();
   }, []);
+
+  const fetchForecast = async (priceVal = 0, effVal = 0) => {
+    setForecastLoading(true);
+    try {
+      const response = await api.post('/chat/analytics/forecast', {
+        price_adjuster: priceVal,
+        op_efficiency: effVal
+      });
+      setForecastData(response.data);
+    } catch (error) {
+      console.error("Failed to fetch predictive insights forecasting:", error);
+      setForecastData({ status: "no_context", projected_revenue: 0, ai_insight: "" });
+    } finally {
+      setForecastLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchForecast(priceMultiplier, efficiencyMultiplier);
+    }, 300);
+    return () => clearTimeout(delayDebounceFn);
+  }, [priceMultiplier, efficiencyMultiplier]);
 
   useEffect(() => {
     fetchUrgentFeedbacks();
@@ -370,27 +393,7 @@ const Analytics = () => {
     };
   }, [chartData, timelineCategories]);
 
-  // Dynamic Mathematical Simulation Pipe over Ingested Forecast Vectors
-  const simulatedForecastData = useMemo(() => {
-    const priceEffect = 1 + priceMultiplier / 100;
-    const efficiencyEffect = 1 + efficiencyMultiplier / 100;
-    const combinedGrowthDelta = (priceMultiplier * 0.4) + (efficiencyMultiplier * 0.6);
 
-    return baseForecastData.map(data => {
-      const simulatedRevenue = data.predicted_revenue * priceEffect * efficiencyEffect;
-      const simulatedLow = data.confidence_bound_low * priceEffect * efficiencyEffect;
-      const simulatedHigh = data.confidence_bound_high * priceEffect * efficiencyEffect;
-      const simulatedGrowth = data.growth_rate + combinedGrowthDelta;
-
-      return {
-        ...data,
-        predicted_revenue: Math.max(0, simulatedRevenue),
-        confidence_bound_low: Math.max(0, simulatedLow),
-        confidence_bound_high: Math.max(0, simulatedHigh),
-        growth_rate: Number(simulatedGrowth.toFixed(1))
-      };
-    });
-  }, [baseForecastData, priceMultiplier, efficiencyMultiplier]);
 
   if (loading) {
     return (
@@ -468,7 +471,8 @@ const Analytics = () => {
       </div>
 
       <ForecastSimulator 
-        simulatedForecastData={simulatedForecastData}
+        forecastData={forecastData}
+        forecastLoading={forecastLoading}
         priceMultiplier={priceMultiplier}
         setPriceMultiplier={setPriceMultiplier}
         efficiencyMultiplier={efficiencyMultiplier}

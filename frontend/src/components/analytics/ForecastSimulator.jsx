@@ -1,7 +1,9 @@
 import React from 'react';
 import { BarChart3, Sliders } from 'lucide-react';
 
-const ForecastSimulator = ({ simulatedForecastData, priceMultiplier, setPriceMultiplier, efficiencyMultiplier, setEfficiencyMultiplier }) => {
+const ForecastSimulator = ({ forecastData, forecastLoading, priceMultiplier, setPriceMultiplier, efficiencyMultiplier, setEfficiencyMultiplier }) => {
+  const isDisabled = !forecastData || forecastData.status === "no_context";
+
   return (
     <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-850 pb-4">
@@ -24,64 +26,90 @@ const ForecastSimulator = ({ simulatedForecastData, priceMultiplier, setPriceMul
           <div className="space-y-1 flex-1 min-w-[150px]">
             <div className="flex justify-between text-[10px] font-mono">
               <span className="text-gray-400">Price Adjuster</span>
-              <span className={priceMultiplier >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold'}>
-                {priceMultiplier >= 0 ? `+${priceMultiplier}` : priceMultiplier}%
+              <span className={isDisabled ? 'text-gray-600 font-bold' : (priceMultiplier >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold')}>
+                {isDisabled ? '0%' : (priceMultiplier >= 0 ? `+${priceMultiplier}` : priceMultiplier) + '%'}
               </span>
             </div>
             <input 
               type="range" 
               min="-50" 
               max="50" 
-              value={priceMultiplier} 
+              value={isDisabled ? 0 : priceMultiplier} 
               onChange={(e) => setPriceMultiplier(Number(e.target.value))}
-              className="w-full accent-brand-primary h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer"
+              disabled={isDisabled}
+              className="w-full accent-brand-primary h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
             />
           </div>
 
           <div className="space-y-1 flex-1 min-w-[150px]">
             <div className="flex justify-between text-[10px] font-mono">
               <span className="text-gray-400">Op. Efficiency</span>
-              <span className={efficiencyMultiplier >= 0 ? 'text-indigo-400 font-bold' : 'text-red-400 font-bold'}>
-                {efficiencyMultiplier >= 0 ? `+${efficiencyMultiplier}` : efficiencyMultiplier}%
+              <span className={isDisabled ? 'text-gray-600 font-bold' : (efficiencyMultiplier >= 0 ? 'text-indigo-400 font-bold' : 'text-red-400 font-bold')}>
+                {isDisabled ? '0%' : (efficiencyMultiplier >= 0 ? `+${efficiencyMultiplier}` : efficiencyMultiplier) + '%'}
               </span>
             </div>
             <input 
               type="range" 
               min="-20" 
               max="20" 
-              value={efficiencyMultiplier} 
+              value={isDisabled ? 0 : efficiencyMultiplier} 
               onChange={(e) => setEfficiencyMultiplier(Number(e.target.value))}
-              className="w-full accent-indigo-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer"
+              disabled={isDisabled}
+              className="w-full accent-indigo-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
             />
           </div>
         </div>
       </div>
       
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {simulatedForecastData.map((data, index) => (
-          <div key={index} className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-4 flex flex-col justify-between transition-all duration-300 hover:border-gray-700">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold font-mono text-gray-400">{data.period}</span>
-              <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
-                data.growth_rate >= 0 ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-red-400 bg-red-500/10 border-red-500/20'
-              }`}>
-                {data.growth_rate >= 0 ? `+${data.growth_rate}` : data.growth_rate}% Projected Growth
-              </span>
-            </div>
-            <div className="mt-4 flex items-baseline justify-between">
-              <div>
-                <p className="text-[10px] font-mono tracking-wide text-gray-500 uppercase font-semibold">Simulated Value</p>
-                <p className="text-xl font-bold tracking-tight text-white mt-0.5">${Math.round(data.predicted_revenue).toLocaleString()}</p>
+        {isDisabled ? (
+          <div className="sm:col-span-2 rounded-lg bg-[#0B0F19]/40 border border-dashed border-gray-800/60 p-8 flex flex-col justify-center items-center text-center text-slate-500 font-mono text-[10px] leading-relaxed min-h-[140px]">
+            <span className="text-lg mb-2">⚡</span>
+            <span>Forecast Engine Offline: Please ingest a corporate financial statement or performance ledger via Data Ingestion Control to calibrate baseline weights and unlock What-If simulations.</span>
+          </div>
+        ) : (
+          <>
+            {/* Projected Revenue Card */}
+            <div className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-4 flex flex-col justify-between transition-all duration-300 hover:border-gray-700 min-h-[140px] relative">
+              {forecastLoading && (
+                <div className="absolute inset-0 bg-[#0B0F19]/80 rounded-lg flex items-center justify-center text-[10px] font-mono text-brand-primary">
+                  <span className="animate-spin mr-2">⏳</span> RE-CALCULATING...
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold font-mono text-gray-400">PROJECTED REVENUE</span>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border text-green-400 bg-green-500/10 border-green-500/20">
+                  Live Simulated
+                </span>
               </div>
-              <div className="text-right">
-                <p className="text-[9px] font-mono text-gray-600 font-semibold">Confidence Interval</p>
-                <p className="text-[11px] font-mono text-brand-muted mt-0.5">
-                  ${Math.round(data.confidence_bound_low).toLocaleString()} - ${Math.round(data.confidence_bound_high).toLocaleString()}
+              <div className="mt-4 flex items-baseline justify-between">
+                <div>
+                  <p className="text-[10px] font-mono tracking-wide text-gray-500 uppercase font-semibold">Simulated Projection</p>
+                  <p className="text-xl font-bold tracking-tight text-white mt-0.5">
+                    ${Math.round(forecastData?.projected_revenue || 0).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* AI Strategic Recommendation Card */}
+            <div className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-4 flex flex-col justify-between transition-all duration-300 hover:border-gray-700 min-h-[140px] relative">
+              {forecastLoading && (
+                <div className="absolute inset-0 bg-[#0B0F19]/80 rounded-lg flex items-center justify-center text-[10px] font-mono text-brand-primary">
+                  <span className="animate-spin mr-2">⏳</span> SYNTHESIZING...
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold font-mono text-indigo-400">🤖 AI STRATEGIC INSIGHT</span>
+              </div>
+              <div className="mt-2 flex-1 flex items-center">
+                <p className="text-[11px] font-mono text-brand-muted leading-relaxed italic">
+                  {forecastData?.ai_insight || "Awaiting simulation variables..."}
                 </p>
               </div>
             </div>
-          </div>
-        ))}
+          </>
+        )}
       </div>
     </div>
   );
