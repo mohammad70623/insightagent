@@ -26,6 +26,17 @@ const DashboardLayout = () => {
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const notificationsRef = useRef(null);
 
+  // History state management
+  const [showHistory, setShowHistory] = useState(false);
+  const historyRef = useRef(null);
+
+  const simulatedLogs = [
+    { id: 1, type: "DELETE", text: "Vector node 'financial_q4.csv' permanently purged.", time: "10 mins ago" },
+    { id: 2, type: "SYNC", text: "Qdrant HNSW index defragmentation optimized.", time: "1 hour ago" },
+    { id: 3, type: "AUTH", text: "Google OAuth token successfully renewed.", time: "4 hours ago" },
+    { id: 4, type: "BILLING", text: "Stripe customer session synchronized.", time: "Yesterday" }
+  ];
+
   const fetchUnreadNotifications = async () => {
     try {
       const response = await api.get('/notifications/unread');
@@ -85,6 +96,9 @@ const DashboardLayout = () => {
     const handleClickOutside = (event) => {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
         setShowNotificationsDropdown(false);
+      }
+      if (historyRef.current && !historyRef.current.contains(event.target)) {
+        setShowHistory(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -258,7 +272,10 @@ const DashboardLayout = () => {
               <button 
                 type="button" 
                 aria-label="Notifications" 
-                onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
+                onClick={() => {
+                  setShowNotificationsDropdown(!showNotificationsDropdown);
+                  setShowHistory(false);
+                }}
                 className="text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none relative flex items-center justify-center p-1"
               >
                 <Bell size={16} />
@@ -306,7 +323,53 @@ const DashboardLayout = () => {
               )}
             </div>
 
-            <button type="button" aria-label="History logs" className="text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none"><History size={16} /></button>
+            <div className="relative" ref={historyRef}>
+              <button 
+                type="button" 
+                aria-label="History logs" 
+                onClick={() => {
+                  setShowHistory(!showHistory);
+                  setShowNotificationsDropdown(false);
+                }}
+                className="text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none flex items-center justify-center p-1"
+              >
+                <History size={16} />
+              </button>
+
+              {/* History Dropdown panel */}
+              {showHistory && (
+                <div className="absolute right-0 mt-3 w-80 rounded-xl border border-gray-800 bg-[#0c0f19] p-4 shadow-2xl z-50 animate-fade-in text-slate-200">
+                  <div className="flex items-center justify-between border-b border-gray-800 pb-2.5 mb-2.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">System History Logs</span>
+                    <span className="text-[9px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 font-semibold px-2 py-0.5 rounded-full font-mono">
+                      Live Stream
+                    </span>
+                  </div>
+                  
+                  <div className="space-y-2.5 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
+                    {simulatedLogs.map((log) => (
+                      <div 
+                        key={log.id}
+                        className="p-2.5 rounded-lg bg-gray-900/40 border border-slate-800/40 hover:border-slate-700/40 transition-all text-left"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                            log.type === 'DELETE' ? 'bg-red-550/10 text-red-400 border border-red-500/20' :
+                            log.type === 'SYNC' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                            log.type === 'AUTH' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                            'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                          }`}>
+                            {log.type}
+                          </span>
+                          <span className="text-[8px] text-slate-500 font-mono">{log.time}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-1.5 leading-normal font-mono">{log.text}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             
             <button 
               ref={profilePicRef}
