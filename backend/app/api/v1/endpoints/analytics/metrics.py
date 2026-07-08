@@ -28,6 +28,18 @@ from tavily import TavilyClient
 from app.core.config import settings
 
 router = APIRouter()
+
+GLOBAL_ANALYTICS_CACHE = {}
+
+def get_user_cache(user_id: str):
+    if user_id not in GLOBAL_ANALYTICS_CACHE:
+        GLOBAL_ANALYTICS_CACHE[user_id] = {
+            "competitor_matrix": None,
+            "top_products": None,
+            "risk_remediation_matrix": None,
+            "last_uploaded_doc_hash": None
+        }
+    return GLOBAL_ANALYTICS_CACHE[user_id]
 logger = logging.getLogger(__name__)
 
 async def get_user_document_texts(collection_name: str, user_id: uuid.UUID) -> dict[str, str]:
@@ -284,19 +296,25 @@ async def get_dynamic_business_metrics(
         """
         
         async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                json={
-                    "model": "llama3-70b-8192",
-                    "messages": [{"role": "user", "content": llama_prompt}],
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"}
-                },
-                timeout=20.0
-            )
-            if response.status_code == 200:
-                return json.loads(response.json()["choices"][0]["message"]["content"])
+            for attempt in range(3):
+                response = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                    json={
+                        "model": "llama3-70b-8192",
+                        "messages": [{"role": "user", "content": llama_prompt}],
+                        "temperature": 0.1,
+                        "response_format": {"type": "json_object"}
+                    },
+                    timeout=20.0
+                )
+                if response.status_code == 200:
+                    return json.loads(response.json()["choices"][0]["message"]["content"])
+                elif response.status_code == 429:
+                    logger.warning(f"Groq API Rate Limit (429) hit. Retrying in {2 ** attempt}s...")
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    break
         return fallback_insights
         
     except Exception as e:
@@ -606,15 +624,71 @@ async def get_real_sentiment_distribution(
 
 # Initialize API Clients from Environment Settings with native JSON mode
 TAVILY_API_KEY = settings.TAVILY_API_KEY
-GROQ_API_KEY = settings.GROQ_API_KEY
-
 tavily_client = TavilyClient(api_key=TAVILY_API_KEY) if TAVILY_API_KEY else None
-llm = ChatGroq(
+
+from groq import Groq
+
+# Isolate 4 distinct infrastructure pipelines
+client_competitor = Groq(api_key=os.getenv("GROQ_API_KEY_COMPETITOR"))
+client_email = Groq(api_key=os.getenv("GROQ_API_KEY_EMAIL"))
+client_risk = Groq(api_key=os.getenv("GROQ_API_KEY_RISK"))
+client_default = Groq(api_key=os.getenv("GROQ_API_KEY_DEFAULT"))
+
+llm_competitor = ChatGroq(
     model=settings.GROQ_MODEL, 
-    groq_api_key=GROQ_API_KEY, 
+    groq_api_key=os.getenv("GROQ_API_KEY_COMPETITOR"), 
     temperature=0.2,
+    max_retries=5,
     model_kwargs={"response_format": {"type": "json_object"}}
-) if GROQ_API_KEY else None
+) if os.getenv("GROQ_API_KEY_COMPETITOR") else None
+
+llm_email = ChatGroq(
+    model=settings.GROQ_MODEL, 
+    groq_api_key=os.getenv("GROQ_API_KEY_EMAIL"), 
+    temperature=0.2,
+    max_retries=5,
+    model_kwargs={"response_format": {"type": "json_object"}}
+) if os.getenv("GROQ_API_KEY_EMAIL") else None
+
+llm_default = ChatGroq(
+    model=settings.GROQ_MODEL, 
+    groq_api_key=os.getenv("GROQ_API_KEY_DEFAULT"), 
+    temperature=0.2,
+    max_retries=5,
+    model_kwargs={"response_format": {"type": "json_object"}}
+) if os.getenv("GROQ_API_KEY_DEFAULT") else None
+
+# Maintain backwards compatibility/central imports mapping llm to llm_default
+llm = llm_default
+
+
+async def invoke_with_retry(client, model: str, messages: list, *, route: str = "unknown", **kwargs):
+    """
+    Centralized async wrapper for Groq chat.completions.create with a single
+    8-second cool-down retry on 429 / rate_limit errors.
+    """
+    try:
+        return await asyncio.to_thread(
+            client.chat.completions.create,
+            model=model,
+            messages=messages,
+            **kwargs
+        )
+    except Exception as exc:
+        err_str = str(exc).lower()
+        if "429" in str(exc) or "rate_limit" in err_str:
+            logger.warning(
+                f'{{"event": "rate_limit_backoff", "route": "{route}", "error": "{exc}"}}'
+            )
+            await asyncio.sleep(8)
+            return await asyncio.to_thread(
+                client.chat.completions.create,
+                model=model,
+                messages=messages,
+                **kwargs
+            )
+        raise
+
 
 class AgentState(TypedDict):
     raw_corpus: str
@@ -626,7 +700,7 @@ class AgentState(TypedDict):
 # --- STABLE LANGGRAPH NODES ---
 
 def extract_domain_node(state: AgentState) -> Dict[str, Any]:
-    if not llm:
+    if not llm_competitor:
         raise ValueError("Core LLM pipeline is uninitialized.")
     
     corpus = state["raw_corpus"]
@@ -641,7 +715,7 @@ def extract_domain_node(state: AgentState) -> Dict[str, Any]:
     }}
     """
     
-    ai_response = llm.invoke(prompt)
+    ai_response = llm_competitor.invoke(prompt)
     data = json.loads(ai_response.content)
     return {
         "detected_domain": data.get("detected_domain", "Enterprise RAG AI Agents")
@@ -655,14 +729,14 @@ def tavily_search_node(state: AgentState) -> Dict[str, Any]:
         return {"search_results": "Fallback mock content."}
         
     try:
-        search_response = tavily_client.search(query=scraping_query, max_results=4, search_depth="advanced")
+        search_response = tavily_client.search(query=scraping_query, max_results=3, search_depth="advanced")
         web_context = " ".join([res.get("content", "") for res in search_response.get("results", [])])
         return {"search_results": web_context}
     except Exception as e:
         return {"search_results": f"Fallback web corpus due to rate bounds: {str(e)}"}
 
 def synthesize_metrics_node(state: AgentState) -> Dict[str, Any]:
-    if not llm:
+    if not llm_competitor:
         raise ValueError("Core LLM pipeline is uninitialized.")
         
     web_ctx = state["search_results"]
@@ -670,7 +744,17 @@ def synthesize_metrics_node(state: AgentState) -> Dict[str, Any]:
     tenant = state["company_name"]
     
     synthesis_prompt = f"""
-    You are an expert market analyst tool. Read this 2026 real-world web data context regarding the '{domain}' sector:
+    You are an Elite Fortune-500 Management Consultant and Competitive Intelligence Strategist. Analyze the ingested Tavily web search chunks and build an exhaustive, enterprise-grade Competitor Benchmarking Matrix with a deeply granular SWOT breakdown per competitor.
+
+    CRITICAL OUTPUT RULES — DO NOT COMPRESS:
+    - For EVERY competitor, write multi-sentence, paragraph-level narratives for each strategic_intelligence field.
+    - operational_strategy: Minimum 3 sentences covering their 2026 go-to-market motion, technology stack differentiation, geographic expansion, and partnership ecosystem.
+    - revenue_footprint: Minimum 2 sentences detailing estimated ARR ranges, pricing model (usage-based, seat-based, enterprise tiers), and monetization channels.
+    - core_weakness: Minimum 2 sentences identifying specific product gaps, technical debt, customer churn triggers, or competitive blind spots.
+    - battle_plan: Minimum 3 sentences providing a tactical playbook with exact feature investments, pricing undercuts, marketing positioning, and customer acquisition strategies our subscriber should execute to defeat this competitor.
+    - DO NOT use single-line summaries. Every field must be a rich, detailed paragraph.
+
+    Tavily Web Search Context regarding the '{domain}' sector:
     "{web_ctx}"
     
     Extract exactly 4 real-world competitor brands/companies active in this space.
@@ -685,17 +769,18 @@ def synthesize_metrics_node(state: AgentState) -> Dict[str, Any]:
           "satisfaction": 85.0,
           "latency": 45,
           "strategic_intelligence": {{
-            "operational_strategy": "Summary narrative of their operational focus in 2026.",
-            "revenue_footprint": "Estimated revenue monetization structures.",
-            "core_weakness": "Primary vulnerable gap or critical product flaw.",
-            "battle_plan": "Actionable instructions for our subscriber to beat them."
+            "operational_strategy": "Exhaustive multi-sentence narrative...",
+            "revenue_footprint": "Detailed multi-sentence revenue analysis...",
+            "core_weakness": "Specific multi-sentence vulnerability assessment...",
+            "battle_plan": "Tactical multi-sentence competitive playbook..."
           }}
         }}
       ]
     }}
     """
     
-    ai_response = llm.invoke(synthesis_prompt)
+    bound_llm = llm_competitor.bind(max_tokens=2000)
+    ai_response = bound_llm.invoke(synthesis_prompt)
     parsed_json = json.loads(ai_response.content)
     discovered_competitors = parsed_json.get("competitors", [])
     
@@ -773,9 +858,34 @@ async def get_live_competitor_matrix(
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
     tenant_company = current_user.workspace_name if current_user.workspace_name else "FastTrack Logistics Inc."
     
-    uploaded_corpus = ""
+    # 1. Fetch document metadata for cache check
+    documents = []
     ok, _ = vector_store.is_available()
     if ok and vector_store.client.collection_exists(collection_name=tenant_collection):
+        documents = await asyncio.to_thread(
+            vector_store.list_user_documents,
+            collection_name=tenant_collection,
+            user_id=current_user.id
+        )
+    
+    doc_hash = hash(tuple(sorted((d.get("document_id", ""), d.get("filename", "")) for d in documents)))
+    user_cache = get_user_cache(str(current_user.id))
+    
+    # Invalidate cache if files changed
+    if user_cache["last_uploaded_doc_hash"] != doc_hash:
+        user_cache["last_uploaded_doc_hash"] = doc_hash
+        user_cache["competitor_matrix"] = None
+        user_cache["top_products"] = None
+        user_cache["risk_remediation_matrix"] = None
+        
+    # Check cache hit
+    if user_cache["competitor_matrix"] is not None:
+        logger.info(f"Cache Hit for competitor-matrix for user {current_user.id}")
+        return user_cache["competitor_matrix"]
+        
+    # Cache miss - build raw corpus
+    uploaded_corpus = ""
+    if documents:
         document_texts = await get_user_document_texts(tenant_collection, current_user.id)
         uploaded_corpus = " ".join(document_texts.values())[:4000] # Limit to prevent token overflow
 
@@ -792,14 +902,26 @@ async def get_live_competitor_matrix(
     }
 
     try:
-        final_output = await asyncio.to_thread(competitor_agent.invoke, initial_state)
-        return {
+        try:
+            final_output = await asyncio.to_thread(competitor_agent.invoke, initial_state)
+        except Exception as e:
+            if "429" in str(e):
+                logger.warning("429 Rate Limit hit during live scraping. Retrying with exponential backoff...")
+                await asyncio.sleep(8)
+                final_output = await asyncio.to_thread(competitor_agent.invoke, initial_state)
+            else:
+                raise e
+
+        result = {
             "success": True,
             "detected_domain": final_output["detected_domain"],
             "scraping_query": f"top 4 real world market competitors names in {final_output['detected_domain'].lower()} industry 2026 analytics metrics",
             "scraped_at": "2026-07-06 17:09:32 UTC",
             "matrix": final_output["final_matrix"]
         }
+        # Populate cache
+        user_cache["competitor_matrix"] = result
+        return result
     except Exception as err:
         logger.error(f"Graph architecture runtime failure: {str(err)}")
         raise HTTPException(status_code=500, detail=f"Graph architecture runtime failure: {str(err)}")
@@ -817,12 +939,12 @@ class CrisisState(TypedDict):
     requires_emergency_response: bool
 
 # --- LANGGRAPH CRITICAL TRIAZING NODE ---
-def triage_email_node(state: CrisisState) -> Dict[str, Any]:
+async def triage_email_node(state: CrisisState) -> Dict[str, Any]:
     """Analyzes customer emails to detect system down emergencies, payment failures, or severe churn signals."""
-    if not llm:
+    if not client_email:
         return {"snippet": state["raw_email_body"][:40], "severity": "MEDIUM", "requires_emergency_response": False}
         
-    prompt = f"""
+    prompt_text = f"""
     You are an automated emergency triage agent for a software platform dashboard. Analyze this customer email text:
     Subject: "{state['subject']}"
     Content: "{state['raw_email_body']}"
@@ -836,10 +958,23 @@ def triage_email_node(state: CrisisState) -> Dict[str, Any]:
         "requires_emergency_response": true or false
     }}
     """
+    messages = [
+        {"role": "system", "content": "You are an automated emergency triage agent. Return only valid JSON."},
+        {"role": "user", "content": prompt_text}
+    ]
     try:
-        response = llm.invoke(prompt)
-        data = json.loads(response.content)
-    except Exception:
+        completion = await invoke_with_retry(
+            client_email,
+            model=settings.GROQ_MODEL,
+            messages=messages,
+            max_tokens=200,
+            temperature=0.0,
+            response_format={"type": "json_object"},
+            route="urgent_feedbacks_triage"
+        )
+        data = json.loads(completion.choices[0].message.content)
+    except Exception as e:
+        logger.warning(f"Triage LLM fallback triggered: {e}")
         data = {
             "snippet": state["subject"][:40] if state["subject"] else "Support Ticket Logs",
             "severity": "MEDIUM",
@@ -874,11 +1009,11 @@ async def fetch_urgent_feedbacks_queue():
         def poll_inbox():
             mail = imaplib.IMAP4_SSL("imap.gmail.com")
             mail.login(GMAIL_USER, GMAIL_APP_PASS)
-            mail.select("inbox")
+            mail.select('INBOX')
             
-            # Pull UNREAD flags from the mailbox using UID
+            # Pull ALL messages from the mailbox using UID
             try:
-                status, messages = mail.uid('search', None, 'UNREAD')
+                status, messages = mail.uid('search', None, 'ALL')
                 is_uid = True
                 if status != "OK":
                     status, messages = mail.search(None, 'ALL')
@@ -890,7 +1025,7 @@ async def fetch_urgent_feedbacks_queue():
             inbox_list = []
             if status == "OK" and messages[0]:
                 mail_ids = messages[0].split()
-                # Fetch up to the last 5 latest unread messages to maintain fast processing speeds
+                # Fetch up to the last 5 latest messages to maintain fast processing speeds
                 for m_id in mail_ids[-5:]:
                     if is_uid:
                         _, msg_data = mail.uid('fetch', m_id, '(RFC822)')
@@ -904,7 +1039,10 @@ async def fetch_urgent_feedbacks_queue():
                             encoding = subject_header[1]
                             if isinstance(subject, bytes):
                                 subject = subject.decode(encoding or "utf-8", errors="ignore")
-                            sender = msg.get("From", "Anonymous Client")
+                            raw_from = msg.get("From", "Anonymous Client")
+                            name, clean_email = parseaddr(raw_from)
+                            sender_email = clean_email.strip() if clean_email else raw_from
+                            sender_name = name.strip() if name.strip() else sender_email
                             
                             body = ""
                             if msg.is_multipart():
@@ -920,8 +1058,9 @@ async def fetch_urgent_feedbacks_queue():
                                     body = body_bytes.decode("utf-8", errors="ignore")
                             
                             inbox_list.append({
-                                "id": int(m_id.decode()),
-                                "sender": sender,
+                                "id": m_id.decode(),
+                                "sender": sender_email,
+                                "sender_name": sender_name,
                                 "subject": subject,
                                 "body": body,
                                 "date_header": msg.get("Date")
@@ -942,13 +1081,11 @@ async def fetch_urgent_feedbacks_queue():
                 "severity": "", 
                 "requires_emergency_response": False
             }
-            agent_res = await asyncio.to_thread(crisis_agent.invoke, initial_state)
+            agent_res = await crisis_agent.ainvoke(initial_state)
             
             # Only include CRITICAL or HIGH severity threats
             if agent_res.get("severity") in ["CRITICAL", "HIGH"]:
-                sender_name = record["sender"].split("<")[0].strip()
-                if not sender_name:
-                    sender_name = record["sender"]
+                sender_name = record["sender_name"]
                 
                 # Format date header into '00:35' or '5 Jul'
                 formatted_time = "Just now"
@@ -966,6 +1103,7 @@ async def fetch_urgent_feedbacks_queue():
                 compiled_queue.append({
                     "id": record["id"],
                     "source": "Email",
+                    "sender": record["sender"],
                     "sender_name": sender_name,
                     "subject": record["subject"],
                     "message_snippet": agent_res["snippet"],
@@ -974,12 +1112,197 @@ async def fetch_urgent_feedbacks_queue():
                     "red_flag": True,
                     "body": record["body"]
                 })
+                
+                # Deduplicated notification creation for admin
+                from app.api.v1.endpoints.notifications import create_system_notification
+                from app.db.session import SessionLocal
+                from app.models.notification import Notification
+                async with SessionLocal() as check_db:
+                    stmt = select(Notification).where(
+                        Notification.user_id == "admin",
+                        Notification.title == f"Urgent {agent_res['severity']} Email Feedback",
+                        Notification.message == f"From {record['sender']}: {record['subject']}"
+                    )
+                    exist_res = await check_db.execute(stmt)
+                    if not exist_res.scalar_one_or_none():
+                        await create_system_notification(
+                            user_id="admin",
+                            title=f"Urgent {agent_res['severity']} Email Feedback",
+                            message=f"From {record['sender']}: {record['subject']}",
+                            redirect_url="/app/analytics"
+                        )
             
     except Exception as e:
         logger.error(f"IMAP Error: {str(e)}")
         
     # Standard Priority Sorting Queue: CRITICAL -> HIGH (Newest ID first)
     severity_order = {"CRITICAL": 0, "HIGH": 1}
-    compiled_queue.sort(key=lambda x: (severity_order.get(x["severity"], 2), -x["id"]))
+    compiled_queue.sort(key=lambda x: (severity_order.get(x["severity"], 2), -int(x["id"])))
     
     return {"success": True, "feedbacks": compiled_queue}
+
+
+class EmailReplyPayload(BaseModel):
+    to_email: str
+    subject: str
+    reply_body: str
+
+
+@router.post("/send-reply")
+async def send_reply_email(
+    payload: EmailReplyPayload,
+    current_user: User = Depends(deps.get_current_user)
+):
+    try:
+        def send_smtp():
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            from email.utils import parseaddr
+            import smtplib
+            
+            _, clean_recipient = parseaddr(payload.to_email)
+            clean_recipient = clean_recipient.strip().replace('\n', '').replace('\r', '')
+            
+            msg = MIMEMultipart()
+            msg['From'] = os.getenv("SMTP_USER", "").strip().replace('\n', '').replace('\r', '')
+            msg['To'] = clean_recipient
+            msg['Subject'] = payload.subject.strip().replace('\n', '').replace('\r', '')
+
+            # The email body can safely contain newlines, so keep it intact:
+            msg.attach(MIMEText(payload.reply_body, 'plain'))
+            
+            host = settings.SMTP_HOST or 'smtp.gmail.com'
+            port = int(settings.SMTP_PORT or 587)
+            user = settings.SMTP_USER or os.getenv("SMTP_USER", "")
+            password = settings.SMTP_PASSWORD or os.getenv("SMTP_PASSWORD", "")
+                
+            with smtplib.SMTP(host, port, timeout=10) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(user, password)
+                server.sendmail(user, [clean_recipient], msg.as_string())
+
+        await asyncio.to_thread(send_smtp)
+        return {"success": True, "message": "Reply dispatched successfully via SMTP."}
+    except Exception as e:
+        logger.error(f"Failed to send email reply: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Outbound transmission failed: {str(e)}")
+
+
+class TopProductItem(BaseModel):
+    name: str
+    sales: Optional[int] = 0
+    conversion: Optional[float] = 0.0
+    trend: Optional[float] = 0.0
+    status: str = "stable"
+
+
+@router.get("/top-products", response_model=List[TopProductItem])
+async def get_top_products(
+    current_user: User = Depends(deps.get_current_user)
+):
+    tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
+    
+    # 1. Fetch document metadata for cache check
+    documents = []
+    ok, _ = vector_store.is_available()
+    if ok and vector_store.client.collection_exists(collection_name=tenant_collection):
+        documents = await asyncio.to_thread(
+            vector_store.list_user_documents,
+            collection_name=tenant_collection,
+            user_id=current_user.id
+        )
+        
+    doc_hash = hash(tuple(sorted((d.get("document_id", ""), d.get("filename", "")) for d in documents)))
+    user_cache = get_user_cache(str(current_user.id))
+    
+    # Invalidate cache if files changed
+    if user_cache["last_uploaded_doc_hash"] != doc_hash:
+        user_cache["last_uploaded_doc_hash"] = doc_hash
+        user_cache["competitor_matrix"] = None
+        user_cache["top_products"] = None
+        user_cache["risk_remediation_matrix"] = None
+        
+    # Check cache hit
+    if user_cache["top_products"] is not None:
+        logger.info(f"Cache Hit for top-products for user {current_user.id}")
+        return user_cache["top_products"]
+
+    # Cache miss
+    if not documents:
+        user_cache["top_products"] = []
+        return []
+        
+    document_texts = await get_user_document_texts(tenant_collection, current_user.id)
+    if not document_texts:
+        user_cache["top_products"] = []
+        return []
+        
+    # Combine documents texts into a unified corpus
+    raw_corpus = " ".join(document_texts.values())[:4000] # Limit to prevent token overflow
+    if not raw_corpus.strip():
+        user_cache["top_products"] = []
+        return []
+
+    # 2. Invoke LLaMA via ChatGroq to parse the products
+    if not llm_default:
+        return []
+        
+    synthesis_prompt = f"""
+    You are an expert market analyst tool. Analyze the following corporate context document:
+    "{raw_corpus}"
+    
+    Extract top performing products mentioned in the text.
+    For each product, identify:
+    - name: The brand/product name (string).
+    - sales: Total sales volume or unit count as an integer (e.g. 15000). Use 0 if not mentioned.
+    - conversion: Conversion rate or performance rate as a float number (e.g. 85.2 for 85.2%). Use 0.0 if not mentioned.
+    - trend: Rate change value as a float number (e.g. 3.1 for +3.1% or -1.2 for -1.2%). Use 0.0 if not mentioned.
+    - status: One of "growing", "stable", or "declining" based on the trend context.
+    
+    IMPORTANT: Every numeric field MUST have a valid number, never null or empty string. Use 0 or 0.0 as defaults.
+    
+    You MUST return ONLY a valid JSON array of objects representing products. Do not use markdown wraps or extra conversational text:
+    [
+      {{
+        "name": "Product Name",
+        "sales": 15000,
+        "conversion": 85.2,
+        "trend": 3.1,
+        "status": "growing"
+      }}
+    ]
+    If you cannot find any specific products or conversion numbers in the text, you MUST return an empty JSON array: []
+    """
+    
+    try:
+        completion = await invoke_with_retry(
+            client_default,
+            model=settings.GROQ_MODEL,
+            messages=[
+                {"role": "system", "content": "You are an expert market analyst. Return only valid JSON."},
+                {"role": "user", "content": synthesis_prompt}
+            ],
+            max_tokens=800,
+            temperature=0.2,
+            route="top_products"
+        )
+        content = completion.choices[0].message.content.strip()
+        
+        # Clean JSON markdown blocks if returned
+        if content.startswith("```"):
+            content = re.sub(r'^```[a-zA-Z]*\n', '', content)
+            content = re.sub(r'\n```$', '', content)
+        
+        parsed_products = json.loads(content)
+        if not isinstance(parsed_products, list):
+            user_cache["top_products"] = []
+            return []
+            
+        user_cache["top_products"] = parsed_products
+        return parsed_products
+    except Exception as e:
+        logger.error(f"Failed to parse top products: {str(e)}")
+        user_cache["top_products"] = []
+        return []

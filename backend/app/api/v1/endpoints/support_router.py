@@ -4,13 +4,19 @@ import asyncio
 import uuid
 import traceback
 from typing import Dict, List, Optional
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 
 from app.core.config import settings
 from app.services.rag.embedding_service import embedding_service
 from app.services.rag.vector_store import vector_store
+from app.api import deps
+from app.models.user import User
+from app.models.ticket import Ticket
 
 router = APIRouter()
 logger = logging.getLogger("support_router")
@@ -184,22 +190,25 @@ async def query_support_rag(user_query: str) -> str:
                 )
                 answer = completion.choices[0].message.content.strip()
         else:
-            # Use ChatGroq with ainvoke
+            # Use ChatGroq with ainvoke — routed to GROQ_API_KEY_DEFAULT
+            groq_default_key = os.getenv("GROQ_API_KEY_DEFAULT") or settings.GROQ_API_KEY
             chat_model = None
             try:
                 from langchain_groq import ChatGroq
                 chat_model = ChatGroq(
-                    api_key=settings.GROQ_API_KEY,
+                    api_key=groq_default_key,
                     model=settings.LLM_MODEL_NAME,
-                    temperature=0.0
+                    temperature=0.0,
+                    max_retries=5
                 )
             except ImportError:
                 try:
                     from langchain_community.chat_models import ChatGroq
                     chat_model = ChatGroq(
-                        api_key=settings.GROQ_API_KEY,
+                        api_key=groq_default_key,
                         model=settings.LLM_MODEL_NAME,
-                        temperature=0.0
+                        temperature=0.0,
+                        max_retries=5
                     )
                 except ImportError:
                     pass
@@ -210,21 +219,46 @@ async def query_support_rag(user_query: str) -> str:
                     SystemMessage(content=system_instruction),
                     HumanMessage(content=user_content)
                 ]
-                response = await chat_model.ainvoke(messages)
-                answer = response.content.strip()
+                try:
+                    response = await chat_model.ainvoke(messages)
+                    answer = response.content.strip()
+                except Exception as retry_exc:
+                    if "429" in str(retry_exc) or "rate_limit" in str(retry_exc).lower():
+                        logger.warning(f'{{"event": "rate_limit_backoff", "route": "support_chat", "error": "{retry_exc}"}}')
+                        await asyncio.sleep(8)
+                        response = await chat_model.ainvoke(messages)
+                        answer = response.content.strip()
+                    else:
+                        raise
             else:
-                # Raw AsyncGroq fallback
+                # Raw AsyncGroq fallback — routed to GROQ_API_KEY_DEFAULT
                 from groq import AsyncGroq
-                client = AsyncGroq(api_key=settings.GROQ_API_KEY)
-                completion = await client.chat.completions.create(
-                    model=settings.LLM_MODEL_NAME,
-                    messages=[
-                        {"role": "system", "content": system_instruction},
-                        {"role": "user", "content": user_content}
-                    ],
-                    temperature=0.0
-                )
-                answer = completion.choices[0].message.content.strip()
+                client = AsyncGroq(api_key=groq_default_key)
+                try:
+                    completion = await client.chat.completions.create(
+                        model=settings.LLM_MODEL_NAME,
+                        messages=[
+                            {"role": "system", "content": system_instruction},
+                            {"role": "user", "content": user_content}
+                        ],
+                        temperature=0.0
+                    )
+                    answer = completion.choices[0].message.content.strip()
+                except Exception as retry_exc:
+                    if "429" in str(retry_exc) or "rate_limit" in str(retry_exc).lower():
+                        logger.warning(f'{{"event": "rate_limit_backoff", "route": "support_chat_async", "error": "{retry_exc}"}}')
+                        await asyncio.sleep(8)
+                        completion = await client.chat.completions.create(
+                            model=settings.LLM_MODEL_NAME,
+                            messages=[
+                                {"role": "system", "content": system_instruction},
+                                {"role": "user", "content": user_content}
+                            ],
+                            temperature=0.0
+                        )
+                        answer = completion.choices[0].message.content.strip()
+                    else:
+                        raise
             
         return answer
 
@@ -359,3 +393,112 @@ async def support_websocket_endpoint(
 
         except WebSocketDisconnect:
             manager.disconnect_admin(session_id)
+
+
+# Pydantic Schemas
+class TicketCreate(BaseModel):
+    category: str
+    urgency: str
+    description: str
+
+class TicketResolve(BaseModel):
+    admin_reply: str
+
+@router.post("/tickets/submit")
+async def submit_ticket(
+    payload: TicketCreate,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    from fastapi import HTTPException
+    from app.api.v1.endpoints.notifications import create_system_notification
+    try:
+        new_ticket = Ticket(
+            user_id=str(current_user.id),
+            category=payload.category,
+            urgency=payload.urgency,
+            description=payload.description,
+            status="PENDING"
+        )
+        db.add(new_ticket)
+        await db.commit()
+        await db.refresh(new_ticket)
+        
+        # Fire notification to admin
+        await create_system_notification(
+            user_id="admin",
+            title="New Support Request",
+            message=f"Client {current_user.email} submitted support request {new_ticket.id}: {payload.category}",
+            redirect_url="/app/admin"
+        )
+        
+        return new_ticket
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to submit ticket: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to save support request to database.")
+
+@router.get("/tickets/my")
+async def get_my_tickets(
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: User = Depends(deps.get_current_user)
+):
+    from fastapi import HTTPException
+    try:
+        statement = select(Ticket).where(Ticket.user_id == str(current_user.id)).order_by(Ticket.created_at.desc())
+        result = await db.execute(statement)
+        return result.scalars().all()
+    except Exception as e:
+        logger.error(f"Failed to fetch user tickets: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to load your ticket history.")
+
+@router.get("/admin/tickets/all")
+async def get_all_tickets_admin(
+    db: AsyncSession = Depends(deps.get_db),
+    current_admin: User = Depends(deps.RoleChecker(["admin"]))
+):
+    from fastapi import HTTPException
+    try:
+        statement = select(Ticket).order_by(Ticket.created_at.desc())
+        result = await db.execute(statement)
+        return result.scalars().all()
+    except Exception as e:
+        logger.error(f"Failed to fetch all tickets: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to retrieve global user tickets.")
+
+@router.patch("/admin/tickets/{ticket_id}/resolve")
+async def resolve_ticket_admin(
+    ticket_id: str,
+    payload: TicketResolve,
+    db: AsyncSession = Depends(deps.get_db),
+    current_admin: User = Depends(deps.RoleChecker(["admin"]))
+):
+    from fastapi import HTTPException
+    from app.api.v1.endpoints.notifications import create_system_notification
+    try:
+        statement = select(Ticket).where(Ticket.id == ticket_id)
+        result = await db.execute(statement)
+        ticket = result.scalar_one_or_none()
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found.")
+        
+        ticket.status = "RESOLVED"
+        ticket.admin_reply = payload.admin_reply
+        await db.commit()
+        await db.refresh(ticket)
+        
+        # Fire notification to user
+        await create_system_notification(
+            user_id=ticket.user_id,
+            title="Support Request Resolved",
+            message=f"Your support request {ticket.id} has been resolved by Admin: {payload.admin_reply}",
+            redirect_url="/app/support"
+        )
+        
+        return ticket
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to resolve ticket: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update ticket status.")

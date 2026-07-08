@@ -15,6 +15,7 @@ const Billing = lazy(() => import('../pages/Billing'));
 const Register = lazy(() => import('../pages/Register'));
 const ResetPassword = lazy(() => import('../pages/ResetPassword'));
 const Settings = lazy(() => import('../pages/Settings'));
+const Support = lazy(() => import('../pages/Support'));
 
 const LazyFallback = () => (
   <div className="flex h-[80vh] w-full items-center justify-center bg-transparent">
@@ -100,6 +101,10 @@ const router = createBrowserRouter([
       {
         path: "settings", 
         element: <Suspense fallback={<LazyFallback />}><Settings /></Suspense>
+      },
+      {
+        path: "support", 
+        element: <Suspense fallback={<LazyFallback />}><Support /></Suspense>
       },
 
       {

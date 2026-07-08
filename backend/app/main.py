@@ -37,7 +37,30 @@ async def startup_event():
     try:
         async with engine.begin() as conn:
             await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS profile_picture VARCHAR;'))
-            print("✅ Database migration: ADD COLUMN profile_picture successful!")
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS ticket (
+                    id VARCHAR(50) PRIMARY KEY,
+                    user_id VARCHAR(50) NOT NULL,
+                    category VARCHAR(255) NOT NULL,
+                    urgency VARCHAR(50) NOT NULL,
+                    description TEXT NOT NULL,
+                    status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+                    admin_reply TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+            """))
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS notification (
+                    id UUID PRIMARY KEY,
+                    user_id VARCHAR(50) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    message TEXT NOT NULL,
+                    redirect_url VARCHAR(255) NOT NULL,
+                    is_read BOOLEAN DEFAULT FALSE NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+            """))
+            print("✅ Database migration: ADD COLUMN profile_picture, CREATE TABLE ticket & notification successful!")
     except Exception as e:
         print(f"⚠️ Database migration info/error: {e}")
 

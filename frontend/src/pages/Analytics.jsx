@@ -13,14 +13,21 @@ import TopProducts from '../components/analytics/TopProducts';
 const Analytics = () => {
   const [liveMetrics, setLiveMetrics] = useState(null);
   const [kpiSummary, setKpiSummary] = useState(null);
-  const [baseForecastData, setBaseForecastData] = useState([]);
+  const [forecastData, setForecastData] = useState(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
   const [benchmarks, setBenchmarks] = useState([]);
   const [searchMeta, setSearchMeta] = useState({ query: '', time: '' });
   const [loading, setLoading] = useState(true);
 
-  // What-If Simulation States
-  const [priceMultiplier, setPriceMultiplier] = useState(0); // Range: -50% to +50%
-  const [efficiencyMultiplier, setEfficiencyMultiplier] = useState(0); // Range: -20% to +20%
+  // 6 Sliders Simulation states
+  const [priceAdjuster, setPriceAdjuster] = useState(0);
+  const [marketingBoost, setMarketingBoost] = useState(0);
+  const [productInnovation, setProductInnovation] = useState(0);
+  const [opEfficiency, setOpEfficiency] = useState(0);
+  const [supportCapacity, setSupportCapacity] = useState(0);
+  const [competitionThreat, setCompetitionThreat] = useState(0);
+  const [insightText, setInsightText] = useState("Awaiting simulation variables...");
+  const [loadingAI, setLoadingAI] = useState(false);
 
   // Ingestion & Vector Base States
   const [activeFiles, setActiveFiles] = useState([]);
@@ -32,6 +39,7 @@ const Analytics = () => {
   const [timelineCategories, setTimelineCategories] = useState([]);
   const [sentimentData, setSentimentData] = useState(null);
   const [urgentFeedbacks, setUrgentFeedbacks] = useState([]);
+  const [topProducts, setTopProducts] = useState(null);
   const [toasts, setToasts] = useState([]);
 
   const addToast = (message, severity) => {
@@ -67,22 +75,42 @@ const Analytics = () => {
 
   const fetchUrgentFeedbacks = async () => {
     try {
-      const response = await api.get('/chat/analytics/urgent-feedbacks');
-      if (response.data && response.data.success) {
-        const liveData = response.data.feedbacks;
+      const res = await api.get('/chat/analytics/urgent-feedbacks');
+      const liveData = res.data?.feedbacks || res.data?.data || res.data || [];
+      
+      setUrgentFeedbacks(prev => {
+        // Create a unique index of existing item IDs to avoid duplicates
+        const existingIds = new Set(prev.map(item => item.id));
+        const newUniqueItems = liveData.filter(item => item.id && !existingIds.has(item.id));
         
-        // Update the table state so rows become fully dynamic
-        setUrgentFeedbacks(liveData);
-        
-        // Check for incoming emergency to trigger top toast alerts
-        liveData.forEach(item => {
-          if (item.trigger_toast) {
-            addToast(`🚨 EMERGENCY: ${item.message_snippet}`, item.severity);
-          }
+        // Trigger toast for new unique items
+        newUniqueItems.forEach(item => {
+          addToast(`🚨 EMERGENCY: ${item.message_snippet}`, item.severity);
         });
-      }
-    } catch (error) {
-      console.error("Error fetching live triage matrix:", error);
+        
+        return [...newUniqueItems, ...prev]; // Stack new critical tickets directly on top
+      });
+    } catch (err) {
+      console.error("Error updating triage buffer:", err);
+    }
+  };
+
+  const handleSendReply = async (emailId, recipient, subject, bodyText) => {
+    try {
+      // 1. Dispatch active SMTP payload to backend
+      await api.post('/chat/analytics/send-reply', {
+        to_email: recipient,
+        subject: subject,
+        reply_body: bodyText
+      });
+      
+      // 2. Instantly remove the resolved mail from UI state so it disappears
+      setUrgentFeedbacks(prev => prev.filter(item => item.id !== emailId));
+      
+      alert("Response dispatched successfully! Ticket resolved and cleared from queue.");
+    } catch (err) {
+      console.error("Outbound transmission failed:", err);
+      alert(`Outbound transmission failed: ${err.response?.data?.detail || err.message}`);
     }
   };
 
@@ -98,6 +126,16 @@ const Analytics = () => {
       }
     } catch (error) {
       console.error("Failed to fetch competitor matrix:", error);
+    }
+  };
+
+  const fetchTopProducts = async () => {
+    try {
+      const response = await api.get('/chat/analytics/top-products');
+      setTopProducts(response.data || []);
+    } catch (error) {
+      console.error("Failed to fetch top products:", error);
+      setTopProducts([]);
     }
   };
 
@@ -117,21 +155,20 @@ const Analytics = () => {
       fetchComplaintsTimeline().catch(e => console.error(e)),
       fetchSentimentDistribution().catch(e => console.error(e)),
       fetchCompetitorMatrix().catch(e => console.error(e)),
-      fetchUrgentFeedbacks().catch(e => console.error(e))
+      fetchUrgentFeedbacks().catch(e => console.error(e)),
+      fetchTopProducts().catch(e => console.error(e))
     ]);
   };
 
   useEffect(() => {
     const fetchAnalyticsForecastAndBenchmarking = async () => {
       try {
-        const [metricsRes, forecastRes, kpiRes] = await Promise.all([
+        const [metricsRes, kpiRes] = await Promise.all([
           api.get('/chat/analytics/metrics'),
-          api.get('/chat/analytics/forecast'),
           api.get('/chat/analytics/kpi-summary')
         ]);
         
         setLiveMetrics(metricsRes.data);
-        setBaseForecastData(forecastRes.data.forecast_data);
         setKpiSummary(kpiRes.data);
       } catch (error) {
         console.error("Failed to fetch full enterprise analytical suite logs:", error);
@@ -142,7 +179,8 @@ const Analytics = () => {
       try {
         await Promise.all([
           fetchAnalyticsForecastAndBenchmarking(),
-          fetchUploadedFiles()
+          fetchUploadedFiles(),
+          fetchForecast(0, 0)
         ]);
       } catch (error) {
         console.error("Failed to complete initial analytical suite sync:", error);
@@ -154,10 +192,58 @@ const Analytics = () => {
     initFetch();
   }, []);
 
-  useEffect(() => {
-    if (typeof fetchUrgentFeedbacks === 'function') {
-      fetchUrgentFeedbacks();
+  const fetchForecast = async (priceVal = 0, effVal = 0) => {
+    setForecastLoading(true);
+    try {
+      const response = await api.post('/chat/analytics/forecast', {
+        price_adjuster: priceVal,
+        op_efficiency: effVal
+      });
+      setForecastData(response.data);
+    } catch (error) {
+      console.error("Failed to fetch predictive insights forecasting:", error);
+      setForecastData({ status: "error", projected_revenue: 0, base_revenue: 50000, ai_insight: "Forecast unavailable — please check your connection and retry." });
+    } finally {
+      setForecastLoading(false);
     }
+  };
+
+  const fetchLiveAISimulation = async () => {
+    setLoadingAI(true);
+    try {
+      const response = await api.post("/predictive/simulate", {
+        priceAdjuster: Number(priceAdjuster),
+        marketingBoost: Number(marketingBoost),
+        productInnovation: Number(productInnovation),
+        opEfficiency: Number(opEfficiency),
+        supportCapacity: Number(supportCapacity),
+        competitionThreat: Number(competitionThreat)
+      });
+      setInsightText(response.data.aiMarkdownReport);
+    } catch (error) {
+      console.error("AI Live Sync failed", error);
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchForecast(priceAdjuster, opEfficiency);
+      fetchLiveAISimulation();
+    }, 800);
+    return () => clearTimeout(delayDebounceFn);
+  }, [priceAdjuster, marketingBoost, productInnovation, opEfficiency, supportCapacity, competitionThreat]);
+
+  useEffect(() => {
+    fetchUrgentFeedbacks();
+    
+    // Set a clean 60-second interval pool for background checks
+    const interval = setInterval(() => {
+      fetchUrgentFeedbacks();
+    }, 60000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const handleFileChange = (e) => {
@@ -304,13 +390,6 @@ const Analytics = () => {
 
 
 
-  const products = useMemo(() => [
-    { name: 'AgentPro Workflows', rate: '92.4%', width: 'w-[92.4%]', delta: '+4.2%', isUp: true },
-    { name: 'Insight SDK v4', rate: '84.1%', width: 'w-[84.1%]', delta: '+1.8%', isUp: true },
-    { name: 'CloudSync Enterprise', rate: '71.8%', width: 'w-[71.8%]', delta: '-0.5%', isUp: false },
-  ], []);
-
-
 
   const smoothBezierPath = useMemo(() => {
     return (key) => {
@@ -340,27 +419,7 @@ const Analytics = () => {
     };
   }, [chartData, timelineCategories]);
 
-  // Dynamic Mathematical Simulation Pipe over Ingested Forecast Vectors
-  const simulatedForecastData = useMemo(() => {
-    const priceEffect = 1 + priceMultiplier / 100;
-    const efficiencyEffect = 1 + efficiencyMultiplier / 100;
-    const combinedGrowthDelta = (priceMultiplier * 0.4) + (efficiencyMultiplier * 0.6);
 
-    return baseForecastData.map(data => {
-      const simulatedRevenue = data.predicted_revenue * priceEffect * efficiencyEffect;
-      const simulatedLow = data.confidence_bound_low * priceEffect * efficiencyEffect;
-      const simulatedHigh = data.confidence_bound_high * priceEffect * efficiencyEffect;
-      const simulatedGrowth = data.growth_rate + combinedGrowthDelta;
-
-      return {
-        ...data,
-        predicted_revenue: Math.max(0, simulatedRevenue),
-        confidence_bound_low: Math.max(0, simulatedLow),
-        confidence_bound_high: Math.max(0, simulatedHigh),
-        growth_rate: Number(simulatedGrowth.toFixed(1))
-      };
-    });
-  }, [baseForecastData, priceMultiplier, efficiencyMultiplier]);
 
   if (loading) {
     return (
@@ -399,16 +458,61 @@ const Analytics = () => {
       <BenchmarkingMatrix searchMeta={searchMeta} benchmarks={benchmarks} />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-        <UrgentFeedbacks urgentFeedbacks={urgentFeedbacks} />
-        <TopProducts products={products} />
+        <UrgentFeedbacks urgentFeedbacks={urgentFeedbacks} onSendReply={handleSendReply} />
+        {topProducts === null ? (
+          <div className="md:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between animate-pulse min-h-[220px]">
+            <div className="h-4 bg-gray-800 rounded w-1/3 mb-4"></div>
+            <div className="space-y-4 flex-1 flex flex-col justify-center">
+              <div className="space-y-2">
+                <div className="h-3 bg-gray-800 rounded w-full"></div>
+                <div className="h-1.5 bg-gray-900 rounded-full w-full"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-3 bg-gray-800 rounded w-full"></div>
+                <div className="h-1.5 bg-gray-900 rounded-full w-full"></div>
+              </div>
+              <div className="space-y-2">
+                <div className="h-3 bg-gray-800 rounded w-full"></div>
+                <div className="h-1.5 bg-gray-900 rounded-full w-full"></div>
+              </div>
+            </div>
+          </div>
+        ) : topProducts.length === 0 ? (
+          <div className="md:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-center items-center text-center py-12 text-slate-500 font-mono text-[10px] leading-relaxed min-h-[220px]">
+            <span className="text-lg mb-2">⚡</span>
+            <span>No document context found. Please ingest a valid performance report via Data Ingestion Control to track metrics.</span>
+          </div>
+        ) : (
+          <TopProducts products={topProducts.map(prod => {
+            const isUp = prod.trend >= 0;
+            return {
+              name: prod.name,
+              rate: `${prod.conversion}%`,
+              delta: `${isUp ? '+' : ''}${prod.trend}%`,
+              isUp,
+              width: `w-[${prod.conversion}%]`
+            };
+          })} />
+        )}
       </div>
 
       <ForecastSimulator 
-        simulatedForecastData={simulatedForecastData}
-        priceMultiplier={priceMultiplier}
-        setPriceMultiplier={setPriceMultiplier}
-        efficiencyMultiplier={efficiencyMultiplier}
-        setEfficiencyMultiplier={setEfficiencyMultiplier}
+        forecastData={forecastData}
+        forecastLoading={forecastLoading}
+        priceAdjuster={priceAdjuster}
+        setPriceAdjuster={setPriceAdjuster}
+        marketingBoost={marketingBoost}
+        setMarketingBoost={setMarketingBoost}
+        productInnovation={productInnovation}
+        setProductInnovation={setProductInnovation}
+        opEfficiency={opEfficiency}
+        setOpEfficiency={setOpEfficiency}
+        supportCapacity={supportCapacity}
+        setSupportCapacity={setSupportCapacity}
+        competitionThreat={competitionThreat}
+        setCompetitionThreat={setCompetitionThreat}
+        insightText={insightText}
+        loadingAI={loadingAI}
       />
 
       {/* ─── INGESTION & VECTOR BASE INVENTORY WIDGET ─── */}

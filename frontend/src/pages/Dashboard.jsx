@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useOutletContext } from 'react-router-dom';
+import axios from 'axios';
 import { api } from '../services/api';
 import CriticalRiskAlerts from '../components/analytics/CriticalRiskAlerts';
 import InfrastructureHealth from '../components/analytics/InfrastructureHealth';
@@ -119,18 +120,32 @@ const Dashboard = () => {
     setMitigations([]); // Clear mitigations as well
 
     try {
-      // 2. Fire the real API call to the RAG Anomaly Detection Core backend
-      const response = await fetch(`http://localhost:8000/api/analyze`, {
-        method: 'POST',
+      const rawToken = localStorage.getItem("token") || localStorage.getItem("access_token");
+      if (!rawToken) {
+        console.error("Missing credentials for risk telemetry validation.");
+        setCurrentStep('idle');
+        setIsAnalyzing(false);
+        return;
+      }
+      
+      // Scrub any trailing or wrapping quotation marks from local storage string
+      const cleanToken = rawToken.replace(/^["']|["']$/g, '');
+
+      // Resolve backend origin dynamically from configured BASE_URL
+      const backendOrigin = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1").replace("/api/v1", "");
+      const targetUrl = `${backendOrigin}/api/analyze`;
+
+      // 2. Fire the real API call to the RAG Anomaly Detection Core backend via axios
+      const response = await axios.post(targetUrl, { document_id: documentId }, {
         headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ document_id: documentId })
+          "Authorization": `Bearer ${cleanToken}`,
+          "Content-Type": "application/json"
+        }
       });
 
-      if (!response.ok) throw new Error('RAG Analysis Execution Failed');
+      if (!response.data) throw new Error('RAG Analysis Execution Failed');
 
-      const data = await response.json();
+      const data = response.data;
       // Expected incoming JSON structure: { success: true, alerts: [...], mitigations: [...] }
 
       // 3. Flash the green success state indicator on the LIVE_STREAM_ENGINE
@@ -141,7 +156,7 @@ const Dashboard = () => {
       setMitigations(data.mitigations || []);
 
     } catch (error) {
-      console.error("Full-Stack API Integration Error:", error);
+      console.error("Full-Stack API Integration Error:", error.response?.data || error);
       setCurrentStep('idle');
     } finally {
       // 5. Provide a smooth 1.5-second visual delay for the success state before resetting the stream engine to standby
