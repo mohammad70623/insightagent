@@ -411,6 +411,7 @@ async def submit_ticket(
     current_user: User = Depends(deps.get_current_user)
 ):
     from fastapi import HTTPException
+    from app.api.v1.endpoints.notifications import create_system_notification
     try:
         new_ticket = Ticket(
             user_id=str(current_user.id),
@@ -422,6 +423,15 @@ async def submit_ticket(
         db.add(new_ticket)
         await db.commit()
         await db.refresh(new_ticket)
+        
+        # Fire notification to admin
+        await create_system_notification(
+            user_id="admin",
+            title="New Support Request",
+            message=f"Client {current_user.email} submitted support request {new_ticket.id}: {payload.category}",
+            redirect_url="/app/admin"
+        )
+        
         return new_ticket
     except Exception as e:
         await db.rollback()
@@ -464,6 +474,7 @@ async def resolve_ticket_admin(
     current_admin: User = Depends(deps.RoleChecker(["admin"]))
 ):
     from fastapi import HTTPException
+    from app.api.v1.endpoints.notifications import create_system_notification
     try:
         statement = select(Ticket).where(Ticket.id == ticket_id)
         result = await db.execute(statement)
@@ -475,6 +486,15 @@ async def resolve_ticket_admin(
         ticket.admin_reply = payload.admin_reply
         await db.commit()
         await db.refresh(ticket)
+        
+        # Fire notification to user
+        await create_system_notification(
+            user_id=ticket.user_id,
+            title="Support Request Resolved",
+            message=f"Your support request {ticket.id} has been resolved by Admin: {payload.admin_reply}",
+            redirect_url="/app/support"
+        )
+        
         return ticket
     except HTTPException:
         raise

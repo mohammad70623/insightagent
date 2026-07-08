@@ -1112,6 +1112,25 @@ async def fetch_urgent_feedbacks_queue():
                     "red_flag": True,
                     "body": record["body"]
                 })
+                
+                # Deduplicated notification creation for admin
+                from app.api.v1.endpoints.notifications import create_system_notification
+                from app.db.session import SessionLocal
+                from app.models.notification import Notification
+                async with SessionLocal() as check_db:
+                    stmt = select(Notification).where(
+                        Notification.user_id == "admin",
+                        Notification.title == f"Urgent {agent_res['severity']} Email Feedback",
+                        Notification.message == f"From {record['sender']}: {record['subject']}"
+                    )
+                    exist_res = await check_db.execute(stmt)
+                    if not exist_res.scalar_one_or_none():
+                        await create_system_notification(
+                            user_id="admin",
+                            title=f"Urgent {agent_res['severity']} Email Feedback",
+                            message=f"From {record['sender']}: {record['subject']}",
+                            redirect_url="/app/analytics"
+                        )
             
     except Exception as e:
         logger.error(f"IMAP Error: {str(e)}")

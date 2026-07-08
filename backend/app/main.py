@@ -49,7 +49,18 @@ async def startup_event():
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
                 );
             """))
-            print("✅ Database migration: ADD COLUMN profile_picture & CREATE TABLE ticket successful!")
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS notification (
+                    id UUID PRIMARY KEY,
+                    user_id VARCHAR(50) NOT NULL,
+                    title VARCHAR(255) NOT NULL,
+                    message TEXT NOT NULL,
+                    redirect_url VARCHAR(255) NOT NULL,
+                    is_read BOOLEAN DEFAULT FALSE NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+                );
+            """))
+            print("✅ Database migration: ADD COLUMN profile_picture, CREATE TABLE ticket & notification successful!")
     except Exception as e:
         print(f"⚠️ Database migration info/error: {e}")
 

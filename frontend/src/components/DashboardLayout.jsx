@@ -20,6 +20,33 @@ const DashboardLayout = () => {
   const [formData, setFormData] = useState({ first_name: '', last_name: '', profile_picture: '' });
   const [isSaving, setIsSaving] = useState(false);
 
+  // Notifications state management
+  const [unreadNotifications, setUnreadNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+  const notificationsRef = useRef(null);
+
+  const fetchUnreadNotifications = async () => {
+    try {
+      const response = await api.get('/notifications/unread');
+      setUnreadNotifications(response.data.unread || []);
+      setUnreadCount(response.data.count || 0);
+    } catch (error) {
+      console.error("Failed to fetch unread notifications", error);
+    }
+  };
+
+  const handleNotificationClick = async (notif) => {
+    try {
+      await api.patch(`/notifications/${notif.id}/read`);
+      fetchUnreadNotifications();
+      setShowNotificationsDropdown(false);
+      navigate(notif.redirect_url);
+    } catch (error) {
+      console.error("Failed to handle notification click", error);
+    }
+  };
+
   const fetchProfile = async () => {
     try {
       const res = await api.get('/profile/me');
@@ -36,11 +63,32 @@ const DashboardLayout = () => {
 
   useEffect(() => {
     fetchProfile();
+    fetchUnreadNotifications();
     
     // Listen to user context refreshes (e.g. from upgrade or profile edit)
-    const handleRefresh = () => fetchProfile();
+    const handleRefresh = () => {
+      fetchProfile();
+      fetchUnreadNotifications();
+    };
     window.addEventListener('user-context-refresh', handleRefresh);
-    return () => window.removeEventListener('user-context-refresh', handleRefresh);
+    
+    // Dynamic polling setup
+    const interval = setInterval(fetchUnreadNotifications, 10000);
+    
+    return () => {
+      window.removeEventListener('user-context-refresh', handleRefresh);
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target)) {
+        setShowNotificationsDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   const handleFileChange = (e) => {
@@ -206,7 +254,58 @@ const DashboardLayout = () => {
               Upgrade
             </button>
             
-            <button type="button" aria-label="Notifications" className="text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none"><Bell size={16} /></button>
+            <div className="relative" ref={notificationsRef}>
+              <button 
+                type="button" 
+                aria-label="Notifications" 
+                onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
+                className="text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none relative flex items-center justify-center p-1"
+              >
+                <Bell size={16} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white shadow-[0_0_10px_rgba(239,68,68,0.5)]">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Dropdown panel */}
+              {showNotificationsDropdown && (
+                <div className="absolute right-0 mt-3 w-80 rounded-xl border border-gray-800 bg-[#0c0f19] p-4 shadow-2xl z-50 animate-fade-in">
+                  <div className="flex items-center justify-between border-b border-gray-800 pb-2.5 mb-2.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">Notifications</span>
+                    {unreadCount > 0 && (
+                      <span className="text-[9px] bg-red-500/10 border border-red-500/20 text-red-400 font-semibold px-2 py-0.5 rounded-full font-mono">
+                        {unreadCount} Unread
+                      </span>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800">
+                    {unreadNotifications.length === 0 ? (
+                      <div className="py-6 text-center text-gray-500 text-xs font-mono">
+                        No new notifications.
+                      </div>
+                    ) : (
+                      unreadNotifications.map((notif) => (
+                        <div 
+                          key={notif.id}
+                          onClick={() => handleNotificationClick(notif)}
+                          className="p-2.5 rounded-lg bg-gray-900/40 hover:bg-[#131926] border border-slate-800/40 hover:border-indigo-500/30 transition-all cursor-pointer text-left"
+                        >
+                          <div className="text-xs font-bold text-slate-200">{notif.title}</div>
+                          <div className="text-[10px] text-slate-400 mt-1 leading-normal">{notif.message}</div>
+                          <div className="text-[8px] text-slate-600 mt-1.5 font-mono">
+                            {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <button type="button" aria-label="History logs" className="text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none"><History size={16} /></button>
             
             <button 
