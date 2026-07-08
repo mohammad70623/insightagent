@@ -38,6 +38,7 @@ class ForecastPayload(BaseModel):
 class ForecastResponse(BaseModel):
     status: str
     projected_revenue: float
+    base_revenue: float
     ai_insight: str
 
 
@@ -181,5 +182,6 @@ async def get_predictive_forecasting(
     return {
         "status": status,
         "projected_revenue": round(projected_revenue, 2),
+        "base_revenue": round(base_revenue, 2),
         "ai_insight": ai_insight
     }

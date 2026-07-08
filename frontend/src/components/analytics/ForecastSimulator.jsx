@@ -1,74 +1,188 @@
 import React from 'react';
 import { BarChart3, Sliders } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
-const ForecastSimulator = ({ forecastData, forecastLoading, priceMultiplier, setPriceMultiplier, efficiencyMultiplier, setEfficiencyMultiplier }) => {
-  // Sliders are only disabled when there is zero data at all (initial load / hard crash)
+const ForecastSimulator = ({ 
+  forecastData, 
+  forecastLoading, 
+  priceAdjuster, 
+  setPriceAdjuster,
+  marketingBoost,
+  setMarketingBoost,
+  productInnovation,
+  setProductInnovation,
+  opEfficiency,
+  setOpEfficiency,
+  supportCapacity,
+  setSupportCapacity,
+  competitionThreat,
+  setCompetitionThreat,
+  insightText,
+  loadingAI
+}) => {
   const isDisabled = !forecastData;
   const isFallbackMode = forecastData?.status === "fallback";
 
+  const cleanNumber = (val) => {
+    if (val === undefined || val === null || val === '') return 50000;
+    if (typeof val === 'number') return val;
+    const cleaned = String(val).replace(/[\$,]/g, '');
+    return parseFloat(cleaned) || 50000;
+  };
+
+  const historicalBaseRevenue = forecastData?.base_revenue;
+  const currentSimulatedProjection = forecastData?.projected_revenue;
+
+  const baseVal = cleanNumber(historicalBaseRevenue || 50000);
+  const simulatedVal = cleanNumber(currentSimulatedProjection || 51775);
+
+  const maxVal = Math.max(baseVal, simulatedVal);
+  const basePercent = maxVal > 0 ? (baseVal / maxVal) * 100 : 0;
+  const simulatedPercent = maxVal > 0 ? (simulatedVal / maxVal) * 100 : 0;
+
   return (
     <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-850 pb-4">
+      <div className="flex flex-col gap-6 border-b border-gray-850 pb-6">
         <div className="flex items-center gap-2">
           <BarChart3 size={14} className="text-brand-primary" />
           <div>
             <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono">
               Predictive Insights & Revenue Forecasting
             </h4>
-            <p className="text-[10px] text-gray-500 mt-0.5">
+            <p className="text-[10px] text-gray-500 mt-0.5 font-mono">
               {isFallbackMode 
-                ? 'Mode: Industry Baseline Defaults | Upload a financial document to calibrate'
-                : 'Target Horizon: 2 Quarters | Ingested Base Weights'
+                ? 'Mode: Industry Baseline Defaults | Ingested Base Weights: $50,000'
+                : `Target Horizon: 2 Quarters | Ingested Base Weights: $${Math.round(baseVal).toLocaleString()}`
               }
             </p>
           </div>
         </div>
         
         {/* Dynamic What-If Control Simulation Deck */}
-        <div className="bg-[#0B0F19] rounded-xl p-4 border border-gray-850 flex flex-wrap gap-6 items-center flex-1 max-w-2xl justify-end">
-          <div className="flex items-center gap-2 text-xs font-bold text-white font-mono">
-            <Sliders size={12} className="text-brand-primary" /> WHAT-IF CONTROLS:
+        <div className="bg-[#0B0F19] rounded-xl p-5 border border-gray-850 space-y-4">
+          <div className="flex items-center gap-2 text-xs font-bold text-white font-mono border-b border-gray-800/60 pb-2">
+            <Sliders size={12} className="text-brand-primary" /> SCENARIO COCKPIT SIMULATION DECK:
           </div>
           
-          <div className="space-y-1 flex-1 min-w-[150px]">
-            <div className="flex justify-between text-[10px] font-mono">
-              <span className="text-gray-400">Price Adjuster</span>
-              <span className={isDisabled ? 'text-gray-600 font-bold' : (priceMultiplier >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold')}>
-                {isDisabled ? '0%' : (priceMultiplier >= 0 ? `+${priceMultiplier}` : priceMultiplier) + '%'}
-              </span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Price Adjuster */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-mono">
+                <span className="text-gray-400">Price Adjuster</span>
+                <span className={isDisabled ? 'text-gray-600 font-bold' : (priceAdjuster >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold')}>
+                  {isDisabled ? '0%' : (priceAdjuster >= 0 ? `+${priceAdjuster}` : priceAdjuster) + '%'}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="-50" 
+                max="50" 
+                value={isDisabled ? 0 : priceAdjuster} 
+                onChange={(e) => setPriceAdjuster(Number(e.target.value))}
+                disabled={isDisabled}
+                className="w-full accent-brand-primary h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              />
             </div>
-            <input 
-              type="range" 
-              min="-50" 
-              max="50" 
-              value={isDisabled ? 0 : priceMultiplier} 
-              onChange={(e) => setPriceMultiplier(Number(e.target.value))}
-              disabled={isDisabled}
-              className="w-full accent-brand-primary h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-            />
-          </div>
 
-          <div className="space-y-1 flex-1 min-w-[150px]">
-            <div className="flex justify-between text-[10px] font-mono">
-              <span className="text-gray-400">Op. Efficiency</span>
-              <span className={isDisabled ? 'text-gray-600 font-bold' : (efficiencyMultiplier >= 0 ? 'text-indigo-400 font-bold' : 'text-red-400 font-bold')}>
-                {isDisabled ? '0%' : (efficiencyMultiplier >= 0 ? `+${efficiencyMultiplier}` : efficiencyMultiplier) + '%'}
-              </span>
+            {/* Marketing Boost */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-mono">
+                <span className="text-gray-400">Marketing Boost</span>
+                <span className={isDisabled ? 'text-gray-600 font-bold' : 'text-indigo-400 font-bold'}>
+                  {isDisabled ? '0%' : `+${marketingBoost}%`}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                value={isDisabled ? 0 : marketingBoost} 
+                onChange={(e) => setMarketingBoost(Number(e.target.value))}
+                disabled={isDisabled}
+                className="w-full accent-indigo-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              />
             </div>
-            <input 
-              type="range" 
-              min="-20" 
-              max="20" 
-              value={isDisabled ? 0 : efficiencyMultiplier} 
-              onChange={(e) => setEfficiencyMultiplier(Number(e.target.value))}
-              disabled={isDisabled}
-              className="w-full accent-indigo-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-            />
+
+            {/* Product Innovation */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-mono">
+                <span className="text-gray-400">Product Innovation</span>
+                <span className={isDisabled ? 'text-gray-600 font-bold' : 'text-emerald-400 font-bold'}>
+                  {isDisabled ? '0%' : `+${productInnovation}%`}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                value={isDisabled ? 0 : productInnovation} 
+                onChange={(e) => setProductInnovation(Number(e.target.value))}
+                disabled={isDisabled}
+                className="w-full accent-emerald-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              />
+            </div>
+
+            {/* Op. Efficiency */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-mono">
+                <span className="text-gray-400">Op. Efficiency</span>
+                <span className={isDisabled ? 'text-gray-600 font-bold' : (opEfficiency >= 0 ? 'text-indigo-400 font-bold' : 'text-red-400 font-bold')}>
+                  {isDisabled ? '0%' : (opEfficiency >= 0 ? `+${opEfficiency}` : opEfficiency) + '%'}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="-20" 
+                max="20" 
+                value={isDisabled ? 0 : opEfficiency} 
+                onChange={(e) => setOpEfficiency(Number(e.target.value))}
+                disabled={isDisabled}
+                className="w-full accent-indigo-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              />
+            </div>
+
+            {/* Support Capacity */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-mono">
+                <span className="text-gray-400">Support Capacity</span>
+                <span className={isDisabled ? 'text-gray-600 font-bold' : (supportCapacity >= 0 ? 'text-green-400 font-bold' : 'text-red-400 font-bold')}>
+                  {isDisabled ? '0%' : (supportCapacity >= 0 ? `+${supportCapacity}` : supportCapacity) + '%'}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="-50" 
+                max="50" 
+                value={isDisabled ? 0 : supportCapacity} 
+                onChange={(e) => setSupportCapacity(Number(e.target.value))}
+                disabled={isDisabled}
+                className="w-full accent-brand-primary h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              />
+            </div>
+
+            {/* Competition Threat */}
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] font-mono">
+                <span className="text-gray-400">Competition Threat</span>
+                <span className={isDisabled ? 'text-gray-600 font-bold' : 'text-red-400 font-bold'}>
+                  {isDisabled ? '0%' : `+${competitionThreat}%`}
+                </span>
+              </div>
+              <input 
+                type="range" 
+                min="0" 
+                max="100" 
+                value={isDisabled ? 0 : competitionThreat} 
+                onChange={(e) => setCompetitionThreat(Number(e.target.value))}
+                disabled={isDisabled}
+                className="w-full accent-red-500 h-1 bg-gray-800 rounded-lg appearance-none cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+              />
+            </div>
           </div>
         </div>
       </div>
       
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {isDisabled ? (
           <div className="sm:col-span-2 rounded-lg bg-[#0B0F19]/40 border border-dashed border-gray-800/60 p-8 flex flex-col justify-center items-center text-center text-slate-500 font-mono text-[10px] leading-relaxed min-h-[140px]">
             <span className="text-lg mb-2">⚡</span>
@@ -93,19 +207,44 @@ const ForecastSimulator = ({ forecastData, forecastLoading, priceMultiplier, set
                   {isFallbackMode ? 'Baseline Estimate' : 'Live Simulated'}
                 </span>
               </div>
-              <div className="mt-4 flex items-baseline justify-between">
+              <div className="mt-4 flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-mono tracking-wide text-gray-500 uppercase font-semibold">Simulated Projection</p>
                   <p className="text-xl font-bold tracking-tight text-white mt-0.5">
-                    ${Math.round(forecastData?.projected_revenue || 0).toLocaleString()}
+                    ${Math.round(simulatedVal).toLocaleString()}
                   </p>
+                </div>
+                
+                {/* Reactive Micro Bar Chart */}
+                <div className="flex items-end gap-3 h-16 w-32 border-l border-b border-gray-800/40 pl-2 pb-1 relative">
+                  <div className="flex flex-col items-center flex-1 group relative h-full justify-end">
+                    <div 
+                      style={{ height: `${basePercent}%` }} 
+                      className="w-4 bg-slate-700/80 rounded-t-sm transition-all duration-300 hover:bg-slate-650"
+                    />
+                    <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-800 text-[8px] font-mono px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap text-slate-300 shadow-xl pointer-events-none">
+                      ${Math.round(baseVal).toLocaleString()}
+                    </span>
+                    <span className="text-[7px] font-mono text-gray-500 mt-1 uppercase scale-90 whitespace-nowrap">Base</span>
+                  </div>
+                  
+                  <div className="flex flex-col items-center flex-1 group relative h-full justify-end">
+                    <div 
+                      style={{ height: `${simulatedPercent}%` }} 
+                      className="w-4 bg-indigo-500 rounded-t-sm transition-all duration-300 hover:bg-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.3)]"
+                    />
+                    <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-800 text-[8px] font-mono px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap text-slate-300 shadow-xl pointer-events-none">
+                      ${Math.round(simulatedVal).toLocaleString()}
+                    </span>
+                    <span className="text-[7px] font-mono text-indigo-400 mt-1 uppercase scale-90 whitespace-nowrap">Delta</span>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* AI Strategic Recommendation Card */}
             <div className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-4 flex flex-col justify-between transition-all duration-300 hover:border-gray-700 min-h-[140px] relative">
-              {forecastLoading && (
+              {loadingAI && (
                 <div className="absolute inset-0 bg-[#0B0F19]/80 rounded-lg flex items-center justify-center text-[10px] font-mono text-brand-primary">
                   <span className="animate-spin mr-2">⏳</span> SYNTHESIZING...
                 </div>
@@ -114,9 +253,11 @@ const ForecastSimulator = ({ forecastData, forecastLoading, priceMultiplier, set
                 <span className="text-xs font-bold font-mono text-indigo-400">🤖 AI STRATEGIC INSIGHT</span>
               </div>
               <div className="mt-2 flex-1 flex items-center">
-                <p className="text-[11px] font-mono text-brand-muted leading-relaxed italic">
-                  {forecastData?.ai_insight || "Awaiting simulation variables..."}
-                </p>
+                <div className="text-[11px] font-mono text-brand-muted leading-relaxed italic prose prose-invert max-w-none">
+                  <ReactMarkdown>
+                    {insightText || "Awaiting simulation variables..."}
+                  </ReactMarkdown>
+                </div>
               </div>
             </div>
           </>

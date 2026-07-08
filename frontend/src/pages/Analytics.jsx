@@ -19,9 +19,15 @@ const Analytics = () => {
   const [searchMeta, setSearchMeta] = useState({ query: '', time: '' });
   const [loading, setLoading] = useState(true);
 
-  // What-If Simulation States
-  const [priceMultiplier, setPriceMultiplier] = useState(0); // Range: -50% to +50%
-  const [efficiencyMultiplier, setEfficiencyMultiplier] = useState(0); // Range: -20% to +20%
+  // 6 Sliders Simulation states
+  const [priceAdjuster, setPriceAdjuster] = useState(0);
+  const [marketingBoost, setMarketingBoost] = useState(0);
+  const [productInnovation, setProductInnovation] = useState(0);
+  const [opEfficiency, setOpEfficiency] = useState(0);
+  const [supportCapacity, setSupportCapacity] = useState(0);
+  const [competitionThreat, setCompetitionThreat] = useState(0);
+  const [insightText, setInsightText] = useState("Awaiting simulation variables...");
+  const [loadingAI, setLoadingAI] = useState(false);
 
   // Ingestion & Vector Base States
   const [activeFiles, setActiveFiles] = useState([]);
@@ -196,26 +202,46 @@ const Analytics = () => {
       setForecastData(response.data);
     } catch (error) {
       console.error("Failed to fetch predictive insights forecasting:", error);
-      setForecastData({ status: "error", projected_revenue: 0, ai_insight: "Forecast unavailable — please check your connection and retry." });
+      setForecastData({ status: "error", projected_revenue: 0, base_revenue: 50000, ai_insight: "Forecast unavailable — please check your connection and retry." });
     } finally {
       setForecastLoading(false);
     }
   };
 
+  const fetchLiveAISimulation = async () => {
+    setLoadingAI(true);
+    try {
+      const response = await api.post("/predictive/simulate", {
+        priceAdjuster: Number(priceAdjuster),
+        marketingBoost: Number(marketingBoost),
+        productInnovation: Number(productInnovation),
+        opEfficiency: Number(opEfficiency),
+        supportCapacity: Number(supportCapacity),
+        competitionThreat: Number(competitionThreat)
+      });
+      setInsightText(response.data.aiMarkdownReport);
+    } catch (error) {
+      console.error("AI Live Sync failed", error);
+    } finally {
+      setLoadingAI(false);
+    }
+  };
+
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      fetchForecast(priceMultiplier, efficiencyMultiplier);
-    }, 300);
+      fetchForecast(priceAdjuster, opEfficiency);
+      fetchLiveAISimulation();
+    }, 800);
     return () => clearTimeout(delayDebounceFn);
-  }, [priceMultiplier, efficiencyMultiplier]);
+  }, [priceAdjuster, marketingBoost, productInnovation, opEfficiency, supportCapacity, competitionThreat]);
 
   useEffect(() => {
     fetchUrgentFeedbacks();
     
-    // Set a clean 30-second interval pool for background checks
+    // Set a clean 60-second interval pool for background checks
     const interval = setInterval(() => {
       fetchUrgentFeedbacks();
-    }, 30000);
+    }, 60000);
     
     return () => clearInterval(interval);
   }, []);
@@ -473,10 +499,20 @@ const Analytics = () => {
       <ForecastSimulator 
         forecastData={forecastData}
         forecastLoading={forecastLoading}
-        priceMultiplier={priceMultiplier}
-        setPriceMultiplier={setPriceMultiplier}
-        efficiencyMultiplier={efficiencyMultiplier}
-        setEfficiencyMultiplier={setEfficiencyMultiplier}
+        priceAdjuster={priceAdjuster}
+        setPriceAdjuster={setPriceAdjuster}
+        marketingBoost={marketingBoost}
+        setMarketingBoost={setMarketingBoost}
+        productInnovation={productInnovation}
+        setProductInnovation={setProductInnovation}
+        opEfficiency={opEfficiency}
+        setOpEfficiency={setOpEfficiency}
+        supportCapacity={supportCapacity}
+        setSupportCapacity={setSupportCapacity}
+        competitionThreat={competitionThreat}
+        setCompetitionThreat={setCompetitionThreat}
+        insightText={insightText}
+        loadingAI={loadingAI}
       />
 
       {/* ─── INGESTION & VECTOR BASE INVENTORY WIDGET ─── */}

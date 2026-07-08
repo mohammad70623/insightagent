@@ -34,11 +34,11 @@ const Admin = () => {
     fetchTenants();
     fetchTickets();
 
-    // Setup authentic background polling every 5 seconds
+    // Setup authentic background polling every 30 seconds
     const interval = setInterval(() => {
       fetchTenants();
       fetchTickets();
-    }, 5000);
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 

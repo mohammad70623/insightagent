@@ -84,7 +84,7 @@ const DashboardLayout = () => {
     window.addEventListener('user-context-refresh', handleRefresh);
     
     // Dynamic polling setup
-    const interval = setInterval(fetchUnreadNotifications, 10000);
+    const interval = setInterval(fetchUnreadNotifications, 60000);
     
     return () => {
       window.removeEventListener('user-context-refresh', handleRefresh);
