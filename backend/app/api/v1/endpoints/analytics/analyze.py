@@ -3,12 +3,16 @@ import asyncio
 import json
 from typing import List, Optional
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from qdrant_client import QdrantClient
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 from groq import Groq
 
 from app.core.config import settings
+from app.api import deps
+from app.models.user import User
+from app.api.v1.endpoints.analytics.metrics import get_user_cache, client_risk, invoke_with_retry
+from app.services.rag.vector_store import vector_store
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -30,9 +34,43 @@ class AnalyzeResponse(BaseModel):
     mitigations: List[MitigationItem]
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-async def analyze_document(payload: dict):
+async def analyze_document(
+    payload: dict,
+    current_user: User = Depends(deps.get_current_user)
+):
     document_id = payload.get("document_id")
     document_text = payload.get("text", "")
+
+    tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
+    
+    # 1. Generate doc_hash for cache invalidation checks
+    documents = []
+    ok, _ = vector_store.is_available()
+    if ok and vector_store.client.collection_exists(collection_name=tenant_collection):
+        documents = await asyncio.to_thread(
+            vector_store.list_user_documents,
+            collection_name=tenant_collection,
+            user_id=current_user.id
+        )
+        
+    doc_hash = hash(tuple(sorted((d.get("document_id", ""), d.get("filename", "")) for d in documents)))
+    user_cache = get_user_cache(str(current_user.id))
+    
+    # Invalidate cache if files changed
+    if user_cache["last_uploaded_doc_hash"] != doc_hash:
+        user_cache["last_uploaded_doc_hash"] = doc_hash
+        user_cache["competitor_matrix"] = None
+        user_cache["top_products"] = None
+        user_cache["risk_remediation_matrix"] = None
+        
+    # Check cache hit
+    if user_cache["risk_remediation_matrix"] is None:
+        user_cache["risk_remediation_matrix"] = {}
+        
+    cache_key = document_id if document_id else str(hash(document_text))
+    if cache_key in user_cache["risk_remediation_matrix"]:
+        logger.info(f"Cache Hit for risk_remediation_matrix for key {cache_key}")
+        return user_cache["risk_remediation_matrix"][cache_key]
 
     # Retrieve from Qdrant if document_id is provided
     if document_id and not document_text:
@@ -76,8 +114,10 @@ async def analyze_document(payload: dict):
     try:
         # 2. SYSTEMIC DIRECTIVE FOR TRUE DYNAMIC LLM EXTRACTION
         system_prompt = (
-            "You are an Elite Enterprise Risk Audit & Mitigation Intelligence system.\n"
-            "Analyze the user's uploaded document text line by line. Your extraction must be 100% dynamic:\n"
+            "You are a Chief Information Security & Risk Officer. Evaluate the ingested data vector payload for structural vulnerabilities, "
+            "market exposure, and compliance bottlenecks. For every identified critical risk, generate an extensive breakdown: "
+            "(1) Root Cause Analysis, (2) Quantifiable Impact/Severity Vector, and (3) A highly detailed, step-by-step Technical Remediation Blueprint. "
+            "Avoid generic summaries; write actionable, expert-level system architectural solutions. Your extraction must be 100% dynamic:\n"
             "1. Identify every distinct threat, regulatory non-compliance, software vulnerability, operational breakdown, or hazard. "
             "For each threat, invent an appropriate high-level category name (e.g., 'GDPR Compliance', 'Supply Chain Loss') and add it to 'alerts'.\n"
             "2. For every risk you extract, you MUST formulate a corresponding actionable solution or mitigation task. "
@@ -89,8 +129,9 @@ async def analyze_document(payload: dict):
         extracted_alerts = []
         extracted_mitigations = []
 
-        # Real-time token evaluation routine matching the text contents:
-        text_lower = document_text.lower()
+        # Defensive truncation to prevent RPM/TPM rate limits
+        document_text_truncated = document_text[:4000]
+        text_lower = document_text_truncated.lower()
         
         has_matched_tokens = False
         
@@ -108,37 +149,36 @@ async def analyze_document(payload: dict):
             extracted_alerts.append(RiskAlert(type="Supply Chain", description="An operational bottleneck within the primary South China Sea transit corridor (Route: SCS-ALPHA-9) projects a 78.4% probability of critical route stagnation.", severity="WARNING"))
             extracted_mitigations.append(MitigationItem(category="Supply Chain", action="Diversify maritime logistics routes by triggering alternative freight arrangements via Baltic or overland supply tracks.", priority="HIGH"))
             has_matched_tokens = True
-
+ 
         if "turbine" in text_lower or "bearing blowout" in text_lower:
             extracted_alerts.append(RiskAlert(type="Operations", description="A catastrophic bearing blowout and complete turbine failure is mathematically imminent within the next 72 active operating hours, causing an $80,000 hourly downtime bottleneck.", severity="CRITICAL"))
             extracted_mitigations.append(MitigationItem(category="Operations", action="Schedule an emergency operational freeze within the 72-hour window on Asset ID: ROBOT-ARM-TK4 to replace deteriorating bearings.", priority="EMERGENCY"))
             has_matched_tokens = True
-
+ 
         if "payroll" in text_lower or "overtime" in text_lower:
             extracted_alerts.append(RiskAlert(type="Operations", description="The automated payroll dispatch engine failed to calculate, log, and issue the corresponding statutory overtime compensation, triggering union disputes.", severity="CRITICAL"))
             extracted_mitigations.append(MitigationItem(category="Operations", action="Recalibrate the payroll logic engine to automatically calculate exact statutory overtime adjustments and engage labor counsels.", priority="HIGH"))
             has_matched_tokens = True
-
+ 
         if "65 working hours" in text_lower or "latin american sector" in text_lower:
             extracted_alerts.append(RiskAlert(type="HR Compliance", description="Full-time warehouse floor staff in the Latin American sector have logged a persistent average of 65 working hours per week over the past 24 weeks, creating labor law liabilities.", severity="HIGH"))
             extracted_mitigations.append(MitigationItem(category="HR Compliance", action="Restructure regional shift rotas, mandate strict weekly caps at 48 hours, and onboard temporary contract personnel to mitigate burn-out factors.", priority="HIGH"))
             has_matched_tokens = True
-
+ 
         if "proxy holding corporation" in text_lower or "saas market segment" in text_lower:
             extracted_alerts.append(RiskAlert(type="Intellectual Property", description="Forensic IP tracing matched a massive 14GB proprietary asset data egress node to a proxy holding corporation closely associated with a direct international competitor in the enterprise SaaS market segment.", severity="CRITICAL"))
             extracted_mitigations.append(MitigationItem(category="Intellectual Property", action="Revoke all secure shell (SSH) access rules for the compromised engineering node, lock internal Git repositories, and activate legal corporate asset protection protocols.", priority="EMERGENCY"))
             has_matched_tokens = True
-
+ 
         # Fallback dynamically to Groq / LLaMA 3 extraction if no predefined tokens match
         if not has_matched_tokens:
             try:
-                groq_client = Groq(api_key=settings.GROQ_API_KEY)
                 user_prompt = f"""
                 Analyze the document content. Identify all active risk threats and immediately formulate corresponding actionable mitigation tasks for each threat.
                 
                 Document Content:
                 ---
-                {document_text}
+                {document_text_truncated}
                 ---
                 
                 Return a strict JSON object mapping to this schema:
@@ -160,15 +200,17 @@ async def analyze_document(payload: dict):
                     ]
                 }}
                 """
-                completion = await asyncio.to_thread(
-                    groq_client.chat.completions.create,
+                completion = await invoke_with_retry(
+                    client_risk,
                     model=settings.GROQ_MODEL,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
                     temperature=0.0,
-                    response_format={"type": "json_object"}
+                    max_tokens=1200,
+                    response_format={"type": "json_object"},
+                    route="analyze_risk"
                 )
                 parsed_data = json.loads(completion.choices[0].message.content)
                 
@@ -189,12 +231,14 @@ async def analyze_document(payload: dict):
                 logger.error(f"Structured output dynamic extraction crash: {llm_err}")
                 extracted_alerts = []
                 extracted_mitigations = []
-
-        return AnalyzeResponse(
+ 
+        response = AnalyzeResponse(
             success=True,
             alerts=extracted_alerts,
             mitigations=extracted_mitigations
         )
+        user_cache["risk_remediation_matrix"][cache_key] = response
+        return response
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

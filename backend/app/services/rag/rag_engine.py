@@ -5,6 +5,7 @@ import uuid
 from typing import AsyncGenerator, List, Dict, Any
 from groq import Groq
 from app.core.config import settings
+import os
 from app.services.rag.embedding_service import embedding_service
 from app.services.rag.vector_store import vector_store
 
@@ -13,7 +14,9 @@ logger = logging.getLogger(__name__)
 
 class RAGEngine:
     def __init__(self):
-        self.llm_client = Groq(api_key=settings.GROQ_API_KEY)
+        # Use the dedicated GROQ_API_KEY_DEFAULT for RAG chat isolation
+        default_key = os.getenv("GROQ_API_KEY_DEFAULT") or settings.GROQ_API_KEY
+        self.llm_client = Groq(api_key=default_key)
 
     def _chunk_text(self, raw_text: str, chunk_size: int = 400, overlap: int = 80) -> List[str]:
         """
@@ -175,16 +178,30 @@ class RAGEngine:
                 {"role": "user", "content": user_prompt}
             ]
 
-            # Step 5: Stream from Groq
-            completion = await asyncio.wait_for(
-                asyncio.to_thread(
-                    self.llm_client.chat.completions.create,
-                    model=settings.LLM_MODEL_NAME,
-                    messages=messages,
-                    stream=True
-                ),
-                timeout=30.0  
-            )
+            # Step 5: Stream from Groq (dedicated client_default channel)
+            async def _create_stream():
+                return await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self.llm_client.chat.completions.create,
+                        model=settings.LLM_MODEL_NAME,
+                        messages=messages,
+                        stream=True
+                    ),
+                    timeout=30.0
+                )
+
+            try:
+                completion = await _create_stream()
+            except Exception as exc:
+                err_str = str(exc).lower()
+                if "429" in str(exc) or "rate_limit" in err_str:
+                    logger.warning(
+                        f'{{"event": "rate_limit_backoff", "route": "rag_chat", "error": "{exc}"}}'
+                    )
+                    await asyncio.sleep(8)
+                    completion = await _create_stream()
+                else:
+                    raise
 
             for chunk in completion:
                 if chunk.choices and chunk.choices[0].delta.content:

@@ -159,8 +159,12 @@ const DashboardLayout = () => {
 
           <button 
             type="button"
-            onClick={() => navigate('/app/billing')} 
-            className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium text-brand-muted hover:bg-gray-900/60 hover:text-white cursor-pointer transition-all"
+            onClick={() => navigate('/app/support')} 
+            className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium transition-all cursor-pointer ${
+              location.pathname === '/app/support'
+                ? 'bg-brand-primary/10 text-brand-primary border-l-2 border-brand-primary rounded-l-none'
+                : 'text-brand-muted hover:bg-gray-900/60 hover:text-white'
+            }`}
           >
             <HelpCircle size={16} /> Support
           </button>

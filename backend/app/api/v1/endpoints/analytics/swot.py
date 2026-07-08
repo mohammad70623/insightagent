@@ -10,7 +10,7 @@ from app.models.user import User
 from app.services.rag.vector_store import vector_store
 from app.services.rag.embedding_service import embedding_service
 from app.core.config import settings
-from groq import Groq
+from app.api.v1.endpoints.analytics.metrics import client_default, invoke_with_retry
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -114,19 +114,23 @@ async def generate_floating_swot_matrix(
         )
 
         # ── Step 3: Call Groq LLM with the real retrieved context ─────────────
-        llm_client = Groq(api_key=settings.GROQ_API_KEY)
+        # Uses the dedicated client_default routed to GROQ_API_KEY_DEFAULT
 
         system_prompt = (
-            "You are an elite corporate strategy analyst AI.\n"
+            "You are an elite Fortune-500 corporate strategy analyst and management consultant AI.\n"
             "You will be given raw business document excerpts retrieved from a company's knowledge base.\n"
-            "Your job is to produce a thorough, detailed SWOT analysis in clean Markdown format.\n\n"
-            "Rules:\n"
-            "- Ground every point STRICTLY in the provided document context.\n"
-            "- Do NOT hallucinate or add generic business advice not supported by the text.\n"
+            "Your job is to produce an EXHAUSTIVE, deeply granular SWOT analysis in clean Markdown format.\n\n"
+            "CRITICAL OUTPUT RULES — DO NOT COMPRESS OR SUMMARIZE:\n"
+            "- Under EACH of the four SWOT quadrants, provide a MINIMUM of 5 specific, evidence-based bullet points.\n"
+            "- Each bullet point MUST be 2-3 sentences long, not single-phrase summaries.\n"
+            "- For Strengths: identify competitive advantages, proprietary assets, team expertise, technology moats, operational efficiencies, and brand equity.\n"
+            "- For Weaknesses: expose internal gaps, resource constraints, technical debt, process bottlenecks, talent shortages, and dependency risks.\n"
+            "- For Opportunities: detail market expansion paths, partnership potential, technology adoption curves, regulatory tailwinds, and untapped customer segments.\n"
+            "- For Threats: assess competitive pressures, regulatory headwinds, macroeconomic risks, supply chain vulnerabilities, and disruptive technology threats.\n"
+            "- Ground every point STRICTLY in the provided document context. Do NOT hallucinate.\n"
             "- Use proper Markdown: ## headings, **bold** for key terms, bullet points.\n"
             "- Structure: ## Strengths, ## Weaknesses, ## Opportunities, ## Threats.\n"
-            "- Under each section list at least 3 specific, evidence-based bullet points.\n"
-            "- End with a ## Strategic Summary paragraph synthesising the four quadrants.\n"
+            "- End with a ## Strategic Summary of at least 3 paragraphs synthesising the four quadrants with actionable executive recommendations.\n"
             "- Do not add preamble like 'Here is the analysis'. Start directly with ## Strengths."
         )
 
@@ -135,8 +139,8 @@ async def generate_floating_swot_matrix(
             f"{context_str}"
         )
 
-        completion = await asyncio.to_thread(
-            llm_client.chat.completions.create,
+        completion = await invoke_with_retry(
+            client_default,
             model=settings.GROQ_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
@@ -144,6 +148,7 @@ async def generate_floating_swot_matrix(
             ],
             temperature=0.2,
             max_tokens=2048,
+            route="swot_analysis"
         )
 
         report_markdown = completion.choices[0].message.content

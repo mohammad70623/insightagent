@@ -2,7 +2,9 @@ import React from 'react';
 import { BarChart3, Sliders } from 'lucide-react';
 
 const ForecastSimulator = ({ forecastData, forecastLoading, priceMultiplier, setPriceMultiplier, efficiencyMultiplier, setEfficiencyMultiplier }) => {
-  const isDisabled = !forecastData || forecastData.status === "no_context";
+  // Sliders are only disabled when there is zero data at all (initial load / hard crash)
+  const isDisabled = !forecastData;
+  const isFallbackMode = forecastData?.status === "fallback";
 
   return (
     <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl space-y-6">
@@ -13,7 +15,12 @@ const ForecastSimulator = ({ forecastData, forecastLoading, priceMultiplier, set
             <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono">
               Predictive Insights & Revenue Forecasting
             </h4>
-            <p className="text-[10px] text-gray-500 mt-0.5">Target Horizon: 2 Quarters | Ingested Base Weights</p>
+            <p className="text-[10px] text-gray-500 mt-0.5">
+              {isFallbackMode 
+                ? 'Mode: Industry Baseline Defaults | Upload a financial document to calibrate'
+                : 'Target Horizon: 2 Quarters | Ingested Base Weights'
+              }
+            </p>
           </div>
         </div>
         
@@ -65,7 +72,7 @@ const ForecastSimulator = ({ forecastData, forecastLoading, priceMultiplier, set
         {isDisabled ? (
           <div className="sm:col-span-2 rounded-lg bg-[#0B0F19]/40 border border-dashed border-gray-800/60 p-8 flex flex-col justify-center items-center text-center text-slate-500 font-mono text-[10px] leading-relaxed min-h-[140px]">
             <span className="text-lg mb-2">⚡</span>
-            <span>Forecast Engine Offline: Please ingest a corporate financial statement or performance ledger via Data Ingestion Control to calibrate baseline weights and unlock What-If simulations.</span>
+            <span>Forecast Engine Initializing: Loading baseline weights...</span>
           </div>
         ) : (
           <>
@@ -78,8 +85,12 @@ const ForecastSimulator = ({ forecastData, forecastLoading, priceMultiplier, set
               )}
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold font-mono text-gray-400">PROJECTED REVENUE</span>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border text-green-400 bg-green-500/10 border-green-500/20">
-                  Live Simulated
+                <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
+                  isFallbackMode 
+                    ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' 
+                    : 'text-green-400 bg-green-500/10 border-green-500/20'
+                }`}>
+                  {isFallbackMode ? 'Baseline Estimate' : 'Live Simulated'}
                 </span>
               </div>
               <div className="mt-4 flex items-baseline justify-between">

@@ -25,7 +25,15 @@ class Settings(BaseSettings):
     def AUTH_LOGIN_URL(self) -> str:
         return f"{self.API_V1_STR}/auth/login"
 
-    GROQ_API_KEY: str
+    @property
+    def GROQ_API_KEY(self) -> str:
+        return self.GROQ_API_KEY_DEFAULT or self.GROQ_API_KEY_COMPETITOR or self.GROQ_API_KEY_EMAIL or self.GROQ_API_KEY_RISK
+
+    # Sync with new multi-key routing system
+    GROQ_API_KEY_COMPETITOR: str = ""
+    GROQ_API_KEY_EMAIL: str = ""
+    GROQ_API_KEY_RISK: str = ""
+    GROQ_API_KEY_DEFAULT: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-specdec"
     TAVILY_API_KEY: str
     VECTOR_DB_URL: str = "http://localhost:6333"

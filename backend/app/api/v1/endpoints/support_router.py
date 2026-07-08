@@ -184,12 +184,13 @@ async def query_support_rag(user_query: str) -> str:
                 )
                 answer = completion.choices[0].message.content.strip()
         else:
-            # Use ChatGroq with ainvoke
+            # Use ChatGroq with ainvoke — routed to GROQ_API_KEY_DEFAULT
+            groq_default_key = os.getenv("GROQ_API_KEY_DEFAULT") or settings.GROQ_API_KEY
             chat_model = None
             try:
                 from langchain_groq import ChatGroq
                 chat_model = ChatGroq(
-                    api_key=settings.GROQ_API_KEY,
+                    api_key=groq_default_key,
                     model=settings.LLM_MODEL_NAME,
                     temperature=0.0,
                     max_retries=5
@@ -198,7 +199,7 @@ async def query_support_rag(user_query: str) -> str:
                 try:
                     from langchain_community.chat_models import ChatGroq
                     chat_model = ChatGroq(
-                        api_key=settings.GROQ_API_KEY,
+                        api_key=groq_default_key,
                         model=settings.LLM_MODEL_NAME,
                         temperature=0.0,
                         max_retries=5
@@ -212,21 +213,46 @@ async def query_support_rag(user_query: str) -> str:
                     SystemMessage(content=system_instruction),
                     HumanMessage(content=user_content)
                 ]
-                response = await chat_model.ainvoke(messages)
-                answer = response.content.strip()
+                try:
+                    response = await chat_model.ainvoke(messages)
+                    answer = response.content.strip()
+                except Exception as retry_exc:
+                    if "429" in str(retry_exc) or "rate_limit" in str(retry_exc).lower():
+                        logger.warning(f'{{"event": "rate_limit_backoff", "route": "support_chat", "error": "{retry_exc}"}}')
+                        await asyncio.sleep(8)
+                        response = await chat_model.ainvoke(messages)
+                        answer = response.content.strip()
+                    else:
+                        raise
             else:
-                # Raw AsyncGroq fallback
+                # Raw AsyncGroq fallback — routed to GROQ_API_KEY_DEFAULT
                 from groq import AsyncGroq
-                client = AsyncGroq(api_key=settings.GROQ_API_KEY)
-                completion = await client.chat.completions.create(
-                    model=settings.LLM_MODEL_NAME,
-                    messages=[
-                        {"role": "system", "content": system_instruction},
-                        {"role": "user", "content": user_content}
-                    ],
-                    temperature=0.0
-                )
-                answer = completion.choices[0].message.content.strip()
+                client = AsyncGroq(api_key=groq_default_key)
+                try:
+                    completion = await client.chat.completions.create(
+                        model=settings.LLM_MODEL_NAME,
+                        messages=[
+                            {"role": "system", "content": system_instruction},
+                            {"role": "user", "content": user_content}
+                        ],
+                        temperature=0.0
+                    )
+                    answer = completion.choices[0].message.content.strip()
+                except Exception as retry_exc:
+                    if "429" in str(retry_exc) or "rate_limit" in str(retry_exc).lower():
+                        logger.warning(f'{{"event": "rate_limit_backoff", "route": "support_chat_async", "error": "{retry_exc}"}}')
+                        await asyncio.sleep(8)
+                        completion = await client.chat.completions.create(
+                            model=settings.LLM_MODEL_NAME,
+                            messages=[
+                                {"role": "system", "content": system_instruction},
+                                {"role": "user", "content": user_content}
+                            ],
+                            temperature=0.0
+                        )
+                        answer = completion.choices[0].message.content.strip()
+                    else:
+                        raise
             
         return answer
 

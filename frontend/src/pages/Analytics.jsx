@@ -196,7 +196,7 @@ const Analytics = () => {
       setForecastData(response.data);
     } catch (error) {
       console.error("Failed to fetch predictive insights forecasting:", error);
-      setForecastData({ status: "no_context", projected_revenue: 0, ai_insight: "" });
+      setForecastData({ status: "error", projected_revenue: 0, ai_insight: "Forecast unavailable — please check your connection and retry." });
     } finally {
       setForecastLoading(false);
     }

@@ -2,91 +2,184 @@ import logging
 import asyncio
 import json
 import os
-import httpx
+import re
+import uuid
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends
 from app.api import deps
 from app.models.user import User
 from app.services.rag.vector_store import vector_store
+from app.api.v1.endpoints.analytics.metrics import (
+    get_user_document_texts,
+    client_default,
+    invoke_with_retry,
+)
+from app.core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# ============================================================
-# PREDICTIVE INSIGHTS FORECASTING ENDPOINT (100% REAL RAG)
-# ============================================================
+# ── HARDCODED CORPORATE BASELINE FALLBACK ──────────────────────────────
+# Used ONLY when the user has zero uploaded documents in their vector store.
+# Keeps the What-If sliders and charts fully interactive and online.
+FALLBACK_BASELINE = {
+    "revenue": 50000.0,
+    "margin": 65.0,
+    "churn_rate": 4.5,
+    "operational_costs": 32500.0,
+}
 
-class ForecastMetric(BaseModel):
-    period: str
-    predicted_revenue: float
-    confidence_bound_low: float
-    confidence_bound_high: float
-    growth_rate: float
+
+class ForecastPayload(BaseModel):
+    price_adjuster: float
+    op_efficiency: float
+
 
 class ForecastResponse(BaseModel):
-    target_vector: str
-    horizon_quarters: int
-    forecast_data: list[ForecastMetric]
+    status: str
+    projected_revenue: float
+    ai_insight: str
 
-@router.get("/forecast", response_model=ForecastResponse)
+
+@router.post("/forecast", response_model=ForecastResponse)
 async def get_predictive_forecasting(
+    payload: ForecastPayload,
     current_user: User = Depends(deps.get_current_user)
 ):
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
-    groq_key = os.getenv("GROQ_API_KEY")
-    
-    fallback_response = {
-        "target_vector": "Enterprise Core Predictive Scale",
-        "horizon_quarters": 0,
-        "forecast_data": []
-    }
-    
-    try:
-        documents = await asyncio.to_thread(
-            vector_store.list_user_documents,
-            collection_name=tenant_collection,
-            user_id=current_user.id
-        )
-        if not documents:
-            return fallback_response
 
-        raw_context = ""
-        for doc in documents[:5]:
-            raw_context += f"\nHistorical Ledger: {doc.get('filename', '')}\nMetrics: {doc.get('text_preview', '')}"
+    # ── PRIORITY 1: Attempt to pull RAG context from uploaded documents ──
+    document_texts = await get_user_document_texts(tenant_collection, current_user.id)
 
-        llama_prompt = f"""
-        Apply a zero-shot statistical inference matrix over the corporate business growth velocity logs. Generate predictive numerical trends for the next two quarters.
-        
-        Retrieved Historical Data:
-        {raw_context}
-        
-        Format the projection precisely into a valid JSON object matching the schema below:
+    raw_corpus = ""
+    if document_texts:
+        raw_corpus = " ".join(document_texts.values())[:4000]
+
+    has_rag_context = bool(raw_corpus.strip())
+    using_fallback = not has_rag_context
+
+    # ── EXTRACT BASELINE WEIGHTS ────────────────────────────────────────
+    base_revenue = FALLBACK_BASELINE["revenue"]
+    margin = FALLBACK_BASELINE["margin"]
+    churn_rate = FALLBACK_BASELINE["churn_rate"]
+    operational_costs = FALLBACK_BASELINE["operational_costs"]
+
+    if has_rag_context and client_default:
+        # Dynamically extract financial weights from the uploaded document
+        extraction_prompt = f"""
+        You are an expert financial data extraction engine. Analyze the following corporate document text:
+        "{raw_corpus}"
+
+        Extract the following baseline metrics as accurately as possible from the document:
+        - revenue: The base quarterly or annual revenue figure as a float (e.g. 125000.0). If multiple revenue figures exist, use the most recent or primary one.
+        - margin: The operational cost margin or profit margin as a percentage float between 0 and 100 (e.g. 35.0).
+        - churn_rate: Customer churn rate as a percentage float (e.g. 4.5). If not explicitly stated, estimate from retention data or return 0.0.
+        - operational_costs: Total operational costs as a float (e.g. 45000.0). If not stated, estimate from margin and revenue or return 0.0.
+
+        IMPORTANT: If you cannot find ANY real financial metrics in the text (no revenue, no profit, no sales), return:
         {{
-            "target_vector": "Enterprise SaaS Revenue Model",
-            "horizon_quarters": 2,
-            "forecast_data": [
-                {{"period": "2026-Q3", "predicted_revenue": 450000.0, "confidence_bound_low": 420000.0, "confidence_bound_high": 480000.0, "growth_rate": 8.5}},
-                {{"period": "2026-Q4", "predicted_revenue": 490000.0, "confidence_bound_low": 450000.0, "confidence_bound_high": 520000.0, "growth_rate": 9.1}}
-            ]
+          "revenue": 0.0,
+          "margin": 0.0,
+          "churn_rate": 0.0,
+          "operational_costs": 0.0
         }}
+
+        Your output MUST be ONLY valid JSON matching this schema, with no markdown or conversational text.
         """
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
-                json={
-                    "model": "llama3-70b-8192",
-                    "messages": [{"role": "user", "content": llama_prompt}],
-                    "temperature": 0.1,
-                    "response_format": {"type": "json_object"}
-                },
-                timeout=20.0
+
+        try:
+            completion = await invoke_with_retry(
+                client_default,
+                model=settings.GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a financial data extraction engine. Return only valid JSON."},
+                    {"role": "user", "content": extraction_prompt}
+                ],
+                max_tokens=300,
+                temperature=0.0,
+                response_format={"type": "json_object"},
+                route="forecast_extraction"
             )
-            if response.status_code == 200:
-                return json.loads(response.json()["choices"][0]["message"]["content"])
-        return fallback_response
-        
-    except Exception as e:
-        logger.error(f"Forecasting calculation failure: {str(e)}")
-        return fallback_response
+            content = completion.choices[0].message.content.strip()
+
+            # Clean markdown wrappers if returned
+            if content.startswith("```"):
+                content = re.sub(r'^```[a-zA-Z]*\n', '', content)
+                content = re.sub(r'\n```$', '', content)
+
+            parsed_baseline = json.loads(content)
+            extracted_revenue = float(parsed_baseline.get("revenue", 0.0))
+
+            if extracted_revenue > 0:
+                # Real financial data found — use extracted weights
+                base_revenue = extracted_revenue
+                margin = float(parsed_baseline.get("margin", 0.0)) or margin
+                churn_rate = float(parsed_baseline.get("churn_rate", 0.0)) or churn_rate
+                operational_costs = float(parsed_baseline.get("operational_costs", 0.0)) or operational_costs
+                using_fallback = False
+            else:
+                # Document exists but no financial data found — use fallback
+                using_fallback = True
+                logger.info(f"Document uploaded but no financial data extracted for user {current_user.id}. Using fallback baseline.")
+
+        except Exception as e:
+            logger.error(f"Baseline extraction failed: {str(e)}. Using fallback baseline.")
+            using_fallback = True
+
+    # ── MATHEMATICAL SIMULATION ON BASELINE WEIGHTS ─────────────────────
+    price_effect = 1.0 + (payload.price_adjuster / 100.0)
+    efficiency_effect = 1.0 + (payload.op_efficiency / 100.0)
+
+    projected_revenue = base_revenue * price_effect * efficiency_effect
+
+    # ── GENERATE STRATEGIC AI INSIGHT VIA DEDICATED client_default ───────
+    ai_insight = ""
+
+    if client_default:
+        source_label = "extracted from uploaded corporate documents" if not using_fallback else "estimated from industry baseline defaults (no document uploaded)"
+
+        reasoning_prompt = f"""
+        Analyze the calculated revenue projections under the current What-If slider configurations. Provide a broad, multi-paragraph financial advisory report detailing:
+        1. Macro-economic opportunities and risks associated with the simulated price adjustment.
+        2. Potential customer churn thresholds and retention impact based on the price adjuster delta.
+        3. Long-term organizational value added through the operational efficiency metric over the next two quarters.
+        4. Specific tactical recommendations for the executive leadership team.
+
+        Data source: Metrics {source_label}.
+
+        Simulated metrics for this corporation:
+        - Historical base quarterly revenue: ${base_revenue:,.2f}
+        - Historical margin: {margin}%
+        - Customer churn rate: {churn_rate}%
+        - Operational costs: ${operational_costs:,.2f}
+        - User-simulated price adjustment: {payload.price_adjuster}%
+        - User-simulated operational efficiency change: {payload.op_efficiency}%
+        - Simulated projected revenue: ${projected_revenue:,.2f}
+
+        Write at minimum 3 detailed paragraphs. Do NOT compress or summarize into bullet points.
+        """
+
+        try:
+            reasoning_completion = await invoke_with_retry(
+                client_default,
+                model=settings.GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are an elite corporate financial strategist and management consultant. Provide deeply detailed, multi-paragraph advisory reports."},
+                    {"role": "user", "content": reasoning_prompt}
+                ],
+                max_tokens=1000,
+                temperature=0.3,
+                route="forecast_reasoning"
+            )
+            ai_insight = reasoning_completion.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"Forecast reasoning generation failed: {str(e)}")
+            ai_insight = "Strategic insight generation temporarily unavailable. Please retry."
+
+    status = "success" if not using_fallback else "fallback"
+
+    return {
+        "status": status,
+        "projected_revenue": round(projected_revenue, 2),
+        "ai_insight": ai_insight
+    }
