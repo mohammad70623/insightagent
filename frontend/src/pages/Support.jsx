@@ -30,71 +30,12 @@ export default function Support() {
 
   // AI Agent Terminal States
   const [chatMessages, setChatMessages] = useState([
-    { sender: 'bot', text: 'AI Support Diagnostician active. Please paste logs, ask architecture questions, or report system abnormalities.' }
+    { sender: 'bot', text: 'Hello! Ask me any question about the platform or setup for instant guidance.' }
   ]);
   const [inputMessage, setInputMessage] = useState('');
-  const [wsConnected, setWsConnected] = useState(false);
-  const socketRef = useRef(null);
+  const [wsConnected, setWsConnected] = useState(true);
   const chatEndRef = useRef(null);
-
-  // FAQ Accordion State
   const [openFaq, setOpenFaq] = useState(null);
-
-  // Initialize WebSocket Connection to RAG Support endpoint
-  useEffect(() => {
-    const sessionId = `session_${Math.random().toString(36).substring(2, 9)}`;
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Use window.location.host or default backend dev server port (e.g. localhost:8000)
-    const host = window.location.hostname === 'localhost' ? 'localhost:8000' : window.location.host;
-    const wsUrl = `${wsProto}//${host}/api/v1/ws/support/${sessionId}?role=user`;
-
-    const connectWs = () => {
-      console.log("Connecting to support WebSocket:", wsUrl);
-      const ws = new WebSocket(wsUrl);
-
-      ws.onopen = () => {
-        setWsConnected(true);
-        console.log("Support WebSocket Connected");
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          let replyText = data.message || "";
-          
-          if (data.status === 'escalated') {
-            replyText = "⚠️ [SYS_ESCALATION] System is routing this thread to an on-call core DevOps engineer. Initial diagnosis started.";
-          }
-
-          setChatMessages(prev => [...prev, { sender: data.sender || 'bot', text: replyText }]);
-        } catch (e) {
-          // fallback for plain text
-          setChatMessages(prev => [...prev, { sender: 'bot', text: event.data }]);
-        }
-      };
-
-      ws.onclose = () => {
-        setWsConnected(false);
-        console.log("Support WebSocket Disconnected, retrying...");
-        // Reconnect after 3 seconds
-        setTimeout(connectWs, 3000);
-      };
-
-      ws.onerror = (err) => {
-        console.error("Support WebSocket Error", err);
-      };
-
-      socketRef.current = ws;
-    };
-
-    connectWs();
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
-      }
-    };
-  }, []);
 
   // Scroll to bottom of chat
   useEffect(() => {
@@ -120,7 +61,7 @@ export default function Support() {
     }
   };
 
-  const handleSendMessage = (e) => {
+  const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
 
@@ -128,16 +69,15 @@ export default function Support() {
     setChatMessages(prev => [...prev, { sender: 'user', text: userMsg }]);
     setInputMessage('');
 
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ message: userMsg }));
-    } else {
-      // Offline fallback
-      setTimeout(() => {
-        setChatMessages(prev => [
-          ...prev,
-          { sender: 'bot', text: "⚠️ Terminal is temporarily operating in local offline buffering mode. We are queuing this query for processing." }
-        ]);
-      }, 500);
+    try {
+      const response = await api.post('/ai-support/chat', { message: userMsg });
+      setChatMessages(prev => [...prev, { sender: 'bot', text: response.data.reply }]);
+    } catch (error) {
+      console.error("AI Support Chat failed", error);
+      setChatMessages(prev => [
+        ...prev,
+        { sender: 'bot', text: "⚠️ Failed to communicate with AI Support. Please try again." }
+      ]);
     }
   };
 
@@ -388,11 +328,11 @@ export default function Support() {
             <div className="bg-slate-950 px-4 py-2 border-b border-slate-800/80 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Terminal size={14} className="text-slate-400" />
-                <span className="text-[11px] font-mono text-slate-300 font-bold">AI System Diagnostician</span>
+                <span className="text-[11px] font-mono text-slate-300 font-bold">AI Support Assistant</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className={`h-2.5 w-2.5 rounded-full ${wsConnected ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`} />
-                <span className="text-[9px] font-mono text-slate-500">{wsConnected ? 'LIVE' : 'DISCONNECTED'}</span>
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[9px] font-mono text-slate-500">ONLINE</span>
               </div>
             </div>
 
@@ -420,7 +360,7 @@ export default function Support() {
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Ask diagnostician or describe node failure..."
+                placeholder="Ask a question..."
                 className="flex-1 bg-[#0d101a] border border-slate-800 rounded text-xs px-3 py-2 text-slate-300 font-mono focus:outline-none focus:border-indigo-500/60"
               />
               <button

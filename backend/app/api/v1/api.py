@@ -6,6 +6,7 @@ from app.api.v1.endpoints import billing
 from app.api.v1.endpoints import profile
 from app.api.v1.endpoints import support_router
 from app.api.v1.endpoints import notifications
+from app.api.v1.endpoints import ai_support
 
 api_router = APIRouter()
 
@@ -16,4 +17,5 @@ api_router.include_router(billing.router, prefix="/billing", tags=["Billing & En
 api_router.include_router(profile.router, prefix="/profile", tags=["User Profile & Workspace"])
 api_router.include_router(profile.user_router, prefix="/user", tags=["User Profile & Workspace"])
 api_router.include_router(support_router.router, tags=["Support & Live Takeover"])
-api_router.include_router(notifications.router, tags=["Notifications System"])
+api_router.include_router(notifications.router, tags=["Notifications System"])
+api_router.include_router(ai_support.router, prefix="/ai-support", tags=["AI Support RAG Core"])
