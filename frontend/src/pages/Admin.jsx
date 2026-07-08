@@ -5,6 +5,18 @@ import { Shield, Database, Cpu, HardDrive, Trash2, RefreshCcw, KeyRound, Server,
 const Admin = () => {
   const [tenants, setTenants] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [tickets, setTickets] = useState([]);
+  const [resolvingTicketId, setResolvingTicketId] = useState(null);
+  const [adminReplyText, setAdminReplyText] = useState("");
+
+  const fetchTickets = async () => {
+    try {
+      const response = await api.get('/admin/tickets/all');
+      setTickets(response.data || []);
+    } catch (error) {
+      console.error("Failed to fetch tickets", error);
+    }
+  };
 
   useEffect(() => {
     const fetchTenants = async () => {
@@ -20,9 +32,13 @@ const Admin = () => {
     
     // Initial fetch
     fetchTenants();
+    fetchTickets();
 
     // Setup authentic background polling every 5 seconds
-    const interval = setInterval(fetchTenants, 5000);
+    const interval = setInterval(() => {
+      fetchTenants();
+      fetchTickets();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -34,6 +50,25 @@ const Admin = () => {
     } catch (error) {
       console.error("Failed to remove tenant", error);
       alert("Failed to remove tenant. See console for details.");
+    }
+  };
+
+  const handleResolveTicket = async (ticketId) => {
+    if (!adminReplyText.trim()) {
+      alert("Please provide a resolution note.");
+      return;
+    }
+    try {
+      await api.patch(`/admin/tickets/${ticketId}/resolve`, {
+        admin_reply: adminReplyText
+      });
+      setAdminReplyText("");
+      setResolvingTicketId(null);
+      fetchTickets();
+      alert(`Ticket ${ticketId} resolved successfully.`);
+    } catch (error) {
+      console.error("Failed to resolve ticket", error);
+      alert("Failed to resolve ticket. Please try again.");
     }
   };
 
@@ -190,6 +225,113 @@ const Admin = () => {
         </div>
 
       </div>
+
+      {/* ─── SUPPORT TICKETS LEDGER ─── */}
+      <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col mt-6">
+        <div className="flex flex-col gap-4 border-b border-gray-850 pb-4 mb-6 relative">
+          <h4 className="text-xs font-bold uppercase tracking-widest text-white font-mono flex items-center gap-2">
+            <Activity size={14} className="text-indigo-400 animate-pulse" /> Active Support Requests
+          </h4>
+        </div>
+
+        <div className="overflow-x-auto text-[11px] w-full">
+          {tickets.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 bg-[#0B0F19]/50 rounded-lg border border-gray-850">
+              <p className="text-gray-400 font-medium text-xs font-mono">No active support requests found in DB.</p>
+            </div>
+          ) : (
+            <table className="table table-xs w-full border-none">
+              <thead>
+                <tr className="border-b border-gray-800 text-brand-muted font-bold text-left uppercase font-mono text-[10px]">
+                  <th className="bg-transparent pl-0 py-3">Ticket ID</th>
+                  <th className="bg-transparent py-3">Client User</th>
+                  <th className="bg-transparent py-3">Trouble Category</th>
+                  <th className="bg-transparent py-3">Urgency</th>
+                  <th className="bg-transparent py-3">Status</th>
+                  <th className="bg-transparent py-3">Admin Notes / Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tickets.map((tkt) => (
+                  <tr key={tkt.id} className="border-b border-gray-850/30 last:border-none hover:bg-gray-900/10 transition-colors">
+                    <td className="bg-transparent pl-0 py-4 font-bold text-indigo-400 font-mono">{tkt.id}</td>
+                    <td className="bg-transparent py-4 text-gray-300 font-mono">{tkt.user_id}</td>
+                    <td className="bg-transparent py-4 text-white font-medium max-w-xs break-words">
+                      <div className="font-semibold text-slate-200">{tkt.category}</div>
+                      <div className="text-[10px] text-slate-500 mt-1 bg-[#0d101a]/40 p-2 rounded border border-gray-800/60">
+                        <span className="text-indigo-400 font-bold text-[9px] uppercase block mb-0.5 font-mono">User Message:</span>
+                        {tkt.description || "No custom message provided."}
+                      </div>
+                    </td>
+                    <td className="bg-transparent py-4">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                        tkt.urgency === 'P1' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                        tkt.urgency === 'P2' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                        'bg-slate-800 text-slate-400'
+                      }`}>
+                        {tkt.urgency}
+                      </span>
+                    </td>
+                    <td className="bg-transparent py-4">
+                      <span className={`px-2 py-0.5 rounded border text-[9px] font-bold tracking-wide ${
+                        tkt.status === 'RESOLVED' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' :
+                        tkt.status === 'PENDING' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+                        'bg-indigo-500/10 border-indigo-500/20 text-indigo-400'
+                      }`}>
+                        ● {tkt.status}
+                      </span>
+                    </td>
+                    <td className="bg-transparent py-4 pr-0">
+                      {tkt.status === 'RESOLVED' ? (
+                        <div className="text-gray-500 max-w-xs font-mono text-[10px] italic">
+                          Resolved: {tkt.admin_reply}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-2">
+                          {resolvingTicketId === tkt.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={adminReplyText}
+                                onChange={(e) => setAdminReplyText(e.target.value)}
+                                placeholder="Type resolution note..."
+                                className="bg-[#131926] border border-gray-800 rounded px-2 py-1 text-white text-[10px] focus:outline-none focus:border-indigo-500"
+                              />
+                              <button
+                                onClick={() => handleResolveTicket(tkt.id)}
+                                className="bg-indigo-600 hover:bg-indigo-500 text-white rounded px-2 py-1 text-[10px] font-bold cursor-pointer"
+                              >
+                                Submit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setResolvingTicketId(null);
+                                  setAdminReplyText("");
+                                }}
+                                className="bg-gray-800 hover:bg-gray-700 text-gray-400 rounded px-2 py-1 text-[10px] cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setResolvingTicketId(tkt.id)}
+                              className="btn btn-xs bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20 hover:text-indigo-300 rounded px-2 py-1 cursor-pointer transition-colors text-[9px] font-bold uppercase tracking-wider"
+                            >
+                              Resolve Ticket
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 };

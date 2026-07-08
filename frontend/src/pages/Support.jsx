@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ShieldCheck, Server, Key, Globe, Clock, ChevronDown, ChevronUp, Terminal, Send, CheckCircle2, AlertTriangle, Play } from 'lucide-react';
+import { api } from '../services/api';
 
 const STATUS_BADGES = {
   RESOLVED: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
@@ -12,11 +13,20 @@ export default function Support() {
   const [category, setCategory] = useState('Document Ingestion & Processing Failure');
   const [priority, setPriority] = useState('P3 - General Guidance');
   const [diagnostics, setDiagnostics] = useState('');
-  const [tickets, setTickets] = useState([
-    { id: 'TKT-9942', category: 'Document Ingestion & Processing Failure', date: '2026-07-08', urgency: 'P3', status: 'RESOLVED' },
-    { id: 'TKT-9831', category: 'Competitor & SWOT Report Generation Issue', date: '2026-07-07', urgency: 'P1', status: 'RESOLVED' },
-    { id: 'TKT-9712', category: 'Billing, Invoicing & Subscription Upgrades', date: '2026-07-05', urgency: 'P2', status: 'RESOLVED' },
-  ]);
+  const [tickets, setTickets] = useState([]);
+
+  const fetchMyTickets = async () => {
+    try {
+      const response = await api.get('/tickets/my');
+      setTickets(response.data || []);
+    } catch (error) {
+      console.error("Failed to fetch tickets", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchMyTickets();
+  }, []);
 
   // AI Agent Terminal States
   const [chatMessages, setChatMessages] = useState([
@@ -91,21 +101,23 @@ export default function Support() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const handleCreateTicket = (e) => {
+  const handleCreateTicket = async (e) => {
     e.preventDefault();
     if (!diagnostics.trim()) return;
 
-    const newTicket = {
-      id: `TKT-${Math.floor(1000 + Math.random() * 9000)}`,
-      category,
-      date: new Date().toISOString().split('T')[0],
-      urgency: priority.split(' ')[0],
-      status: 'QUEUE'
-    };
-
-    setTickets(prev => [newTicket, ...prev]);
-    setDiagnostics('');
-    alert(`Ticket ${newTicket.id} created successfully and placed in the triage queue!`);
+    try {
+      const response = await api.post('/tickets/submit', {
+        category,
+        urgency: priority.split(' - ')[0],
+        description: diagnostics
+      });
+      setDiagnostics('');
+      fetchMyTickets();
+      alert(`Request ${response.data.id} submitted successfully!`);
+    } catch (error) {
+      console.error("Failed to submit request", error);
+      alert("Failed to submit support request. Please try again.");
+    }
   };
 
   const handleSendMessage = (e) => {
@@ -237,15 +249,15 @@ export default function Support() {
         <div className="lg:col-span-7 flex flex-col space-y-6">
           <div className="bg-[#0B0F19]/60 backdrop-blur border border-slate-800 rounded-xl p-6 shadow-xl">
             <div className="mb-5">
-              <h2 className="text-lg font-semibold text-white">Create New Engineering Ticket</h2>
-              <p className="text-xs text-slate-400">Submit environment diagnostics and stack traces for triaging.</p>
+              <h2 className="text-lg font-semibold text-white">Submit a Support Request</h2>
+              <p className="text-xs text-slate-400">Describe your issue below. Our operations team will analyze the sequence and provide an enterprise solution.</p>
             </div>
 
             <form onSubmit={handleCreateTicket} className="space-y-4">
               {/* Issue Classification Dropdown */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-400 font-mono mb-1.5">
-                  Issue Classification
+                  What are you having trouble with?
                 </label>
                 <select
                   value={category}
@@ -262,37 +274,45 @@ export default function Support() {
               {/* Severity Level inline radio-button badges */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-400 font-mono mb-1.5">
-                  Severity Level / Priority
+                  How urgently do you need this resolved?
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {['P3 - General Guidance', 'P2 - Production Impairment', 'P1 - Mission Critical SLA Breach'].map((lvl) => (
-                    <button
-                      key={lvl}
-                      type="button"
-                      onClick={() => setPriority(lvl)}
-                      className={`px-3 py-2 text-[10px] font-medium border rounded-lg transition-all text-center cursor-pointer ${
-                        priority === lvl
-                          ? 'bg-indigo-600/10 border-indigo-500 text-indigo-300'
-                          : 'bg-[#131926] border-slate-800 text-slate-400 hover:border-slate-700'
-                      }`}
-                    >
-                      {lvl.split(' - ')[0]}
-                      <span className="block text-[8px] text-slate-500 font-normal mt-0.5">{lvl.split(' - ')[1]}</span>
-                    </button>
-                  ))}
+                  {['P3 - General Guidance', 'P2 - Production Impairment', 'P1 - Mission Critical SLA Breach'].map((lvl) => {
+                    const displayMap = {
+                      'P3 - General Guidance': { title: 'Low', sub: 'General Question / Guidance' },
+                      'P2 - Production Impairment': { title: 'Medium', sub: 'Feature or Report Loading Slowly' },
+                      'P1 - Mission Critical SLA Breach': { title: 'High', sub: 'Complete Blocker / Cannot Process Documents' }
+                    };
+                    const disp = displayMap[lvl];
+                    return (
+                      <button
+                        key={lvl}
+                        type="button"
+                        onClick={() => setPriority(lvl)}
+                        className={`px-3 py-2 text-[10px] font-medium border rounded-lg transition-all text-center cursor-pointer ${
+                          priority === lvl
+                            ? 'bg-indigo-600/10 border-indigo-500 text-indigo-300'
+                            : 'bg-[#131926] border-slate-800 text-slate-400 hover:border-slate-700'
+                        }`}
+                      >
+                        {disp.title}
+                        <span className="block text-[8px] text-slate-500 font-normal mt-0.5">{disp.sub}</span>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Detailed System Diagnostics Textarea */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-indigo-400 font-mono mb-1.5">
-                  Detailed System Diagnostics
+                  Issue Description & Details
                 </label>
                 <textarea
                   value={diagnostics}
                   onChange={(e) => setDiagnostics(e.target.value)}
                   rows={4}
-                  placeholder={`[STACK TRACE OR PIPELINE ERROR METADATA]\nTraceback (most recent call last):\n  File "app/core/config.py", line 28, in ValidationError\npydantic.errors.ValidationError: 1 validation error for Settings`}
+                  placeholder="Please describe what happened, or paste any error message you saw on your screen here..."
                   className="w-full bg-[#131926] border border-slate-800 text-xs rounded-lg p-3 text-slate-200 font-mono focus:outline-none focus:ring-1 focus:ring-indigo-500/60"
                 />
               </div>
@@ -303,7 +323,7 @@ export default function Support() {
                   type="submit"
                   className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-md font-medium text-sm transition-all shadow-lg hover:shadow-indigo-500/10 active:scale-[0.98] cursor-pointer"
                 >
-                  Submit Ticket
+                  Submit Request
                 </button>
               </div>
             </form>
@@ -327,8 +347,16 @@ export default function Support() {
                   {tickets.map((tkt, idx) => (
                     <tr key={idx} className="border-b border-slate-800/40 hover:bg-slate-900/10 transition-colors">
                       <td className="py-3 font-mono text-indigo-400 font-bold">{tkt.id}</td>
-                      <td className="py-3">{tkt.category}</td>
-                      <td className="py-3 text-slate-500">{tkt.date}</td>
+                      <td className="py-3 text-slate-200">
+                        <div>{tkt.category}</div>
+                        {tkt.status === "RESOLVED" && tkt.admin_reply && (
+                          <div className="mt-2 p-2 bg-emerald-955/30 border border-emerald-800/40 rounded text-[11px] text-emerald-300 max-w-md">
+                            <span className="font-bold uppercase text-[9px] tracking-wider text-emerald-400 block mb-0.5">Official Solution:</span>
+                            {tkt.admin_reply}
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3 text-slate-500">{tkt.created_at ? new Date(tkt.created_at).toISOString().split('T')[0] : ''}</td>
                       <td className="py-3">
                         <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
                           tkt.urgency === 'P1' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
