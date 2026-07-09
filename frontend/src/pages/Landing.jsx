@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BarChart3, MessageSquare, ShieldCheck, ArrowRight, CheckCircle2, Globe, ArrowUpRight } from 'lucide-react';
 import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
@@ -46,6 +46,38 @@ const Landing = () => {
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
   const [showLangDropdown, setShowLangDropdown] = useState(false);
+
+  // Simulated Log Stream State
+  const dynamicLogs = useMemo(() => [
+    { type: 'SYSTEM', text: 'Initializing connectivity node with Groq Inference Cloud...', color: 'text-slate-400' },
+    { type: 'MODEL', text: 'Spawning LLaMA 3 autonomous agent clusters...', color: 'text-purple-400' },
+    { type: 'RAG CORE', text: 'Synchronizing embedding index vectors (42/50 modules verified)...', color: 'text-cyan-400' },
+    { type: 'MATRIX', text: 'Scanning Risk & Remediation node topology across 21 points...', color: 'text-amber-400' },
+    { type: 'TELEMETRY', text: 'Hardware latency metrics stabilized at ~6.33ms delta.', color: 'text-emerald-400' },
+    { type: 'AI AGENT', text: 'Synthesizing strategic forecasting matrices for Next 6 Quarters...', color: 'text-cyan-400' },
+    { type: 'SUCCESS', text: 'Executive Intelligence Report securely compiled. Awaiting dashboard fetch.', color: 'text-emerald-400 font-semibold' }
+  ], []);
+
+  const [visibleLogs, setVisibleLogs] = useState([dynamicLogs[0]]);
+  const logContainerRef = useRef(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisibleLogs((prev) => {
+        if (prev.length >= dynamicLogs.length) {
+          return [dynamicLogs[0]];
+        }
+        return [...prev, dynamicLogs[prev.length]];
+      });
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [dynamicLogs]);
+
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [visibleLogs]);
 
  
   const pricingPlans = useMemo(() => [
@@ -132,13 +164,27 @@ const Landing = () => {
             <div className="h-2 w-2 rounded-full bg-amber-500/60" />
             <div className="h-2 w-2 rounded-full bg-green-500/60" />
           </div>
-          <div className="flex-1 bg-main/50 rounded-lg border border-gray-850/40 p-4 flex items-center justify-center relative">
-            <div className="text-center space-y-2">
-              <div className="h-1.5 w-24 bg-gray-800 rounded mx-auto animate-pulse" />
-              <div className="h-1.5 w-16 bg-gray-800 rounded mx-auto animate-pulse" />
+          <div className="flex-1 bg-main/50 rounded-lg border border-gray-850/40 p-4 flex flex-col justify-between relative overflow-hidden">
+            <div 
+              ref={logContainerRef} 
+              className="flex-1 overflow-y-auto max-h-48 space-y-1.5 pr-1 text-[9px] font-mono text-left scrollbar-none"
+            >
+              {visibleLogs.map((log, idx) => (
+                <div key={idx} className={`animate-fade-in ${log.color}`}>
+                  [{log.type}]: {log.text}
+                </div>
+              ))}
             </div>
-            <span className="absolute bottom-3 left-4 text-[9px] font-mono text-brand-primary/60">Live Intelligence Stream...</span>
-            <span className="absolute top-3 right-4 text-[8px] font-mono text-gray-600">https://app.insightagent.ai/dashboard</span>
+            <div className="flex items-center justify-between border-t border-gray-850/40 pt-2 mt-2">
+              <div className="flex items-center text-[9px] font-mono text-brand-primary/60">
+                <span className="relative flex h-1.5 w-1.5 mr-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                Live Intelligence Stream...
+              </div>
+              <span className="text-[8px] font-mono text-gray-600">https://app.insightagent.ai/dashboard</span>
+            </div>
           </div>
         </div>
       </section>
