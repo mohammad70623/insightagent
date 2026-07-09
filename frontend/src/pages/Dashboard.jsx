@@ -21,6 +21,7 @@ const Dashboard = () => {
   });
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [userName, setUserName] = useState('Admin');
 
   // Transition and onboarding states
   const [onboardingStep, setOnboardingStep] = useState(1);
@@ -88,8 +89,21 @@ const Dashboard = () => {
       }
     };
 
+    const fetchUserProfile = async () => {
+      try {
+        const response = await api.get('/profile/me');
+        if (response.data) {
+          const name = response.data.name || response.data.email?.split('@')[0] || 'Admin';
+          setUserName(name);
+        }
+      } catch (error) {
+        console.error("Failed to fetch user profile:", error);
+      }
+    };
+
     fetchLiveAnomalies();
     fetchOnboardingAndInventory();
+    fetchUserProfile();
   }, []);
 
   // Fetch uploaded files once onboarding Step 3 is activated
@@ -184,10 +198,10 @@ const Dashboard = () => {
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white">
-            Welcome to InsightAgent, Alex Rivera [Admin]!
+            Welcome to InsightAgent, {userName}!
           </h2>
           <p className="text-xs text-brand-muted mt-1.5 leading-relaxed">
-            Get started by ingesting your first enterprise data modules. Automated AI analytics and intelligence reports are seconds away.
+            Get started by uploading your first business document. Analytics and intelligence reports are ready in seconds.
           </p>
         </div>
         
@@ -363,8 +377,8 @@ const Dashboard = () => {
               <div className="font-mono text-[10px] space-y-1.5 p-3 rounded bg-black/40 border border-gray-900/60 text-gray-400 min-h-[50px] flex flex-col justify-center transition-all duration-500">
                 {currentStep === 'idle' && (
                   <>
-                    <div className="text-gray-400 font-semibold">[STANDBY]: Ready to receive payload stream.</div>
-                    <div className="text-gray-600">[SYSTEM]: Ingestion pipeline listener active.</div>
+                    <div className="text-gray-400 font-semibold">[IDLE]: System operational. Awaiting next user request.</div>
+                    <div className="text-gray-655">[SYSTEM]: Security gateway and background sync active.</div>
                   </>
                 )}
                 {currentStep === 'uploading' && (
@@ -411,7 +425,7 @@ const Dashboard = () => {
       {showTip && (
         <div className="flex items-center justify-between rounded-xl border border-gray-800/50 bg-surface px-6 py-3 text-xs text-brand-muted shadow-md transition-all animate-fade-in">
           <span className="flex items-center gap-2 leading-relaxed">
-            ✨ <strong>Tip:</strong> Use the RAG Agent to find correlations between supply chain data and NOAA archives. Ask <em className="text-gray-300">"What are the main drivers of efficiency loss last quarter?"</em>
+            ✨ <strong>Tip:</strong> Use the global search bar at the top to instantly find and analyze documents across your entire workspace.
           </span>
           <button onClick={() => setShowTip(false)} type="button" className="text-gray-500 hover:text-white transition-colors cursor-pointer bg-transparent border-none outline-none" aria-label="Dismiss tip">
             <X size={14} />

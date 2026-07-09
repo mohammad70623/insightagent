@@ -3,7 +3,7 @@ import MessageBubble from "./MessageBubble";
 import ChatInput from "./ChatInput";
 
 const UI_TEXT = {
-  ACTIVE: "🟢 Secure Stream Terminal Activated",
+  ACTIVE: "🟢 Secure Chat Session Active",
   AWAITING: "⚪ Awaiting Session Matrix",
   EMPTY_PANEL: "Please select or create an agent session on the left pane to begin execution.",
   UPLINK: "Workspace Empty. Uplink established. Awaiting user injection..."
@@ -26,9 +26,6 @@ const ChatWindow = ({
           <h3 className="font-bold text-lg text-gray-100">
             {activeSessionId ? UI_TEXT.ACTIVE : UI_TEXT.AWAITING}
           </h3>
-          <p className="text-xs text-gray-400 font-mono">
-            SESSION_UUID: {activeSessionId || "NULL_POINTER"}
-          </p>
         </div>
         {isStreaming && (
           <span className="text-xs font-mono bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full border border-amber-500/30 animate-pulse">

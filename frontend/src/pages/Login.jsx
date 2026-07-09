@@ -155,10 +155,10 @@ export default function Login() {
 
           <div className="space-y-3">
             <h2 className="text-3xl font-semibold tracking-tight leading-tight text-white">
-              Enterprise-grade AI intelligence.
+              Secure workspace for your business intelligence.
             </h2>
             <p className="text-brand-muted text-sm leading-relaxed font-normal">
-              Unlock predictive analytics and autonomous data workflows in a secure, high-performance environment.
+              Access your smart agents, search secure documents, and analyze team insights from a single dashboard.
             </p>
           </div>
 
