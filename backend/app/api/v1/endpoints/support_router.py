@@ -5,7 +5,7 @@ import uuid
 import traceback
 from typing import Dict, List, Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends
-from pydantic import BaseModel
+from pydantic import BaseModel  
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

@@ -1,6 +1,7 @@
-import React from 'react';
-import { BarChart3, Sliders } from 'lucide-react';
+import React, { useMemo } from 'react';
+import { BarChart3, Sliders, BrainCircuit } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 
 const ForecastSimulator = ({ 
   forecastData, 
@@ -24,21 +25,45 @@ const ForecastSimulator = ({
   const isFallbackMode = forecastData?.status === "fallback";
 
   const cleanNumber = (val) => {
-    if (val === undefined || val === null || val === '') return 50000;
+    if (val === undefined || val === null || val === '') return 5000000; // Updated default base for realistic enterprise simulation
     if (typeof val === 'number') return val;
     const cleaned = String(val).replace(/[\$,]/g, '');
-    return parseFloat(cleaned) || 50000;
+    return parseFloat(cleaned) || 5000000;
   };
 
   const historicalBaseRevenue = forecastData?.base_revenue;
-  const currentSimulatedProjection = forecastData?.projected_revenue;
+  const baseVal = cleanNumber(historicalBaseRevenue || 5000000);
 
-  const baseVal = cleanNumber(historicalBaseRevenue || 50000);
-  const simulatedVal = cleanNumber(currentSimulatedProjection || 51775);
+  // Multi-variable calculation logic for progressive timeline (Next 6 Quarters)
+  const timelineData = useMemo(() => {
+    const quarters = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6'];
+    
+    // Compute coefficients for all 6 sliders
+    const pCoeff = priceAdjuster * 0.003;        // Price Adjuster (-50% to +50% -> -0.15 to +0.15)
+    const mCoeff = marketingBoost * 0.004;       // Marketing Boost (0% to 100% -> 0 to 0.4)
+    const iCoeff = productInnovation * 0.005;    // Product Innovation (0% to 100% -> 0 to 0.5)
+    const eCoeff = opEfficiency * 0.005;         // Op. Efficiency (-20% to +20% -> -0.1 to +0.1)
+    const sCoeff = supportCapacity * 0.002;      // Support Capacity (-50% to +50% -> -0.1 to +0.1)
+    const cCoeff = -competitionThreat * 0.003;   // Competition Threat (0% to 100% -> -0.3 to 0)
 
-  const maxVal = Math.max(baseVal, simulatedVal);
-  const basePercent = maxVal > 0 ? (baseVal / maxVal) * 100 : 0;
-  const simulatedPercent = maxVal > 0 ? (simulatedVal / maxVal) * 100 : 0;
+    const netSimulationFactor = pCoeff + mCoeff + iCoeff + eCoeff + sCoeff + cCoeff;
+
+    return quarters.map((quarter, index) => {
+      const step = index + 1; // 1 to 6
+      // Progressive curve growth factor compounded over time steps
+      const growthFactor = Math.pow(1 + netSimulationFactor / 6, step);
+      // Progressive base trend (e.g. natural 1.5% growth per quarter)
+      const baseTrend = Math.pow(1.015, step);
+      const revenue = baseVal * growthFactor * baseTrend;
+      return {
+        name: quarter,
+        revenue: Math.round(revenue)
+      };
+    });
+  }, [baseVal, priceAdjuster, marketingBoost, productInnovation, opEfficiency, supportCapacity, competitionThreat]);
+
+  // Main simulated projection metric matches the final data point of the curve
+  const finalProjectedRevenue = timelineData[timelineData.length - 1].revenue;
 
   return (
     <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl space-y-6">
@@ -51,8 +76,8 @@ const ForecastSimulator = ({
             </h4>
             <p className="text-[10px] text-gray-500 mt-0.5 font-mono">
               {isFallbackMode 
-                ? 'Mode: Industry Baseline Defaults | Ingested Base Weights: $50,000'
-                : `Target Horizon: 2 Quarters | Ingested Base Weights: $${Math.round(baseVal).toLocaleString()}`
+                ? 'Mode: Industry Baseline Defaults | Ingested Base Weights: $5,000,000'
+                : `Target Horizon: Next 6 Quarters | Ingested Base Weights: $${Math.round(baseVal).toLocaleString()}`
               }
             </p>
           </div>
@@ -184,20 +209,20 @@ const ForecastSimulator = ({
       
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
         {isDisabled ? (
-          <div className="sm:col-span-2 rounded-lg bg-[#0B0F19]/40 border border-dashed border-gray-800/60 p-8 flex flex-col justify-center items-center text-center text-slate-500 font-mono text-[10px] leading-relaxed min-h-[140px]">
+          <div className="sm:col-span-2 rounded-lg bg-[#0B0F19]/40 border border-dashed border-gray-880/60 p-8 flex flex-col justify-center items-center text-center text-slate-500 font-mono text-[10px] leading-relaxed min-h-[140px]">
             <span className="text-lg mb-2">⚡</span>
             <span>Forecast Engine Initializing: Loading baseline weights...</span>
           </div>
         ) : (
           <>
             {/* Projected Revenue Card */}
-            <div className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-4 flex flex-col justify-between transition-all duration-300 hover:border-gray-700 min-h-[140px] relative">
+            <div className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-5 flex flex-col justify-between transition-all duration-300 hover:border-gray-700 min-h-[320px] relative">
               {forecastLoading && (
-                <div className="absolute inset-0 bg-[#0B0F19]/80 rounded-lg flex items-center justify-center text-[10px] font-mono text-brand-primary">
+                <div className="absolute inset-0 bg-[#0B0F19]/80 rounded-lg flex items-center justify-center text-[10px] font-mono text-brand-primary z-10">
                   <span className="animate-spin mr-2">⏳</span> RE-CALCULATING...
                 </div>
               )}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-bold font-mono text-gray-400">PROJECTED REVENUE</span>
                 <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
                   isFallbackMode 
@@ -207,52 +232,80 @@ const ForecastSimulator = ({
                   {isFallbackMode ? 'Baseline Estimate' : 'Live Simulated'}
                 </span>
               </div>
-              <div className="mt-4 flex items-center justify-between">
+              
+              {/* Neon Area Chart */}
+              <div className="flex-1 w-full min-h-[180px] my-2 relative">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={timelineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="neonTealGlow" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#00E5FF" stopOpacity={0.4}/>
+                        <stop offset="95%" stopColor="#00E5FF" stopOpacity={0.01}/>
+                      </linearGradient>
+                    </defs>
+                    <XAxis 
+                      dataKey="name" 
+                      stroke="#4B5563" 
+                      fontSize={9} 
+                      tickLine={false} 
+                      axisLine={false} 
+                    />
+                    <YAxis 
+                      stroke="#4B5563" 
+                      fontSize={9} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      tickFormatter={(v) => `$${(v / 1000000).toFixed(1)}M`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: '#0B0F19', 
+                        borderColor: '#1F2937', 
+                        borderRadius: '8px',
+                        fontSize: '10px',
+                        fontFamily: 'monospace'
+                      }}
+                      itemStyle={{ color: '#00E5FF' }}
+                      labelStyle={{ color: '#9CA3AF' }}
+                      formatter={(value) => [`$${value.toLocaleString()}`, 'Projected Revenue']}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="revenue" 
+                      stroke="#00E5FF" 
+                      strokeWidth={2.5}
+                      fillOpacity={1} 
+                      fill="url(#neonTealGlow)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Summary Metrics at the bottom */}
+              <div className="mt-4 pt-3 border-t border-gray-800/40 flex items-center justify-between">
                 <div>
                   <p className="text-[10px] font-mono tracking-wide text-gray-500 uppercase font-semibold">Simulated Projection</p>
-                  <p className="text-xl font-bold tracking-tight text-white mt-0.5">
-                    ${Math.round(simulatedVal).toLocaleString()}
+                  <p className="text-2xl font-bold tracking-tight text-white mt-0.5">
+                    ${finalProjectedRevenue.toLocaleString()}
                   </p>
-                </div>
-                
-                {/* Reactive Micro Bar Chart */}
-                <div className="flex items-end gap-3 h-16 w-32 border-l border-b border-gray-800/40 pl-2 pb-1 relative">
-                  <div className="flex flex-col items-center flex-1 group relative h-full justify-end">
-                    <div 
-                      style={{ height: `${basePercent}%` }} 
-                      className="w-4 bg-slate-700/80 rounded-t-sm transition-all duration-300 hover:bg-slate-650"
-                    />
-                    <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-800 text-[8px] font-mono px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap text-slate-300 shadow-xl pointer-events-none">
-                      ${Math.round(baseVal).toLocaleString()}
-                    </span>
-                    <span className="text-[7px] font-mono text-gray-500 mt-1 uppercase scale-90 whitespace-nowrap">Base</span>
-                  </div>
-                  
-                  <div className="flex flex-col items-center flex-1 group relative h-full justify-end">
-                    <div 
-                      style={{ height: `${simulatedPercent}%` }} 
-                      className="w-4 bg-indigo-500 rounded-t-sm transition-all duration-300 hover:bg-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.3)]"
-                    />
-                    <span className="absolute -top-7 left-1/2 -translate-x-1/2 bg-slate-900 border border-slate-800 text-[8px] font-mono px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap text-slate-300 shadow-xl pointer-events-none">
-                      ${Math.round(simulatedVal).toLocaleString()}
-                    </span>
-                    <span className="text-[7px] font-mono text-indigo-400 mt-1 uppercase scale-90 whitespace-nowrap">Delta</span>
-                  </div>
                 </div>
               </div>
             </div>
 
             {/* AI Strategic Recommendation Card */}
-            <div className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-4 flex flex-col justify-between transition-all duration-300 hover:border-gray-700 min-h-[140px] relative">
+            <div className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-5 flex flex-col justify-between transition-all duration-300 hover:border-gray-700 min-h-[320px] relative">
               {loadingAI && (
-                <div className="absolute inset-0 bg-[#0B0F19]/80 rounded-lg flex items-center justify-center text-[10px] font-mono text-brand-primary">
+                <div className="absolute inset-0 bg-[#0B0F19]/80 rounded-lg flex items-center justify-center text-[10px] font-mono text-brand-primary z-10">
                   <span className="animate-spin mr-2">⏳</span> SYNTHESIZING...
                 </div>
               )}
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold font-mono text-indigo-400">🤖 AI STRATEGIC INSIGHT</span>
+              <div className="flex items-center gap-[10px] border-b border-gray-850 pb-2 mb-3">
+                <BrainCircuit size={18} className="text-slate-400" />
+                <span className="text-xs font-bold font-mono tracking-wide text-slate-200">
+                  Executive Intelligence Report
+                </span>
               </div>
-              <div className="mt-2 flex-1 flex items-center">
+              <div className="flex-1 overflow-y-auto max-h-[220px] custom-scrollbar pr-1">
                 <div className="text-[11px] font-mono text-brand-muted leading-relaxed italic prose prose-invert max-w-none">
                   <ReactMarkdown>
                     {insightText || "Awaiting simulation variables..."}
