@@ -82,7 +82,7 @@ const Landing = () => {
         <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-brand-muted">
           <button type="button" onClick={() => navigate('/login')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none text-xs font-semibold text-brand-muted">Dashboard</button>
           <button type="button" onClick={() => navigate('/docs')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none text-xs font-semibold text-brand-muted">Docs</button>
-          <a href="#pricing" className="hover:text-white transition-colors">Feedback</a>
+          <button type="button" onClick={() => navigate('/feedback')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none text-xs font-semibold text-brand-muted">Feedback</button>
         </nav>
         <button 
           type="button" 
