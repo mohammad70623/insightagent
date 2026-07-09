@@ -6,6 +6,35 @@ import TermsOfServiceModal from '../components/TermsOfServiceModal';
 import SecurityModal from '../components/SecurityModal';
 import ContactModal from '../components/ContactModal';
 
+const languages = [
+  { code: 'en', name: 'English (US)', active: true },
+  { code: 'es', name: 'Español (Spanish)', active: false },
+  { code: 'fr', name: 'Français (French)', active: false },
+  { code: 'de', name: 'Deutsch (German)', active: false },
+  { code: 'zh', name: '简体中文 (Chinese)', active: false },
+  { code: 'ja', name: '日本語 (Japanese)', active: false },
+  { code: 'bn', name: 'বাংলা (Bengali)', active: false },
+  { code: 'ar', name: 'العربية (Arabic)', active: false },
+  { code: 'pt', name: 'Português (Portuguese)', active: false },
+  { code: 'ru', name: 'Русский (Russian)', active: false },
+  { code: 'hi', name: 'हिन्दी (Hindi)', active: false },
+  { code: 'it', name: 'Italiano (Italian)', active: false },
+  { code: 'ko', name: '한국어 (Korean)', active: false },
+  { code: 'nl', name: 'Nederlands (Dutch)', active: false },
+  { code: 'tr', name: 'Türkçe (Turkish)', active: false },
+  { code: 'vi', name: 'Tiếng Việt (Vietnamese)', active: false },
+  { code: 'pl', name: 'Polski (Polish)', active: false },
+  { code: 'id', name: 'Bahasa Indonesia', active: false },
+  { code: 'sv', name: 'Svenska (Swedish)', active: false },
+  { code: 'no', name: 'Norsk (Norwegian)', active: false },
+  { code: 'fi', name: 'Suomi (Finnish)', active: false },
+  { code: 'da', name: 'Dansk (Danish)', active: false },
+  { code: 'he', name: 'עברית (Hebrew)', active: false },
+  { code: 'th', name: 'ไทย (Thai)', active: false },
+  { code: 'ms', name: 'Bahasa Melayu', active: false },
+  { code: 'uk', name: 'Українська (Ukrainian)', active: false }
+];
+
 /**
  * @description Enterprise SaaS Landing & Pricing Page Component
  * Architecture: Clean Component Design using modern Arrow Function expression.
@@ -16,6 +45,7 @@ const Landing = () => {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showLangDropdown, setShowLangDropdown] = useState(false);
 
  
   const pricingPlans = useMemo(() => [
@@ -228,8 +258,55 @@ const Landing = () => {
           <button type="button" onClick={() => setShowSecurityModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Security</button>
           <button type="button" onClick={() => setShowContactModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Contact</button>
         </div>
-        <div className="flex gap-3 text-gray-500">
-          <Globe size={14} className="hover:text-white cursor-pointer" />
+        <div className="relative flex gap-3 text-gray-500">
+          <button 
+            type="button" 
+            onClick={() => setShowLangDropdown(!showLangDropdown)}
+            className="hover:text-white cursor-pointer bg-transparent border-none p-0 flex items-center justify-center text-gray-500 hover:text-white"
+            aria-label="Language Selector"
+          >
+            <Globe size={14} />
+          </button>
+
+          {showLangDropdown && (
+            <div className="absolute bottom-14 right-0 w-56 max-h-64 overflow-y-auto bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-xl p-2 shadow-2xl z-50 scrollbar-thin scrollbar-thumb-slate-800 text-left">
+              {/* Sticky Header */}
+              <div className="sticky top-0 bg-slate-950/95 backdrop-blur-xl pb-1.5 mb-1.5 border-b border-slate-850 text-[9px] font-mono tracking-widest text-slate-500 font-bold uppercase pl-2">
+                Choose Language
+              </div>
+
+              {/* List */}
+              <div className="space-y-0.5">
+                {languages.map((lang) => {
+                  if (lang.active) {
+                    return (
+                      <div 
+                        key={lang.code} 
+                        className="flex items-center justify-between text-slate-100 bg-slate-900 rounded-lg font-medium py-1.5 px-2 text-sm cursor-default"
+                      >
+                        <span>{lang.name}</span>
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <span 
+                        key={lang.code} 
+                        className="opacity-40 cursor-not-allowed hover:bg-transparent text-slate-400 py-1.5 px-2 text-sm block"
+                      >
+                        {lang.name}
+                      </span>
+                    );
+                  }
+                })}
+              </div>
+
+              {/* Sticky Footer */}
+              <div className="sticky bottom-0 bg-slate-950/95 backdrop-blur-xl pt-1.5 mt-1.5 border-t border-slate-850 text-[8px] font-mono text-center text-slate-600">
+                Localization coming soon (v2.0)
+              </div>
+            </div>
+          )}
         </div>
       </footer>
 
