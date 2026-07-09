@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { Eye, EyeOff, ShieldCheck, Activity, AlertCircle, ArrowLeft } from 'lucide-react';
+import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
+import TermsOfServiceModal from '../components/TermsOfServiceModal';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -17,6 +19,25 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  // Modals and Alerts States
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showSupportAlert, setShowSupportAlert] = useState(false);
+  const [flashVerifyButton, setFlashVerifyButton] = useState(false);
+
+  const handleSupportClick = (e) => {
+    e.preventDefault();
+    setShowSupportAlert(true);
+  };
+
+  const handleSupportGotIt = () => {
+    setShowSupportAlert(false);
+    setFlashVerifyButton(true);
+    setTimeout(() => {
+      setFlashVerifyButton(false);
+    }, 2000);
+  };
 
   const validateEmail = (email) => {
     const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
@@ -237,7 +258,7 @@ export default function Login() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="w-full rounded-lg bg-brand-primary px-4 py-3 text-xs font-bold text-black shadow-xl shadow-indigo-500/5 transition-all hover:bg-indigo-400 active:scale-[0.99] mt-2 flex items-center justify-center h-10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  className={`w-full rounded-lg bg-brand-primary px-4 py-3 text-xs font-bold text-black shadow-xl shadow-indigo-500/5 transition-all hover:bg-indigo-400 active:scale-[0.99] mt-2 flex items-center justify-center h-10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${flashVerifyButton ? 'ring-4 ring-cyan-400 scale-[1.03] shadow-[0_0_25px_rgba(6,182,212,0.8)] animate-pulse' : ''}`}
                 >
                   {isLoading ? (
                     <span className="loading loading-spinner loading-xs bg-black"></span>
@@ -373,13 +394,66 @@ export default function Login() {
           )}
 
           <div className="mt-16 flex justify-center gap-6 text-[10px] text-gray-600 border-t border-gray-900 pt-4 font-semibold">
-            <a href="#support" className="hover:text-gray-400 transition-colors">Support</a>
-            <a href="#terms" className="hover:text-gray-400 transition-colors">Terms</a>
-            <a href="#privacy" className="hover:text-gray-400 transition-colors">Privacy</a>
+            <button 
+              type="button" 
+              onClick={handleSupportClick} 
+              className="hover:text-gray-400 transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[10px]"
+            >
+              Support
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setShowTermsModal(true)} 
+              className="hover:text-gray-400 transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[10px]"
+            >
+              Terms
+            </button>
+            <button 
+              type="button" 
+              onClick={() => setShowPrivacyModal(true)} 
+              className="hover:text-gray-400 transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[10px]"
+            >
+              Privacy
+            </button>
           </div>
 
         </div>
       </div>
+
+      {/* Support Alert Overlay Modal */}
+      {showSupportAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <div className="w-full max-w-sm rounded-xl border border-slate-800 bg-[#0B0F19] p-6 shadow-2xl space-y-4 text-left animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-2 text-red-400">
+              <AlertCircle size={18} />
+              <h4 className="text-xs font-bold uppercase tracking-widest font-mono">
+                Authentication Required
+              </h4>
+            </div>
+            <p className="text-[11px] text-slate-350 leading-relaxed font-mono">
+              To access the InsightAgent Enterprise Support and ticketing ecosystem, you must be securely signed into your account. Please complete your identity verification first.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={handleSupportGotIt}
+                className="w-full rounded-lg bg-gradient-to-r from-brand-primary to-indigo-500 hover:from-cyan-400 hover:to-indigo-400 text-black font-extrabold text-xs py-2.5 px-4 cursor-pointer transition-all uppercase tracking-wider shadow-lg hover:shadow-cyan-500/20"
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shared Policy Modals */}
+      <PrivacyPolicyModal 
+        isOpen={showPrivacyModal} 
+        onClose={() => setShowPrivacyModal(false)} 
+      />
+      <TermsOfServiceModal 
+        isOpen={showTermsModal} 
+        onClose={() => setShowTermsModal(false)} 
+      />
     </div>
   );
 }
