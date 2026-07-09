@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { BarChart3, MessageSquare, ShieldCheck, ArrowRight, CheckCircle2, Globe, ArrowUpRight } from 'lucide-react';
 import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 import TermsOfServiceModal from '../components/TermsOfServiceModal';
@@ -193,8 +193,8 @@ const Landing = () => {
       <section id="features" className="max-w-[1400px] mx-auto px-6 py-20 md:px-12 border-t border-gray-900/60 text-center space-y-12">
         <div className="space-y-2">
           <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white">Architected for Precision</h2>
-          <p className="text-xs text-brand-muted max-w-lg mx-auto leading-relaxed">
-            Our "Stitch" architecture creates a modular, interconnected fabric for your organizational data.
+          <p className="text-xs text-brand-muted max-w-2xl md:max-w-3xl mx-auto leading-relaxed">
+            InsightAgent safely syncs with your secure documents to build a smart network for your business operations.
           </p>
         </div>
 
@@ -202,20 +202,22 @@ const Landing = () => {
           <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-md space-y-4">
             <div className="h-8 w-8 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center text-brand-primary"><BarChart3 size={16} /></div>
             <h3 className="text-sm font-bold text-white">Deep Analytics</h3>
-            <p className="text-xs text-brand-muted leading-relaxed font-medium">Vectorized processing of unstructured data across your entire enterprise cloud stack.</p>
-            <button type="button" onClick={() => navigate('/docs')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Explore Docs ↗</button>
+            <p className="text-xs text-brand-muted leading-relaxed font-medium">Easily upload and analyze your business PDFs, spreadsheets, and txt files in seconds.</p>
+            <Link className="text-cyan-400 hover:text-cyan-300 font-medium inline-flex items-center gap-1 mt-2 transition-colors text-[10px]" to="/docs">
+              Explore Docs ↗
+            </Link>
           </div>
           <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-md space-y-4">
             <div className="h-8 w-8 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center text-brand-primary"><MessageSquare size={16} /></div>
             <h3 className="text-sm font-bold text-white">AI Chat Agent</h3>
-            <p className="text-xs text-brand-muted leading-relaxed font-medium">Context-aware conversational interface for natural language querying of complex datasets.</p>
-            <button type="button" onClick={() => navigate('/docs')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Agent Capabilities ↗</button>
+            <p className="text-xs text-brand-muted leading-relaxed font-medium">Ask questions in plain English and get instant answers from your internal database.</p>
+            <button type="button" onClick={() => navigate('/docs#agent-capabilities')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Agent Capabilities ↗</button>
           </div>
           <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-md space-y-4">
             <div className="h-8 w-8 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center text-brand-primary"><ShieldCheck size={16} /></div>
             <h3 className="text-sm font-bold text-white">Security First</h3>
-            <p className="text-xs text-brand-muted leading-relaxed font-medium">SOC2 Type II compliant infrastructure with local-only processing options for sensitive PII.</p>
-            <button type="button" onClick={() => navigate('/login')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Security Portal ↗</button>
+            <p className="text-xs text-brand-muted leading-relaxed font-medium">Enterprise-grade privacy with fully secured data handling to keep your records safe.</p>
+            <button type="button" onClick={() => navigate('/docs#security-privacy')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Security Portal ↗</button>
           </div>
         </div>
       </section>

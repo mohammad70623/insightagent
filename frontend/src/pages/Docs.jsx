@@ -11,8 +11,10 @@ const Docs = () => {
     { id: 'auth-gateway', title: '1.1 Authentication Gateway' },
     { id: 'workspace-core', title: '2. Workspace Core' },
     { id: 'predictive-analytics', title: '3. Predictive Analytics' },
+    { id: 'agent-capabilities', title: '3.1 Agent Capabilities' },
     { id: 'document-ingestion', title: '4. Document Ingestion' },
-    { id: 'billing-tiers', title: '5. Billing & Tiers' }
+    { id: 'billing-tiers', title: '5. Billing & Tiers' },
+    { id: 'security-privacy', title: '6. Security & Privacy' }
   ];
 
   useEffect(() => {
@@ -30,6 +32,14 @@ const Docs = () => {
       }
     };
     window.addEventListener('scroll', handleScroll);
+
+    // Direct hash scroll anchor on mount
+    const hash = window.location.hash;
+    if (hash) {
+      const targetId = hash.replace('#', '');
+      setTimeout(() => scrollToSection(targetId), 300);
+    }
+
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -221,6 +231,47 @@ const Docs = () => {
             </div>
           </section>
 
+          {/* SECTION 3.1 */}
+          <section id="agent-capabilities" className="space-y-4">
+            <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2 border-b border-slate-900 pb-2">
+              <BrainCircuit size={18} className="text-brand-primary" />
+              3.1 MULTI-AGENT CAPABILITIES
+            </h2>
+            <p className="text-xs text-slate-350 leading-relaxed">
+              Our LLaMA 3 core matrix framework does not just scan keywords—it deploys specialized autonomous agent nodes working in parallel to orchestrate enterprise tasks.
+            </p>
+            <ul className="space-y-3 text-xs text-slate-350 pl-1 font-sans">
+              <li className="flex items-start gap-2.5">
+                <span className="text-brand-primary font-bold shrink-0 mt-0.5">🧠</span>
+                <div>
+                  <strong>CONTEXTUAL MEMORY RETRIEVAL (RAG Core):</strong>
+                  <p className="text-slate-400 mt-1">The ingestion agent splits corporate PDFs into optimized text chunks, links them with custom embedding layers, and maintains perfect context awareness during multi-turn chats.</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="text-brand-primary font-bold shrink-0 mt-0.5">🔍</span>
+                <div>
+                  <strong>AUTOMATED ANOMALY & RISK DETECTION:</strong>
+                  <p className="text-slate-400 mt-1">Continuously reviews logs, complaints, and ticket data streams to automatically categorize system vulnerabilities into strict Critical and High-Priority risk matrices.</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="text-brand-primary font-bold shrink-0 mt-0.5">📊</span>
+                <div>
+                  <strong>CROSS-PLATFORM SYSTEM TELEMETRY:</strong>
+                  <p className="text-slate-400 mt-1">Monitors live operational health checkpoints, calculating precise inference latency speeds (stabilized at ~6.33ms delta) and load distribution metrics over 69 active background threads.</p>
+                </div>
+              </li>
+              <li className="flex items-start gap-2.5">
+                <span className="text-brand-primary font-bold shrink-0 mt-0.5">📈</span>
+                <div>
+                  <strong>MULTI-VARIABLE COCKPIT SIMULATION:</strong>
+                  <p className="text-slate-400 mt-1">Translates business adjustments from our 6-node slider control panel into accurate quarter-by-quarter revenue projections, generating immediate executive text advice.</p>
+                </div>
+              </li>
+            </ul>
+          </section>
+
           {/* SECTION 4 */}
           <section id="document-ingestion" className="space-y-4">
             <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2 border-b border-slate-900 pb-2">
@@ -277,6 +328,95 @@ const Docs = () => {
                 <h4 className="text-2xl font-black text-white">$149/mo</h4>
                 <p className="text-[11px] text-slate-400 font-mono">Limit: <strong>1000 Files</strong></p>
                 <p className="text-[10px] text-slate-500 leading-normal">On-premise hybrid cloud deployments, custom training loops.</p>
+              </div>
+            </div>
+          </section>
+
+          {/* SECTION 6 */}
+          <section id="security-privacy" className="space-y-4">
+            <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2 border-b border-slate-900 pb-2">
+              <ShieldCheck size={18} className="text-brand-primary" />
+              6.0 ENTERPRISE SECURITY & COMPLIANCE PROTOCOL
+            </h2>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider font-mono">
+                6.1 Data Encryption & Storage Security
+              </h3>
+              <p className="text-xs text-slate-350 leading-relaxed">
+                InsightAgent implements strict cryptographic guardrails to guarantee the confidentiality of all corporate assets at rest and in transit.
+              </p>
+              <ul className="list-disc pl-5 text-xs text-slate-350 space-y-1.5">
+                <li><strong>In-Transit Protection:</strong> All network payloads routed between the client interface and the FastAPI application layer are strictly enforced via Transport Layer Security (TLS 1.3) protocols.</li>
+                <li><strong>At-Rest Storage Isolation:</strong> Raw unstructured documents (.pdf, .csv, .json, .txt) ingested via the Data Upload dashboard are instantly encrypted using military-grade Advanced Encryption Standard (AES-256) before hitting static physical storage block devices.</li>
+              </ul>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider font-mono">
+                6.2 Network & Vector Database Isolation
+              </h3>
+              <p className="text-xs text-slate-350 leading-relaxed">
+                To ensure absolute corporate privacy, the RAG core infrastructure treats every data ingestion thread as a completely isolated environment.
+              </p>
+              <ul className="list-disc pl-5 text-xs text-slate-350 space-y-1.5">
+                <li><strong>Vector Base Multi-Tenancy:</strong> Document chunk vectors and embeddings are strictly isolated within a dedicated cryptographic namespace inside our vector store. Your corporate knowledge matrix is completely separated from global internet nodes, blocking any unauthorized cross-tenant data leaks.</li>
+                <li><strong>Model Training Exclusion:</strong> InsightAgent guarantees that zero data tokens processed by our local LLaMA 3 and Groq inference instances are retained or utilized for external baseline weights fine-tuning. Your business intelligence remains 100% proprietary to your admin workspace boundary.</li>
+              </ul>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <h3 className="text-sm font-bold text-slate-250 uppercase tracking-wider font-mono">
+                6.3 Identity & Access Management (IAM)
+              </h3>
+              <p className="text-xs text-slate-350 leading-relaxed">
+                Authentication and session tokens are locked down at the perimeter using secure federated architecture.
+              </p>
+              <ul className="list-disc pl-5 text-xs text-slate-350 space-y-1.5">
+                <li><strong>JWT Cryptographic Verification:</strong> User state authentication is strictly handled via the Firebase Admin SDK token exchange system. The FastAPI backend intercepts every incoming API connection to verify the signature of the client's JSON Web Token (JWT).</li>
+              </ul>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <h3 className="text-sm font-bold text-slate-200 uppercase tracking-wider font-mono">
+                6.4 Secure Infrastructure Summary Table
+              </h3>
+              <p className="text-xs text-slate-350 leading-relaxed">
+                Below is the deployment breakdown of our active baseline security policies:
+              </p>
+
+              <div className="overflow-x-auto my-6 border border-slate-800 rounded-xl bg-slate-950/40">
+                <table className="min-w-full divide-y divide-slate-800 text-sm">
+                  <thead className="bg-slate-900/60 text-slate-400 font-medium">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Security Layer</th>
+                      <th className="px-4 py-3 text-left">Mechanism Implemented</th>
+                      <th className="px-4 py-3 text-left">Compliance Target</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800 text-slate-300 font-mono text-xs">
+                    <tr>
+                      <td className="px-4 py-3 font-semibold text-cyan-400">Payload Transit</td>
+                      <td className="px-4 py-3">TLS 1.3 Encryption / Signed Headers</td>
+                      <td className="px-4 py-3 text-slate-400">Anti-Eavesdropping Protocol</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 font-semibold text-cyan-400">Knowledge Storage</td>
+                      <td className="px-4 py-3">AES-256 Rest State Key Matrices</td>
+                      <td className="px-4 py-3 text-slate-400">Data Asset Protection</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 font-semibold text-cyan-400">Session Gate</td>
+                      <td className="px-4 py-3">Firebase JWT Bearer Interceptors</td>
+                      <td className="px-4 py-3 text-slate-400">Zero-Trust Access Control</td>
+                    </tr>
+                    <tr>
+                      <td className="px-4 py-3 font-semibold text-cyan-400">LLM Privacy</td>
+                      <td className="px-4 py-3">Zero Ingestion Logging on Groq Engine</td>
+                      <td className="px-4 py-3 text-slate-400">PII Data Leak Prevention</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </section>
