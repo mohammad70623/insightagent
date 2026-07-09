@@ -15,10 +15,10 @@ const BenchmarkingMatrix = ({ searchMeta, benchmarks = [] }) => {
           <Globe size={16} className="text-indigo-400 animate-pulse" />
           <div>
             <h3 className="text-xs font-bold uppercase tracking-widest text-white font-mono">
-              🌐 Live Competitor Benchmarking Matrix
+              🌐 Market Positioning & Competitive Insights
             </h3>
             <p className="text-[10px] text-slate-400 mt-1 italic font-mono">
-              Query: "{query}"
+              Insights: Real-time industry standing based on current 2026 market intelligence.
             </p>
           </div>
         </div>
@@ -77,15 +77,15 @@ const BenchmarkingMatrix = ({ searchMeta, benchmarks = [] }) => {
         {/* Right Column: Performance Table */}
         <div>
           <h4 className="text-xs font-semibold tracking-widest text-[#64748b] uppercase mb-4">
-            Core Scalability Performance Metrics
+            Service Performance Overview
           </h4>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#1e293b] text-[10px] tracking-wider uppercase text-[#64748b]">
-                  <th className="pb-2 font-semibold">Vendor Asset</th>
+                  <th className="pb-2 font-semibold">Market Player</th>
                   <th className="pb-2 font-semibold text-center">Satisfaction Index</th>
-                  <th className="pb-2 font-semibold text-right">API Latency Vector</th>
+                  <th className="pb-2 font-semibold text-right">Response Time</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#1e293b] text-xs">
@@ -174,7 +174,7 @@ const BenchmarkingMatrix = ({ searchMeta, benchmarks = [] }) => {
                   <div className="text-lg font-bold text-green-400 mt-1">{selectedCompetitor.satisfaction}%</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase text-[#64748b]">Latency Vector</div>
+                  <div className="text-[10px] uppercase text-[#64748b]">Response Time</div>
                   <div className="text-lg font-bold text-amber-500 mt-1">{selectedCompetitor.latency}ms</div>
                 </div>
               </div>

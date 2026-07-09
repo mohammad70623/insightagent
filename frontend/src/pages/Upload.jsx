@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { api, apiService } from '../services/api';
+import { Trash2 } from 'lucide-react';
 
 // Status badge helper
 const StatusBadge = ({ status, progress }) => {
@@ -146,7 +147,7 @@ const Upload = () => {
       {/* ──────────────── INGESTION PANEL ──────────────── */}
       <div className="max-w-3xl mx-auto bg-[#1f2937] rounded-xl p-6 border border-gray-700 shadow-2xl">
         <h2 className="text-xl font-bold mb-4 text-[#38bdf8] flex items-center gap-2">
-          📦 Data Ingestion Control
+          📁 Upload Workspace Files
         </h2>
 
         {/* Drop Zone */}
@@ -194,7 +195,7 @@ const Upload = () => {
         {/* Upload Queue */}
         <div className="space-y-3 mb-6">
           <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
-            Ingestion Queue ({queuedFiles.length})
+            Selected Files ({queuedFiles.length})
           </h3>
           {queuedFiles.length === 0 ? (
             <p className="text-sm text-gray-500 italic p-4 bg-[#111827] rounded border border-gray-800 text-center">
@@ -242,10 +243,10 @@ const Upload = () => {
           className="w-full py-3 bg-[#38bdf8] hover:bg-[#7dd3fc] disabled:bg-gray-700 disabled:text-gray-500 text-gray-900 font-bold rounded-lg transition tracking-wide text-sm shadow-lg cursor-pointer disabled:cursor-not-allowed"
         >
           {isCommitting
-            ? '⚡ Processing Pipeline...'
+            ? '⚡ Saving Files...'
             : readyCount > 0
-            ? `Commit ${readyCount} File${readyCount > 1 ? 's' : ''} to Vector DB`
-            : 'Commit Pipeline to Vector DB'}
+            ? `Save ${readyCount} File${readyCount > 1 ? 's' : ''} to Workspace`
+            : 'Save Files to Workspace'}
         </button>
       </div>
 
@@ -253,7 +254,7 @@ const Upload = () => {
       <div className="max-w-3xl mx-auto bg-[#1f2937] rounded-xl p-6 border border-gray-700 shadow-2xl">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold text-green-400 flex items-center gap-2">
-            🗂️ Active Vector Base Indexes
+            📑 Uploaded Documents
           </h2>
           <button
             onClick={fetchIndexedFiles}
@@ -284,16 +285,18 @@ const Upload = () => {
                     <span className="text-sm font-medium text-gray-200 truncate">
                       📄 {file.filename || 'Unknown File'}
                     </span>
-                    <span className="text-xs text-gray-600 font-mono mt-0.5 truncate">
-                      ID: {file.document_id}
-                    </span>
+                    {/* ID mapping commented out for clean corporate UX view */}
                   </div>
                   <button
                     onClick={() => handleDeleteIndexed(file.document_id, file.filename)}
                     disabled={deletingId === file.document_id}
-                    className="shrink-0 px-3 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 rounded text-xs font-bold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="shrink-0 px-3 py-1.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/30 rounded text-xs font-bold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
                   >
-                    {deletingId === file.document_id ? 'Purging...' : 'Purge 🗑️'}
+                    {deletingId === file.document_id ? 'Deleting...' : (
+                      <>
+                        Delete <Trash2 size={14} className="inline-block ml-1" />
+                      </>
+                    )}
                   </button>
                 </div>
               ))}

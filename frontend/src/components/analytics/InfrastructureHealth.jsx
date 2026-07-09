@@ -82,7 +82,7 @@ export default function InfrastructureHealth({ riskAlerts = [], isAnalyzing, cur
           ENTERPRISE INFRASTRUCTURE HEALTH
         </h3>
         <p className="text-[10px] font-mono text-slate-500 mt-1 uppercase tracking-wider">
-          Hardware Telemetry & Neural Network Latency Matrix
+          System Performance Overview
         </p>
       </div>
 

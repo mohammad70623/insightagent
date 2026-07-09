@@ -41,14 +41,14 @@ export default function CriticalRiskAlerts({ riskAlerts = [], mitigationPlans = 
         <div className="flex items-center justify-between">
           <h3 className="text-[12px] font-mono tracking-widest text-slate-200 uppercase font-bold flex items-center gap-2">
             <span className={`w-2 h-2 rounded-full ${riskAlerts.length > 0 ? 'bg-red-500 animate-pulse' : 'bg-slate-500'}`} />
-            CRITICAL RISK & REMEDIATION MATRIX
+            System Security & Compliance Alerts
           </h3>
           <span className="text-[9px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2 py-0.5 rounded uppercase font-bold tracking-wider">
-            Inline RAG Core
+            Inline Security Core
           </span>
         </div>
         <p className="text-[10px] font-mono text-slate-500 mt-1 uppercase tracking-wider">
-          Real-time AI Threat Assessment | {riskAlerts.length} Flagged Vulnerabilities Across {finalCategoryList.length} Unique Nodes
+          Active Security Monitoring | {riskAlerts.length} Flagged Vulnerabilities Across {finalCategoryList.length} Unique Nodes
         </p>
       </div>
 
@@ -62,7 +62,7 @@ export default function CriticalRiskAlerts({ riskAlerts = [], mitigationPlans = 
         </div>
       ) : finalCategoryList.length === 0 ? (
         <div className="flex flex-col items-center justify-center flex-1 select-none">
-          <p className="text-slate-500 text-xs font-sans">Awaiting telemetry payload vector validation...</p>
+          <p className="text-slate-500 text-xs font-sans">All security nodes secure. Monitoring background tasks...</p>
         </div>
       ) : (
         /* CLEAN UNIFIED ACCORDION LIST FEED */

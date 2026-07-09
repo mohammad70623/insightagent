@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History } from 'lucide-react';
+import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History, Eye, EyeOff } from 'lucide-react';
 import SwotButton from './analytics/SwotButton';
 import { api } from '../services/api';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
@@ -19,6 +19,14 @@ const DashboardLayout = () => {
   const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
   const [formData, setFormData] = useState({ first_name: '', last_name: '', profile_picture: '' });
   const [isSaving, setIsSaving] = useState(false);
+  const [firstName, setFirstName] = useState("Mohammad");
+  const [lastName, setLastName] = useState("Hossain");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [settingsView, setSettingsView] = useState("view");
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
 
   // Notifications state management
   const [unreadNotifications, setUnreadNotifications] = useState([]);
@@ -67,6 +75,8 @@ const DashboardLayout = () => {
         last_name: res.data.last_name || '',
         profile_picture: res.data.profile_picture || ''
       });
+      setFirstName(res.data.first_name || 'Mohammad');
+      setLastName(res.data.last_name || 'Hossain');
     } catch (err) {
       console.error("Failed to load user profile", err);
     }
@@ -108,34 +118,71 @@ const DashboardLayout = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setFormData(prev => ({ ...prev, profile_picture: reader.result }));
-    };
-    reader.readAsDataURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    setFormData(prev => ({ ...prev, profile_picture: objectUrl }));
   };
 
-  const handleProfileSave = async (e) => {
+  const triggerAvatarClick = () => {
+    document.getElementById('avatar-upload-input')?.click();
+  };
+
+  const handleNameChangeSubmit = async (e) => {
     e.preventDefault();
+    if (!currentPassword) {
+      alert("⚠️ Please enter your current password to confirm name changes.");
+      return;
+    }
     setIsSaving(true);
     try {
       await api.put('/profile/update', {
-        first_name: formData.first_name,
-        last_name: formData.last_name,
+        first_name: firstName,
+        last_name: lastName,
         profile_picture: formData.profile_picture,
         workspace_name: profile?.workspace_name,
         workspace_logo: profile?.workspace_logo,
         is_2fa_enabled: profile?.is_2fa_enabled || false
       });
       await fetchProfile();
-      setShowProfileModal(false);
+      alert("✨ Name updated successfully!");
+      setCurrentPassword("");
+      setSettingsView('view');
       // Dispatch refresh so other components (e.g. Settings, Header) get the update
       window.dispatchEvent(new Event('user-context-refresh'));
     } catch (err) {
-      console.error("Failed to update profile", err);
-      alert("Failed to update profile. Please try again.");
+      console.error("Failed to update profile name", err);
+      alert("Failed to update profile name. Please try again.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handlePasswordChangeSubmit = async (e) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      alert("⚠️ Please fill in all password fields.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      alert("❌ New passwords do not match!");
+      return;
+    }
+
+    try {
+      const response = await api.post('/profile/change-password', {
+        current_password: currentPassword,
+        new_password: newPassword
+      });
+
+      if (response.status === 200 || response.data?.status === 'success') {
+        alert("🔒 Password updated successfully in the database! Please log in again with your new credentials.");
+        handleLogout(); 
+      } else {
+        alert(`❌ Error: ${response.data?.message || "Failed to update password."}`);
+      }
+    } catch (error) {
+      console.error("Password update error:", error);
+      const errorMsg = error.response?.data?.detail || error.message || "Failed to update password.";
+      alert(`❌ Error: ${errorMsg}`);
     }
   };
  
@@ -374,7 +421,7 @@ const DashboardLayout = () => {
             <button 
               ref={profilePicRef}
               type="button"
-              onClick={() => setShowProfileModal(true)}
+              onClick={() => { setSettingsView('view'); setShowProfileModal(true); }}
               className="avatar cursor-pointer bg-transparent border-none p-0 focus:outline-none hover:scale-105 active:scale-95 transition-all"
               aria-label="User profile settings"
             >
@@ -411,7 +458,7 @@ const DashboardLayout = () => {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-gray-850 pb-4 mb-6">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-brand-primary font-mono">User Profile Hub</h3>
+              <h3 className="text-sm font-bold uppercase tracking-widest text-brand-primary font-mono">Account Settings</h3>
               <button 
                 type="button"
                 onClick={() => setShowProfileModal(false)}
@@ -421,86 +468,206 @@ const DashboardLayout = () => {
               </button>
             </div>
 
-            <form onSubmit={handleProfileSave} className="space-y-5">
-              {/* Avatar upload zone */}
-              <div className="flex flex-col items-center gap-3">
-                <div className="relative w-20 h-20 rounded-full border-2 border-brand-primary/45 overflow-hidden bg-gray-900 flex items-center justify-center group shadow-inner">
-                  {formData.profile_picture ? (
-                    <img src={formData.profile_picture} alt="Avatar Preview" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-xl font-bold text-brand-primary font-mono uppercase">
-                      {profile ? `${profile.first_name[0] || ''}${profile.last_name[0] || ''}` : 'IA'}
-                    </span>
-                  )}
-                  
-                  {/* Overlay upload input */}
-                  <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity duration-200">
-                    <span className="text-[10px] text-white font-bold font-mono">CHANGE</span>
-                    <input 
-                      type="file" 
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      className="hidden" 
-                    />
-                  </label>
+            {/* Avatar upload zone */}
+            <div className="flex flex-col items-center gap-3 mb-6">
+              <div 
+                onClick={triggerAvatarClick}
+                className="relative w-20 h-20 rounded-full border-2 border-brand-primary/45 overflow-hidden bg-gray-900 flex items-center justify-center group shadow-inner cursor-pointer"
+              >
+                {formData.profile_picture ? (
+                  <img src={formData.profile_picture} alt="Avatar Preview" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-xl font-bold text-brand-primary font-mono uppercase">
+                    {profile ? `${profile.first_name[0] || ''}${profile.last_name[0] || ''}` : 'IA'}
+                  </span>
+                )}
+                
+                {/* Overlay upload */}
+                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity duration-205">
+                  <span className="text-[10px] text-white font-bold font-mono">CHANGE</span>
                 </div>
-                <span className="text-[10px] text-gray-500 font-mono">Click preview to upload profile picture</span>
               </div>
+              <input 
+                type="file" 
+                accept="image/*"
+                id="avatar-upload-input"
+                onChange={handleFileChange}
+                className="hidden" 
+              />
+            </div>
 
-              {/* Form Fields */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono mb-1.5">Email Address</label>
-                  <input 
-                    type="text" 
-                    disabled 
-                    value={profile?.email || ''} 
-                    className="w-full rounded-lg bg-gray-900 border border-gray-850 px-3 py-2 text-xs text-gray-400 font-mono outline-none cursor-not-allowed"
-                  />
+            {/* Dynamic Views */}
+            {settingsView === 'view' && (
+              <div className="space-y-6 text-center">
+                <div className="space-y-1">
+                  <h4 className="text-lg font-bold text-white">{firstName} {lastName}</h4>
+                  <p className="text-xs text-slate-400 font-mono">{profile?.email}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-3 pt-4 border-t border-gray-850">
+                  <button
+                    type="button"
+                    onClick={() => { setSettingsView('edit_name'); setCurrentPassword(''); }}
+                    className="w-full py-2.5 bg-brand-primary text-black font-bold rounded-lg text-xs hover:bg-indigo-400 hover:shadow-[0_0_15px_rgba(139,92,246,0.2)] transition-all cursor-pointer"
+                  >
+                    ✏️ Change Account Name
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSettingsView('edit_password'); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }}
+                    className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 hover:text-white font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                  >
+                    🔒 Change Account Password
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {settingsView === 'edit_name' && (
+              <form onSubmit={handleNameChangeSubmit} className="space-y-5">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono mb-1.5">First Name</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="w-full rounded-lg bg-main border border-gray-800 px-3 py-2 text-xs text-white outline-none focus:border-brand-primary transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono mb-1.5">Last Name</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="w-full rounded-lg bg-main border border-gray-800 px-3 py-2 text-xs text-white outline-none focus:border-brand-primary transition-all"
+                      />
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono mb-1.5">First Name</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={formData.first_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                      className="w-full rounded-lg bg-main border border-gray-800 px-3 py-2 text-xs text-white outline-none focus:border-brand-primary transition-all"
-                    />
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono mb-1.5">Current Password</label>
+                    <div className="relative">
+                      <input 
+                        type={showCurrentPass ? "text" : "password"} 
+                        required
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="w-full rounded-lg bg-main border border-gray-800 pl-3 pr-10 py-2 text-xs text-white outline-none focus:border-brand-primary transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPass(!showCurrentPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors bg-transparent border-none cursor-pointer flex items-center justify-center"
+                      >
+                        {showCurrentPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 border-t border-gray-850 pt-4 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => { setSettingsView('view'); setCurrentPassword(''); setShowCurrentPass(false); setShowNewPass(false); }}
+                    className="flex-1 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-400 hover:text-white font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="flex-1 py-2 bg-brand-primary text-black font-bold rounded-lg text-xs hover:bg-indigo-400 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? "Saving..." : "Confirm Name Change"}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {settingsView === 'edit_password' && (
+              <form onSubmit={handlePasswordChangeSubmit} className="space-y-5">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono mb-1.5">Current Password</label>
+                    <div className="relative">
+                      <input 
+                        type={showCurrentPass ? "text" : "password"} 
+                        required
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        className="w-full rounded-lg bg-main border border-gray-800 pl-3 pr-10 py-2 text-xs text-white outline-none focus:border-brand-primary transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowCurrentPass(!showCurrentPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors bg-transparent border-none cursor-pointer flex items-center justify-center"
+                      >
+                        {showCurrentPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono mb-1.5">Last Name</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={formData.last_name}
-                      onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                      className="w-full rounded-lg bg-main border border-gray-800 px-3 py-2 text-xs text-white outline-none focus:border-brand-primary transition-all"
-                    />
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono mb-1.5">New Password</label>
+                    <div className="relative">
+                      <input 
+                        type={showNewPass ? "text" : "password"} 
+                        required
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full rounded-lg bg-main border border-gray-800 pl-3 pr-10 py-2 text-xs text-white outline-none focus:border-brand-primary transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPass(!showNewPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors bg-transparent border-none cursor-pointer flex items-center justify-center"
+                      >
+                        {showNewPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-brand-muted font-mono mb-1.5">Confirm Password</label>
+                    <div className="relative">
+                      <input 
+                        type={showNewPass ? "text" : "password"} 
+                        required
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full rounded-lg bg-main border border-gray-800 pl-3 pr-10 py-2 text-xs text-white outline-none focus:border-brand-primary transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPass(!showNewPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors bg-transparent border-none cursor-pointer flex items-center justify-center"
+                      >
+                        {showNewPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 border-t border-gray-850 pt-4 mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowProfileModal(false)}
-                  className="flex-1 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-400 hover:text-white font-bold rounded-lg text-xs transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="flex-1 py-2 bg-brand-primary text-black font-bold rounded-lg text-xs hover:bg-indigo-400 hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSaving ? "Saving..." : "Save Profile"}
-                </button>
-              </div>
-            </form>
+                <div className="flex gap-3 border-t border-gray-850 pt-4 mt-6">
+                  <button
+                    type="button"
+                    onClick={() => { setSettingsView('view'); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setShowCurrentPass(false); setShowNewPass(false); }}
+                    className="flex-1 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-400 hover:text-white font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 bg-brand-primary text-black font-bold rounded-lg text-xs hover:bg-indigo-400 transition-all cursor-pointer"
+                  >
+                    Update Password
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

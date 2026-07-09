@@ -82,7 +82,7 @@ const Admin = () => {
             <Shield className="text-brand-primary" /> Enterprise System Administration
           </h2>
           <p className="text-xs text-brand-muted mt-1.5">
-            Global architectural configuration, active namespace registry, and high-privilege operations.
+            Global system configuration, active user workspace management, and high-privilege administrative operations.
           </p>
         </div>
       </div>
@@ -114,8 +114,8 @@ const Admin = () => {
             <Server size={24} />
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-muted font-mono">Active Qdrant Clusters</p>
-            <p className="text-xl font-bold text-white mt-1">12 Nodes <span className="text-xs text-emerald-400 font-normal ml-1">Healthy</span></p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-muted font-mono">Connected Workspaces</p>
+            <p className="text-xl font-bold text-white mt-1">12 Active <span className="text-xs text-emerald-400 font-normal ml-1">Healthy</span></p>
           </div>
         </div>
       </div>
@@ -127,7 +127,7 @@ const Admin = () => {
         <div className="lg:col-span-8 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col">
           <div className="flex flex-col gap-4 border-b border-gray-850 pb-4 mb-6 relative">
             <h4 className="text-xs font-bold uppercase tracking-widest text-white font-mono flex items-center gap-2">
-              <Database size={14} className="text-brand-primary" /> Live Tenant Registries
+              <Database size={14} className="text-brand-primary" /> Active User Workspaces
             </h4>
             <div className="absolute right-0 top-0 flex items-center gap-2 text-[9px] font-mono text-emerald-400">
               <Activity size={12} className="animate-pulse" /> LIVE SYNC ACTIVE
@@ -148,7 +148,7 @@ const Admin = () => {
               <table className="table table-xs w-full border-none">
                 <thead>
                   <tr className="border-b border-gray-800 text-brand-muted font-bold text-left uppercase font-mono text-[10px]">
-                    <th className="bg-transparent pl-0 py-3">Identity (UUID & Email)</th>
+                    <th className="bg-transparent pl-0 py-3">User Account Details</th>
                     <th className="bg-transparent py-3">Tier</th>
                     <th className="bg-transparent py-3">Files</th>
                     <th className="bg-transparent py-3">Expiration (UTC)</th>
@@ -159,8 +159,7 @@ const Admin = () => {
                   {tenants.map((tenant) => (
                     <tr key={tenant.id} className="border-b border-gray-850/30 last:border-none hover:bg-gray-900/10 transition-colors">
                       <td className="bg-transparent pl-0 py-4 font-semibold text-white font-mono flex flex-col gap-1">
-                        <span className="text-[10px] text-gray-400 truncate w-40" title={tenant.id}>{tenant.id}</span>
-                        <span className="text-brand-primary">{tenant.email}</span>
+                        <span className="text-brand-primary font-bold text-xs">{tenant.email}</span>
                       </td>
                       <td className="bg-transparent py-4">
                         <span className={`px-2 py-0.5 rounded border text-[9px] font-bold tracking-wide ${
@@ -182,7 +181,7 @@ const Admin = () => {
                           onClick={() => handleRemoveTenant(tenant.id)}
                           className="btn btn-sm bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-md px-3 py-1 flex items-center justify-end gap-2 ml-auto transition-colors cursor-pointer text-[10px] font-bold uppercase tracking-wider"
                         >
-                          <Trash2 size={12} /> Wipe
+                          <Trash2 size={12} /> Remove
                         </button>
                       </td>
                     </tr>
@@ -202,23 +201,23 @@ const Admin = () => {
             <div className="space-y-3">
               <button className="w-full btn btn-sm bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-lg px-4 py-2.5 flex items-center justify-start gap-3 transition-colors cursor-pointer text-xs font-semibold h-auto">
                 <Trash2 size={16} />
-                <span className="text-left">Wipe Corrupted Vectors</span>
+                <span className="text-left">Clear System Cache</span>
               </button>
 
               <button className="w-full btn btn-sm bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500/20 hover:text-amber-300 rounded-lg px-4 py-2.5 flex items-center justify-start gap-3 transition-colors cursor-pointer text-xs font-semibold h-auto">
                 <RefreshCcw size={16} />
-                <span className="text-left">Flush Global Polling Registry Nodes</span>
+                <span className="text-left">Restart Background Sync Workers</span>
               </button>
 
               <button className="w-full btn btn-sm bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary/20 hover:text-indigo-300 rounded-lg px-4 py-2.5 flex items-center justify-start gap-3 transition-colors cursor-pointer text-xs font-semibold h-auto">
                 <KeyRound size={16} />
-                <span className="text-left">Rotate System LLaMA API Bundles</span>
+                <span className="text-left">Rotate System API Keys</span>
               </button>
             </div>
 
             <div className="mt-6 p-4 rounded-lg bg-[#0B0F19] border border-gray-850">
               <p className="text-[10px] text-gray-500 font-mono leading-relaxed">
-                <span className="text-red-400 font-bold uppercase">Warning:</span> These actions execute instantly across all global database instances. Ensure synchronization is halted before rotating keys.
+                <span className="text-red-400 font-bold uppercase">Warning:</span> These actions execute instantly across all global database instances. Ensure all critical background operations are completed before performing system maintenance tasks.
               </p>
             </div>
           </div>

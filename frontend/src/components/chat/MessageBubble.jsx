@@ -194,8 +194,8 @@ const MessageBubble = ({ msg, isStreaming, isLast }) => {
             : "bg-[#1f2937] text-gray-100 border border-gray-700 rounded-tl-none font-mono"
         }`}
       >
-        <p className="text-[10px] font-bold tracking-widest uppercase opacity-60 mb-1.5 font-sans select-none">
-          {isUser ? "👨‍💻 USER_PROMPT" : "🤖 LLaMA_STREAM_AGENT"}
+        <p className="text-[10px] font-bold tracking-widest uppercase opacity-60 mb-1.5 font-sans select-none flex items-center gap-1">
+          {isUser ? "You" : "✨ InsightAgent"}
         </p>
         
         {/* 💡 structured render and responsive structure */}

@@ -1,10 +1,39 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { BarChart3, MessageSquare, ShieldCheck, ArrowRight, CheckCircle2, Globe, ArrowUpRight } from 'lucide-react';
 import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 import TermsOfServiceModal from '../components/TermsOfServiceModal';
 import SecurityModal from '../components/SecurityModal';
 import ContactModal from '../components/ContactModal';
+
+const languages = [
+  { code: 'en', name: 'English (US)', active: true },
+  { code: 'es', name: 'Español (Spanish)', active: false },
+  { code: 'fr', name: 'Français (French)', active: false },
+  { code: 'de', name: 'Deutsch (German)', active: false },
+  { code: 'zh', name: '简体中文 (Chinese)', active: false },
+  { code: 'ja', name: '日本語 (Japanese)', active: false },
+  { code: 'bn', name: 'বাংলা (Bengali)', active: false },
+  { code: 'ar', name: 'العربية (Arabic)', active: false },
+  { code: 'pt', name: 'Português (Portuguese)', active: false },
+  { code: 'ru', name: 'Русский (Russian)', active: false },
+  { code: 'hi', name: 'हिन्दी (Hindi)', active: false },
+  { code: 'it', name: 'Italiano (Italian)', active: false },
+  { code: 'ko', name: '한국어 (Korean)', active: false },
+  { code: 'nl', name: 'Nederlands (Dutch)', active: false },
+  { code: 'tr', name: 'Türkçe (Turkish)', active: false },
+  { code: 'vi', name: 'Tiếng Việt (Vietnamese)', active: false },
+  { code: 'pl', name: 'Polski (Polish)', active: false },
+  { code: 'id', name: 'Bahasa Indonesia', active: false },
+  { code: 'sv', name: 'Svenska (Swedish)', active: false },
+  { code: 'no', name: 'Norsk (Norwegian)', active: false },
+  { code: 'fi', name: 'Suomi (Finnish)', active: false },
+  { code: 'da', name: 'Dansk (Danish)', active: false },
+  { code: 'he', name: 'עברית (Hebrew)', active: false },
+  { code: 'th', name: 'ไทย (Thai)', active: false },
+  { code: 'ms', name: 'Bahasa Melayu', active: false },
+  { code: 'uk', name: 'Українська (Ukrainian)', active: false }
+];
 
 /**
  * @description Enterprise SaaS Landing & Pricing Page Component
@@ -16,6 +45,39 @@ const Landing = () => {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [showSecurityModal, setShowSecurityModal] = useState(false);
   const [showContactModal, setShowContactModal] = useState(false);
+  const [showLangDropdown, setShowLangDropdown] = useState(false);
+
+  // Simulated Log Stream State
+  const dynamicLogs = useMemo(() => [
+    { type: 'SYSTEM', text: 'Initializing connectivity node with Groq Inference Cloud...', color: 'text-slate-400' },
+    { type: 'MODEL', text: 'Spawning LLaMA 3 autonomous agent clusters...', color: 'text-purple-400' },
+    { type: 'RAG CORE', text: 'Synchronizing embedding index vectors (42/50 modules verified)...', color: 'text-cyan-400' },
+    { type: 'MATRIX', text: 'Scanning Risk & Remediation node topology across 21 points...', color: 'text-amber-400' },
+    { type: 'TELEMETRY', text: 'Hardware latency metrics stabilized at ~6.33ms delta.', color: 'text-emerald-400' },
+    { type: 'AI AGENT', text: 'Synthesizing strategic forecasting matrices for Next 6 Quarters...', color: 'text-cyan-400' },
+    { type: 'SUCCESS', text: 'Executive Intelligence Report securely compiled. Awaiting dashboard fetch.', color: 'text-emerald-400 font-semibold' }
+  ], []);
+
+  const [visibleLogs, setVisibleLogs] = useState([dynamicLogs[0]]);
+  const logContainerRef = useRef(null);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setVisibleLogs((prev) => {
+        if (prev.length >= dynamicLogs.length) {
+          return [dynamicLogs[0]];
+        }
+        return [...prev, dynamicLogs[prev.length]];
+      });
+    }, 1500);
+    return () => clearInterval(interval);
+  }, [dynamicLogs]);
+
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [visibleLogs]);
 
  
   const pricingPlans = useMemo(() => [
@@ -50,9 +112,9 @@ const Landing = () => {
           <span className="text-sm font-bold tracking-tight text-white">InsightAgent</span>
         </div>
         <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-brand-muted">
-          <button type="button" onClick={() => navigate('/login')} className="hover:text-white transition-colors cursor-pointer">Dashboard</button>
-          <a href="#features" className="hover:text-white transition-colors">Docs</a>
-          <a href="#pricing" className="hover:text-white transition-colors">Feedback</a>
+          <button type="button" onClick={() => navigate('/login')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none text-xs font-semibold text-brand-muted">Dashboard</button>
+          <button type="button" onClick={() => navigate('/docs')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none text-xs font-semibold text-brand-muted">Docs</button>
+          <button type="button" onClick={() => navigate('/feedback')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none text-xs font-semibold text-brand-muted">Feedback</button>
         </nav>
         <button 
           type="button" 
@@ -102,13 +164,27 @@ const Landing = () => {
             <div className="h-2 w-2 rounded-full bg-amber-500/60" />
             <div className="h-2 w-2 rounded-full bg-green-500/60" />
           </div>
-          <div className="flex-1 bg-main/50 rounded-lg border border-gray-850/40 p-4 flex items-center justify-center relative">
-            <div className="text-center space-y-2">
-              <div className="h-1.5 w-24 bg-gray-800 rounded mx-auto animate-pulse" />
-              <div className="h-1.5 w-16 bg-gray-800 rounded mx-auto animate-pulse" />
+          <div className="flex-1 bg-main/50 rounded-lg border border-gray-850/40 p-4 flex flex-col justify-between relative overflow-hidden">
+            <div 
+              ref={logContainerRef} 
+              className="flex-1 overflow-y-auto max-h-48 space-y-1.5 pr-1 text-[9px] font-mono text-left scrollbar-none"
+            >
+              {visibleLogs.map((log, idx) => (
+                <div key={idx} className={`animate-fade-in ${log.color}`}>
+                  [{log.type}]: {log.text}
+                </div>
+              ))}
             </div>
-            <span className="absolute bottom-3 left-4 text-[9px] font-mono text-brand-primary/60">Live Intelligence Stream...</span>
-            <span className="absolute top-3 right-4 text-[8px] font-mono text-gray-600">https://app.insightagent.ai/dashboard</span>
+            <div className="flex items-center justify-between border-t border-gray-850/40 pt-2 mt-2">
+              <div className="flex items-center text-[9px] font-mono text-brand-primary/60">
+                <span className="relative flex h-1.5 w-1.5 mr-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                </span>
+                Live Intelligence Stream...
+              </div>
+              <span className="text-[8px] font-mono text-gray-600">https://app.insightagent.ai/dashboard</span>
+            </div>
           </div>
         </div>
       </section>
@@ -117,8 +193,8 @@ const Landing = () => {
       <section id="features" className="max-w-[1400px] mx-auto px-6 py-20 md:px-12 border-t border-gray-900/60 text-center space-y-12">
         <div className="space-y-2">
           <h2 className="text-2xl md:text-3xl font-black tracking-tight text-white">Architected for Precision</h2>
-          <p className="text-xs text-brand-muted max-w-lg mx-auto leading-relaxed">
-            Our "Stitch" architecture creates a modular, interconnected fabric for your organizational data.
+          <p className="text-xs text-brand-muted max-w-2xl md:max-w-3xl mx-auto leading-relaxed">
+            InsightAgent safely syncs with your secure documents to build a smart network for your business operations.
           </p>
         </div>
 
@@ -126,20 +202,22 @@ const Landing = () => {
           <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-md space-y-4">
             <div className="h-8 w-8 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center text-brand-primary"><BarChart3 size={16} /></div>
             <h3 className="text-sm font-bold text-white">Deep Analytics</h3>
-            <p className="text-xs text-brand-muted leading-relaxed font-medium">Vectorized processing of unstructured data across your entire enterprise cloud stack.</p>
-            <button type="button" onClick={() => navigate('/login')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Explore Docs ↗</button>
+            <p className="text-xs text-brand-muted leading-relaxed font-medium">Easily upload and analyze your business PDFs, spreadsheets, and txt files in seconds.</p>
+            <Link className="text-cyan-400 hover:text-cyan-300 font-medium inline-flex items-center gap-1 mt-2 transition-colors text-[10px]" to="/docs">
+              Explore Docs ↗
+            </Link>
           </div>
           <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-md space-y-4">
             <div className="h-8 w-8 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center text-brand-primary"><MessageSquare size={16} /></div>
             <h3 className="text-sm font-bold text-white">AI Chat Agent</h3>
-            <p className="text-xs text-brand-muted leading-relaxed font-medium">Context-aware conversational interface for natural language querying of complex datasets.</p>
-            <button type="button" onClick={() => navigate('/login')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Agent Capabilities ↗</button>
+            <p className="text-xs text-brand-muted leading-relaxed font-medium">Ask questions in plain English and get instant answers from your internal database.</p>
+            <button type="button" onClick={() => navigate('/docs#agent-capabilities')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Agent Capabilities ↗</button>
           </div>
           <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-md space-y-4">
             <div className="h-8 w-8 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center text-brand-primary"><ShieldCheck size={16} /></div>
             <h3 className="text-sm font-bold text-white">Security First</h3>
-            <p className="text-xs text-brand-muted leading-relaxed font-medium">SOC2 Type II compliant infrastructure with local-only processing options for sensitive PII.</p>
-            <button type="button" onClick={() => navigate('/login')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Security Portal ↗</button>
+            <p className="text-xs text-brand-muted leading-relaxed font-medium">Enterprise-grade privacy with fully secured data handling to keep your records safe.</p>
+            <button type="button" onClick={() => navigate('/docs#security-privacy')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Security Portal ↗</button>
           </div>
         </div>
       </section>
@@ -228,8 +306,55 @@ const Landing = () => {
           <button type="button" onClick={() => setShowSecurityModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Security</button>
           <button type="button" onClick={() => setShowContactModal(true)} className="hover:text-white transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[11px]">Contact</button>
         </div>
-        <div className="flex gap-3 text-gray-500">
-          <Globe size={14} className="hover:text-white cursor-pointer" />
+        <div className="relative flex gap-3 text-gray-500">
+          <button 
+            type="button" 
+            onClick={() => setShowLangDropdown(!showLangDropdown)}
+            className="hover:text-white cursor-pointer bg-transparent border-none p-0 flex items-center justify-center text-gray-500 hover:text-white"
+            aria-label="Language Selector"
+          >
+            <Globe size={14} />
+          </button>
+
+          {showLangDropdown && (
+            <div className="absolute bottom-14 right-0 w-56 max-h-64 overflow-y-auto bg-slate-950/95 backdrop-blur-xl border border-slate-800 rounded-xl p-2 shadow-2xl z-50 scrollbar-thin scrollbar-thumb-slate-800 text-left">
+              {/* Sticky Header */}
+              <div className="sticky top-0 bg-slate-950/95 backdrop-blur-xl pb-1.5 mb-1.5 border-b border-slate-850 text-[9px] font-mono tracking-widest text-slate-500 font-bold uppercase pl-2">
+                Choose Language
+              </div>
+
+              {/* List */}
+              <div className="space-y-0.5">
+                {languages.map((lang) => {
+                  if (lang.active) {
+                    return (
+                      <div 
+                        key={lang.code} 
+                        className="flex items-center justify-between text-slate-100 bg-slate-900 rounded-lg font-medium py-1.5 px-2 text-sm cursor-default"
+                      >
+                        <span>{lang.name}</span>
+                        <span className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <span 
+                        key={lang.code} 
+                        className="opacity-40 cursor-not-allowed hover:bg-transparent text-slate-400 py-1.5 px-2 text-sm block"
+                      >
+                        {lang.name}
+                      </span>
+                    );
+                  }
+                })}
+              </div>
+
+              {/* Sticky Footer */}
+              <div className="sticky bottom-0 bg-slate-950/95 backdrop-blur-xl pt-1.5 mt-1.5 border-t border-slate-850 text-[8px] font-mono text-center text-slate-600">
+                Localization coming soon (v2.0)
+              </div>
+            </div>
+          )}
         </div>
       </footer>
 

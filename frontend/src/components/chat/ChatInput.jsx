@@ -23,11 +23,11 @@ const ChatInput = ({ inputPrompt, setInputPrompt, onSendMessage, activeSessionId
         <input
           ref={inputRef}
           type="text"
-          placeholder={activeSessionId ? "Inject prompt for RAG analysis Matrix... (Press Enter)" : "Terminal Locked."}
+          placeholder={activeSessionId ? "Ask anything about your workspace documents... (Press Enter to send)" : "Terminal Locked."}
           value={inputPrompt}
           onChange={(e) => setInputPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="flex-1 px-4 py-3 bg-[#111827] border border-gray-600 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-[#38bdf8] disabled:opacity-50 font-mono"
+          className="flex-1 px-4 py-3 bg-[#111827] border border-gray-600 rounded-lg text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-[#38bdf8] disabled:opacity-50 font-sans"
           disabled={!activeSessionId || isStreaming}
         />
         <button
@@ -35,7 +35,7 @@ const ChatInput = ({ inputPrompt, setInputPrompt, onSendMessage, activeSessionId
           disabled={!activeSessionId || isStreaming || !inputPrompt.trim()}
           className="px-6 py-3 bg-[#38bdf8] text-gray-900 font-bold rounded-lg text-sm hover:bg-[#7dd3fc] disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition duration-200 shadow-md uppercase tracking-wider"
         >
-          Execute
+          Send
         </button>
       </form>
     </div>
