@@ -80,8 +80,8 @@ const Landing = () => {
           <span className="text-sm font-bold tracking-tight text-white">InsightAgent</span>
         </div>
         <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-brand-muted">
-          <button type="button" onClick={() => navigate('/login')} className="hover:text-white transition-colors cursor-pointer">Dashboard</button>
-          <a href="#features" className="hover:text-white transition-colors">Docs</a>
+          <button type="button" onClick={() => navigate('/login')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none text-xs font-semibold text-brand-muted">Dashboard</button>
+          <button type="button" onClick={() => navigate('/docs')} className="hover:text-white transition-colors cursor-pointer bg-transparent border-none text-xs font-semibold text-brand-muted">Docs</button>
           <a href="#pricing" className="hover:text-white transition-colors">Feedback</a>
         </nav>
         <button 
@@ -157,13 +157,13 @@ const Landing = () => {
             <div className="h-8 w-8 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center text-brand-primary"><BarChart3 size={16} /></div>
             <h3 className="text-sm font-bold text-white">Deep Analytics</h3>
             <p className="text-xs text-brand-muted leading-relaxed font-medium">Vectorized processing of unstructured data across your entire enterprise cloud stack.</p>
-            <button type="button" onClick={() => navigate('/login')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Explore Docs ↗</button>
+            <button type="button" onClick={() => navigate('/docs')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Explore Docs ↗</button>
           </div>
           <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-md space-y-4">
             <div className="h-8 w-8 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center text-brand-primary"><MessageSquare size={16} /></div>
             <h3 className="text-sm font-bold text-white">AI Chat Agent</h3>
             <p className="text-xs text-brand-muted leading-relaxed font-medium">Context-aware conversational interface for natural language querying of complex datasets.</p>
-            <button type="button" onClick={() => navigate('/login')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Agent Capabilities ↗</button>
+            <button type="button" onClick={() => navigate('/docs')} className="inline-flex items-center gap-1 text-[10px] font-bold text-brand-primary hover:underline cursor-pointer bg-transparent border-none outline-none">Agent Capabilities ↗</button>
           </div>
           <div className="rounded-xl border border-gray-800/40 bg-surface p-6 shadow-md space-y-4">
             <div className="h-8 w-8 rounded-lg bg-gray-900 border border-gray-800 flex items-center justify-center text-brand-primary"><ShieldCheck size={16} /></div>
