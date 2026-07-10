@@ -23,7 +23,7 @@ const ChatInput = ({ inputPrompt, setInputPrompt, onSendMessage, activeSessionId
         <input
           ref={inputRef}
           type="text"
-          placeholder={activeSessionId ? "Ask anything about your workspace documents... (Press Enter to send)" : "Terminal Locked."}
+          placeholder="Ask me anything..."
           value={inputPrompt}
           onChange={(e) => setInputPrompt(e.target.value)}
           onKeyDown={handleKeyDown}

@@ -421,11 +421,14 @@ export default function Login() {
           {authMode === 'otp' && (
             <>
               <div className="mb-8 animate-fade-in">
-                <h3 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-                  <ShieldCheck className="text-brand-primary" /> Two-Factor Active
-                </h3>
-                <p className="text-xs text-brand-muted mt-2 leading-relaxed">
-                  We've dispatched a secure cryptographic code to <strong className="text-white font-mono">{email}</strong>. Please enter it below to authenticate.
+                {/* Clean & Friendly Title Header */}
+                <h2 className="text-2xl font-semibold text-slate-100 flex items-center gap-2">
+                  <span className="text-xl">🛡️</span> Enter verification code
+                </h2>
+
+                {/* Simple & Easy Subtext */}
+                <p className="text-sm text-slate-400 font-normal mt-2 max-w-md leading-relaxed">
+                  We sent a 6-digit code to <span className="text-slate-200 font-medium">{email}</span>. Enter it below to log in.
                 </p>
               </div>
 
@@ -442,15 +445,16 @@ export default function Login() {
                   />
                 </div>
 
+                {/* Humanized & Direct Action Button */}
                 <button
                   type="submit"
                   disabled={isLoading || verificationCode.length < 6}
-                  className="w-full rounded-lg bg-brand-primary px-4 py-3 text-xs font-bold text-black shadow-xl shadow-indigo-500/5 transition-all hover:bg-indigo-400 active:scale-[0.99] mt-4 flex items-center justify-center h-11 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-slate-100 font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center"
                 >
                   {isLoading ? (
-                    <span className="loading loading-spinner loading-xs bg-black"></span>
+                    <span className="loading loading-spinner loading-xs bg-white"></span>
                   ) : (
-                    "Authorize Session"
+                    "Verify and Log In"
                   )}
                 </button>
               </form>

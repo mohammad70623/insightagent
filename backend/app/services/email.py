@@ -21,21 +21,14 @@ async def send_otp_email(to_email: str, otp_code: str, purpose: str):
     Sends a beautifully formatted HTML email containing the cryptographic OTP code.
     In DEV_MODE the email is skipped and the OTP is printed to the console instead.
     """
-    if settings.DEV_MODE:
-        logger.warning(
-            f"[DEV_MODE] Skipping real email. OTP for {to_email} ({purpose}): {otp_code}"
-        )
-        print(f"\n{'='*60}")
-        print(f"  [DEV_MODE] OTP for {to_email} | purpose={purpose}")
-        print(f"  Code: {otp_code}  (or use master OTP: {settings.MASTER_OTP})")
-        print(f"{'='*60}\n")
-        return
+    # Force real production execution by removing the mock string check or setting DEV_MODE to False
+    DEV_MODE = False 
 
-    try:
+    async def _send_otp_email_authentic(email, generated_otp):
         msg = EmailMessage()
         msg["Subject"] = f"InsightAgent: Your {purpose.capitalize()} Verification Code"
         msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
-        msg["To"] = to_email
+        msg["To"] = email
 
         html_content = f"""
         <!DOCTYPE html>
@@ -133,7 +126,7 @@ async def send_otp_email(to_email: str, otp_code: str, purpose: str):
                     </p>
                     
                     <div class="otp-box">
-                        <p class="otp-code">{otp_code}</p>
+                        <p class="otp-code">{generated_otp}</p>
                     </div>
                     
                     <p class="text-body" style="font-size: 12px;">
@@ -151,12 +144,19 @@ async def send_otp_email(to_email: str, otp_code: str, purpose: str):
         """
 
         msg.add_alternative(html_content, subtype="html")
-
         await asyncio.to_thread(_smtp_send, msg)
-        logger.info(f"Successfully dispatched {purpose} OTP to {to_email}")
+        logger.info(f"Successfully dispatched {purpose} OTP to {email}")
+
+    # Locate the conditional block handling the email dispatch and change it to strictly fire the real mailer:
+    try:
+        # 1. Force remove the mock check and trigger the authentic SMTP function directly
+        email = to_email
+        generated_otp = otp_code
+
+        await _send_otp_email_authentic(email, generated_otp)
+        print(f"🚀 [PRODUCTION] Real OTP email successfully fired to {email} via live SMTP gateway.")
     except Exception as e:
-        logger.error(f"SMTP failure – could not send OTP to {to_email}: {e}", exc_info=True)
-        # Re-raise so the caller knows the email didn't go out.
+        print(f"🔴 SMTP Direct Failure: {str(e)}")
         raise
 
 async def send_password_reset_email(to_email: str, reset_token: str):
@@ -166,13 +166,8 @@ async def send_password_reset_email(to_email: str, reset_token: str):
     """
     reset_link = f"http://localhost:5173/reset-password?token={reset_token}"
 
-    if settings.DEV_MODE:
-        logger.warning(f"[DEV_MODE] Skipping real email. Password reset link for {to_email}: {reset_link}")
-        print(f"\n{'='*60}")
-        print(f"  [DEV_MODE] Reset link for {to_email}")
-        print(f"  {reset_link}")
-        print(f"{'='*60}\n")
-        return
+    # Force real production execution by removing the mock string check or setting DEV_MODE to False
+    DEV_MODE = False
 
     try:
         msg = EmailMessage()
