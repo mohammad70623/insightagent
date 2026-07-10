@@ -17,6 +17,16 @@ from app.schemas.user import UserCreate, UserResponse, TokenRefreshRequest, Toke
 from app.models.auth import OTPVerification, PasswordResetToken
 from app.models.user import User, Invoice
 from app.services.email import send_otp_email, send_password_reset_email
+import firebase_admin
+from firebase_admin import credentials, auth as firebase_auth
+
+# Safe singleton initialization for Firebase Admin SDK
+if not firebase_admin._apps:
+    try:
+        cred = credentials.Certificate("firebase-credentials.json")
+        firebase_admin.initialize_app(cred)
+    except Exception as e:
+        print(f"Firebase Admin SDK initialization warning: {e}")
 
 router = APIRouter()
 
@@ -327,3 +337,82 @@ async def upgrade_tier(
         "started_at": current_user.subscription_started_at,
         "expires_at": current_user.subscription_expires_at
     }
+
+class GoogleLoginPayload(BaseModel):
+    id_token: str
+
+@router.post("/google")
+async def login_with_google(
+    payload: GoogleLoginPayload, 
+    db: AsyncSession = Depends(deps.get_db)
+) -> Any:
+    try:
+        # 1. Cryptographically decode and verify the token against Google/Firebase servers
+        decoded_token = firebase_auth.verify_id_token(payload.id_token)
+        email = decoded_token.get("email")
+        name = decoded_token.get("name", "")
+        picture = decoded_token.get("picture", "")
+        
+        if not email:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token payload: Email missing.")
+
+        normalized_email = email.lower().strip()
+
+        # 2. Check if the authenticated Google user already exists in our system database
+        user = await UserRepository.get_by_email(db, email=normalized_email)
+        if not user:
+            # Parse names
+            name_parts = name.split(" ", 1)
+            first_name = name_parts[0] if name_parts else "Google"
+            last_name = name_parts[1] if len(name_parts) > 1 else "User"
+
+            # Create a user object with a random password
+            from app.schemas.user import UserCreate
+            user_in = UserCreate(
+                email=normalized_email,
+                password=secrets.token_urlsafe(16),
+                first_name=first_name,
+                last_name=last_name
+            )
+            
+            hashed_password = security.get_password_hash(user_in.password)
+            user = await UserRepository.create(db, obj_in=user_in, hashed_password=hashed_password)
+            user.is_verified = True
+            user.profile_picture = picture
+            user.role = "user"
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+        else:
+            # 3. ACCOUNT MERGE: Email already exists! Preserves original role and merges avatar
+            if picture and not user.profile_picture:
+                user.profile_picture = picture
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+
+        # 3. Generate our application's official secure local JWT token for sub-requests
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = security.create_access_token(
+            subject=user.id, role=user.role, expires_delta=access_token_expires
+        )
+        refresh_token = security.create_refresh_token(subject=user.id)
+        
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": user.role,
+                "avatar": user.profile_picture
+            }
+        }
+    except Exception as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Google token validation failed: {str(error)}"
+        )
