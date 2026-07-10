@@ -83,23 +83,56 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      // 1. Trigger the Firebase Google Sign-In Popup window
+      // 1. Trigger the Firebase OAuth Popup via our utility
       const result = await signInWithGoogle();
       
       if (result.success) {
-        console.log("🔥 Firebase Auth Success! ID Token generated:", result.token);
-        console.log("👤 Google User Data:", result.user);
-        
-        // Temporary alert for testing Step 1
-        alert(`✨ Firebase Success! Authenticated as ${result.user.displayName}. Ready for Step 2.`);
-        
-        // Note: Backend pipeline integration will be wired here in the next step.
+        console.log("🔥 Firebase authenticated successfully. Forwarding token to FastAPI...");
+
+        // 2. Dispatch the Firebase cryptographic ID token to our real FastAPI backend endpoint
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/google`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            id_token: result.token, // Send the explicit Firebase ID token payload
+          }),
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          console.log("🍏 [Auth Debug] Full Backend Response Data:", data);
+
+          // 1. Bulletproof extraction of user properties from the backend payload
+          const userName = data.user?.full_name || data.user?.name || (data.user?.first_name ? `${data.user.first_name} ${data.user.last_name || ''}`.trim() : '') || "User";
+          const userRole = data.user?.role || "user";
+          const userAvatar = data.user?.avatar || data.user?.avatar_url || data.user?.profile_picture || "";
+
+          // 2. Commit the exact verified values to local storage for middleware checking
+          localStorage.setItem("token", data.access_token);
+          localStorage.setItem("userEmail", data.user?.email || "");
+          localStorage.setItem("userName", userName);
+          localStorage.setItem("userAvatar", userAvatar);
+          localStorage.setItem("userRole", userRole); // Crucial for protecting Admin sidebar routes
+
+          // 3. Clear debugging feedback and trigger safe internal navigation
+          alert(`✨ Welcome back, ${userName}! Full-Stack Authentication Verified.`);
+          
+          // Force a window reload or context update if your Sidebar depends on a state refresh
+          navigate("/app/dashboard");
+          window.location.reload(); 
+        } else {
+          console.error("❌ Backend OAuth Verification Rejection:", data);
+          alert(`❌ Backend Registration Failed: ${data.detail || "Authentication error"}`);
+        }
       } else {
-        alert(`❌ Google Auth Popup Failed: ${result.error}`);
+        alert(`❌ Google Auth Popup Cancelled/Failed: ${result.error}`);
       }
     } catch (err) {
-      console.error("OAuth frontend popup exception:", err);
-      alert("❌ An error occurred while opening the Google Sign-In popup.");
+      console.error("🔴 Full-stack auth network pipeline collapse:", err);
+      alert("❌ Server connection lost. Please ensure your FastAPI server is active.");
     }
   };
 
