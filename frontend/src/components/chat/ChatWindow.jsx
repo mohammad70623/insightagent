@@ -19,7 +19,7 @@ const ChatWindow = ({
   chatBottomRef 
 }) => {
   return (
-    <div className="flex-1 flex flex-col bg-[#111827]">
+    <div className="flex-1 flex flex-col bg-[#111827] overflow-hidden relative h-full">
       {/* Top Banner */}
       <div className="px-6 py-4 bg-[#1f2937] border-b border-gray-700 flex justify-between items-center shadow-md">
         <div>
@@ -35,7 +35,7 @@ const ChatWindow = ({
       </div>
 
       {/* Messages Stream Screen */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar pb-24">
         {!activeSessionId ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6">
             <span className="text-4xl mb-4">🚀</span>

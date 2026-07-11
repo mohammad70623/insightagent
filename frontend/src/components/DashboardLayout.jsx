@@ -15,6 +15,7 @@ const DashboardLayout = () => {
   const profilePicRef = useRef(null);
 
   const [profile, setProfile] = useState(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
   const [formData, setFormData] = useState({ first_name: '', last_name: '', profile_picture: '' });
@@ -206,10 +207,48 @@ const DashboardLayout = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-main text-white font-sans select-none">
+    <div className="flex h-screen w-screen overflow-hidden bg-main text-white font-sans select-none flex-col md:flex-row">
       
+      {/* Mobile/Tablet Sticky Header */}
+      <div className="md:hidden flex items-center justify-between px-6 py-4 bg-surface border-b border-gray-800 sticky top-0 z-40 w-full">
+        <div className="flex items-center gap-3">
+          <button 
+            type="button"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="text-white hover:text-brand-primary text-2xl focus:outline-none bg-transparent border-none cursor-pointer"
+          >
+            ☰
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-primary text-black font-black text-xs">I</div>
+            <span className="text-sm font-bold text-white tracking-tight">InsightAgent</span>
+          </div>
+        </div>
+        
+        {isMenuOpen && (
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen(false)}
+            className="text-xs font-bold text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none"
+          >
+            ✕ Close
+          </button>
+        )}
+      </div>
+
+      {/* Overlay backdrop for mobile menu */}
+      {isMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 md:hidden" 
+          onClick={() => setIsMenuOpen(false)}
+        />
+      )}
+
       {/* ─── SIDEBAR PANELS ─── */}
-      <aside className="hidden w-64 flex-col justify-between border-r border-gray-800/40 bg-surface p-6 lg:flex">
+      <aside className={`
+        ${isMenuOpen ? 'flex absolute inset-y-0 left-0 z-50 bg-[#0c0f19] w-64' : 'hidden'}
+        md:flex md:relative md:w-64 flex-col justify-between border-r border-gray-800/40 bg-surface p-6
+      `}>
         <div className="space-y-6">
           <div className="flex items-center gap-3 px-2">
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary text-black font-black text-sm">I</div>
@@ -219,10 +258,9 @@ const DashboardLayout = () => {
             </div>
           </div>
 
-         
           <button 
             type="button"
-            onClick={() => navigate('/app/chat')} 
+            onClick={() => { navigate('/app/chat'); setIsMenuOpen(false); }} 
             className="btn btn-sm w-full border-none bg-brand-primary text-black font-bold hover:bg-indigo-400 capitalize py-2.5 h-auto rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98]"
           >
             <Plus size={15} /> New Analysis
@@ -237,7 +275,7 @@ const DashboardLayout = () => {
                 <button
                   key={item.name}
                   type="button"
-                  onClick={() => navigate(item.path)}
+                  onClick={() => { navigate(item.path); setIsMenuOpen(false); }}
                   className={`flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
                     isActive 
                       ? 'bg-brand-primary/10 text-brand-primary border-l-2 border-brand-primary rounded-l-none' 
@@ -253,10 +291,9 @@ const DashboardLayout = () => {
 
         {/* ─── LOWER CONTROLS PANEL ─── */}
         <div className="space-y-1 border-t border-gray-800/40 pt-4">
-         
           <button 
             type="button"
-            onClick={() => setShowPrivacyPolicyModal(true)} 
+            onClick={() => { setShowPrivacyPolicyModal(true); setIsMenuOpen(false); }} 
             className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium transition-all cursor-pointer ${
               showPrivacyPolicyModal
                 ? 'bg-brand-primary/10 text-brand-primary border-l-2 border-brand-primary rounded-l-none'
@@ -268,7 +305,7 @@ const DashboardLayout = () => {
 
           <button 
             type="button"
-            onClick={() => navigate('/app/support')} 
+            onClick={() => { navigate('/app/support'); setIsMenuOpen(false); }} 
             className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium transition-all cursor-pointer ${
               location.pathname === '/app/support'
                 ? 'bg-brand-primary/10 text-brand-primary border-l-2 border-brand-primary rounded-l-none'
@@ -281,7 +318,7 @@ const DashboardLayout = () => {
           {/* Logout Trigger */}
           <button 
             type="button"
-            onClick={handleLogout} 
+            onClick={() => { handleLogout(); setIsMenuOpen(false); }} 
             className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 cursor-pointer transition-all"
           >
             <Settings size={16} /> Logout
@@ -439,7 +476,7 @@ const DashboardLayout = () => {
         </header>
 
         
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-main p-8">
+        <main className={`flex-1 overflow-x-hidden bg-main ${location.pathname === '/app/chat' ? 'relative overflow-hidden p-0' : 'overflow-y-auto p-8'}`}>
           <Outlet context={{ profilePicRef }} />
         </main>
       </div>
