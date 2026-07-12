@@ -19,6 +19,7 @@ from typing import Optional, Dict, Any, List, TypedDict, Union
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException
 from qdrant_client.models import Filter, FieldCondition, MatchValue
+from sqlalchemy import select
 from app.api import deps
 from app.models.user import User
 from app.services.rag.vector_store import vector_store

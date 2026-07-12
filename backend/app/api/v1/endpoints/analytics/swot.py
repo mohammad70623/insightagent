@@ -1,10 +1,12 @@
 import logging
 import asyncio
 import os
+from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from app.api import deps
 from app.models.user import User
 from app.services.rag.vector_store import vector_store
@@ -26,6 +28,7 @@ class SWOTAnalysisResponse(BaseModel):
 
 @router.get("/swot", response_model=SWOTAnalysisResponse)
 async def generate_floating_swot_matrix(
+    document_id: Optional[str] = None,
     current_user: User = Depends(deps.get_current_user),
     db: AsyncSession = Depends(deps.get_db)
 ):
@@ -58,9 +61,7 @@ async def generate_floating_swot_matrix(
             }
 
         # ── Step 2: Check the collection even exists ──────────────────────────
-        from qdrant_client import QdrantClient
-        client = QdrantClient(url=settings.VECTOR_DB_URL)
-        if not client.collection_exists(collection_name=tenant_collection):
+        if not vector_store.client.collection_exists(collection_name=tenant_collection):
             return {
                 "user_id": str(current_user.id),
                 "swot_markdown": (
@@ -79,21 +80,35 @@ async def generate_floating_swot_matrix(
             "business strengths weaknesses opportunities threats revenue growth "
             "market competition risk strategy performance financial"
         )
-        query_vector = await embedding_service.get_embeddings([swot_query])
+        
+        context_chunks = []
+        try:
+            query_vector = await embedding_service.get_embeddings([swot_query])
 
-        payloads = await asyncio.to_thread(
-            vector_store.search_tenant_vectors,
-            tenant_collection,
-            current_user.id,
-            query_vector[0],
-            10  # pull up to 10 most relevant chunks for richer context
-        )
+            payloads = await asyncio.to_thread(
+                vector_store.search_tenant_vectors,
+                tenant_collection,
+                current_user.id,
+                query_vector[0],
+                10,  # pull up to 10 most relevant chunks for richer context
+                document_id
+            )
 
-        context_chunks = [
-            p.get("text", "").strip()
-            for p in payloads
-            if isinstance(p, dict) and p.get("text", "").strip()
-        ]
+            context_chunks = [
+                p.get("text", "").strip()
+                for p in payloads
+                if isinstance(p, dict) and p.get("text", "").strip()
+            ]
+        except Exception as qdrant_err:
+            logger.error(f"SWOT document semantic search failed: {qdrant_err}", exc_info=True)
+            return {
+                "user_id": str(current_user.id),
+                "swot_markdown": (
+                    "## SWOT Search Error\n\n"
+                    "An error occurred while retrieving document chunks from the vector database.\n\n"
+                    f"**Details:** {qdrant_err}"
+                )
+            }
 
         if not context_chunks:
             return {

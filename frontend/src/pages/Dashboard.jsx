@@ -127,6 +127,10 @@ const Dashboard = () => {
   const handleAnalyzeClick = async (documentId) => {
     if (!documentId) return;
 
+    // Store active document_id in localStorage so that other components (like SWOT assistant)
+    // know which document is currently selected/analyzed.
+    localStorage.setItem("active_document_id", documentId);
+
     // 1. Trigger active processing layout states immediately
     setIsAnalyzing(true);
     setCurrentStep('processing');
@@ -145,8 +149,11 @@ const Dashboard = () => {
       // Scrub any trailing or wrapping quotation marks from local storage string
       const cleanToken = rawToken.replace(/^["']|["']$/g, '');
 
-      // Resolve backend origin dynamically from configured BASE_URL
-      const backendOrigin = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/v1").replace("/api/v1", "");
+      // Resolve backend origin dynamically from VITE_API_BASE_URL
+      const baseApiUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
+      const backendOrigin = baseApiUrl.includes("/api/v1") 
+        ? baseApiUrl.replace("/api/v1", "") 
+        : baseApiUrl;
       const targetUrl = `${backendOrigin}/api/analyze`;
 
       // 2. Fire the real API call to the RAG Anomaly Detection Core backend via axios

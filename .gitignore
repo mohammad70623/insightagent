@@ -29,3 +29,4 @@ dist-ssr
 .env.local
 *.env
 backend/app/core/.env
+backend/uploaded_documents/

@@ -74,19 +74,18 @@ async def analyze_document(
 
     # Retrieve from Qdrant if document_id is provided
     if document_id and not document_text:
-        client = QdrantClient(url=settings.VECTOR_DB_URL)
         try:
-            collections_response = client.get_collections()
             text_chunks = []
-            for col in collections_response.collections:
-                col_name = col.name
+            # Only query the user's isolated collection, which is guaranteed to exist and have the indices
+            if vector_store.client.collection_exists(collection_name=tenant_collection):
                 offset = None
                 while True:
-                    results, next_offset = client.scroll(
-                        collection_name=col_name,
+                    results, next_offset = await asyncio.to_thread(
+                        vector_store.client.scroll,
+                        collection_name=tenant_collection,
                         scroll_filter=Filter(
                             must=[
-                                FieldCondition(key="document_id", match=MatchValue(value=document_id))
+                                FieldCondition(key="document_id", match=MatchValue(value=str(document_id)))
                             ]
                         ),
                         limit=100,
@@ -101,8 +100,7 @@ async def analyze_document(
                     if next_offset is None:
                         break
                     offset = next_offset
-                if text_chunks:
-                    break
+
             if text_chunks:
                 document_text = "\n\n".join(text_chunks)
         except Exception as err:

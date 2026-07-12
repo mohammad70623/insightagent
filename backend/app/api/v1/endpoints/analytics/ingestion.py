@@ -92,6 +92,12 @@ def extract_text_from_file(file_name: str, content: bytes) -> str:
                 
     return ""
 
+from pathlib import Path
+import shutil
+
+UPLOAD_DIR = Path("uploaded_documents")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
 @router.post("/index-payload")
 async def index_payload(
     file: UploadFile = File(...),
@@ -99,8 +105,8 @@ async def index_payload(
     db: AsyncSession = Depends(deps.get_db)
 ):
     """
-    Accepts incoming payload binary buffers, streams them in safe 1MB chunk boundaries
-    to prevent memory-spikes, invokes layout-aware extraction, and awaits solid Qdrant insertion.
+    Accepts incoming payload binary buffers, streams them in safe 1MB chunk boundaries,
+    writes the file permanently to disk, invokes layout-aware extraction, and awaits solid Qdrant insertion.
     """
     try:
         # ── Qdrant health-gate ────────────────────────────────────────────────
@@ -125,16 +131,29 @@ async def index_payload(
         if current_user.subscription_tier == "Pro" and current_user.uploaded_files_count >= 50:
             raise HTTPException(status_code=403, detail="PAYWALL_LIMIT_REACHED: Pro tier limited to 50 files. Upgrade to Enterprise.")
 
+        # ── Stream Recovery & Accumulation ──
         chunks_accumulator = []
         while chunk_bytes := await file.read(1024 * 1024):
             chunks_accumulator.append(chunk_bytes)
-            
+
         complete_content = b"".join(chunks_accumulator)
+        del chunks_accumulator  # Free the chunk list
+
+        if not complete_content:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
         
-        # Parse text inside a dedicated executor thread to ensure zero event loop lag
+        file_path = UPLOAD_DIR / file.filename
+        def write_file_to_disk(path, data):
+            with open(path, "wb") as buffer:
+                buffer.write(data)
+        
+        await asyncio.to_thread(write_file_to_disk, file_path, complete_content)
+
+        # Parse text inside a dedicated executor thread
         raw_text = await asyncio.to_thread(extract_text_from_file, file.filename, complete_content)
-        
-        del chunks_accumulator
+
+        # Safe to release the raw bytes only after extraction and disk writing have fully returned
         del complete_content
         
         if not raw_text or not raw_text.strip():
@@ -156,8 +175,22 @@ async def index_payload(
             raw_text=raw_text,
             filename=file.filename
         )
+
+        # ── DEBUG: surface exact runtime state of the indexing call ──
+        print(f"[DEBUG index-payload] rag_engine.index_document_payload returned: {success}")
+        print(f"[DEBUG index-payload] document_id passed to Qdrant  : '{str(document_id)}'  (type={type(document_id).__name__})")
+        print(f"[DEBUG index-payload] user_id passed to Qdrant      : '{str(current_user.id)}'")
+        print(f"[DEBUG index-payload] collection_name               : '{tenant_collection_namespace}'")
+        logger.info(
+            f'{{"event": "index_payload_debug", "success": {success}, '
+            f'"document_id": "{str(document_id)}", "user_id": "{str(current_user.id)}", '
+            f'"collection": "{tenant_collection_namespace}"}}'
+        )
         
         if not success:
+            
+            if file_path.exists():
+                file_path.unlink()
             raise HTTPException(status_code=500, detail="Vector warehouse sync rejected the operation payload.")
             
         # 2. Embedding generation and vector database indexing successful
@@ -177,7 +210,7 @@ async def index_payload(
     except Exception as e:
         logger.error(f'{{"event": "index_payload_failed", "filename": "{file.filename}", "error": "{str(e)}"}}')
         raise HTTPException(status_code=500, detail=f"Ingestion worker layer crashed: {str(e)}")
-
+    
 @router.get("/uploaded-files")
 async def get_uploaded_files(current_user: User = Depends(deps.get_current_user)):
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
@@ -231,31 +264,63 @@ async def delete_file_pipeline(
 # which confirms the background indexing job completed successfully.
 @router.get("/ingestion-status/{document_id}")
 async def get_ingestion_status(document_id: str, current_user: User = Depends(deps.get_current_user)):
+    """
+    Polls the shared vector_store singleton (same client used during indexing) to check
+    whether vector points for this document_id have been committed to Qdrant.
+    Using a fresh QdrantClient per poll caused a race condition where a just-created
+    collection appeared as non-existent, locking the frontend at 'INDEXING (100%)'.
+    """
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
     try:
-        from qdrant_client import QdrantClient
         from qdrant_client.models import Filter, FieldCondition, MatchValue
-        from app.core.config import settings
 
-        client = QdrantClient(url=settings.VECTOR_DB_URL)
+        # ── FIX: Reuse the shared vector_store client instead of spawning a raw QdrantClient ──
+        collection_exists = await asyncio.to_thread(
+            vector_store.is_collection_exists, tenant_collection
+        )
 
-        if not client.collection_exists(collection_name=tenant_collection):
-            # Collection not yet created — indexing still in progress
+        # ── DEBUG: log collection existence check ──
+        print(f"[DEBUG ingestion-status] document_id from frontend  : '{document_id}'")
+        print(f"[DEBUG ingestion-status] tenant_collection          : '{tenant_collection}'")
+        print(f"[DEBUG ingestion-status] collection_exists          : {collection_exists}")
+        logger.info(
+            f'{{"event": "ingestion_status_debug", "document_id": "{document_id}", '
+            f'"collection": "{tenant_collection}", "collection_exists": {collection_exists}}}'
+        )
+
+        if not collection_exists:
             return {"status": "processing", "progress": 10}
 
         # Scroll for at least one point belonging to this document_id
-        results, _ = client.scroll(
-            collection_name=tenant_collection,
-            scroll_filter=Filter(
-                must=[
-                    FieldCondition(key="user_id",     match=MatchValue(value=str(current_user.id))),
-                    FieldCondition(key="document_id", match=MatchValue(value=document_id)),
-                ]
-            ),
-            limit=1,
-            with_payload=False,
-            with_vectors=False,
-        )
+        try:
+            results, _ = await asyncio.to_thread(
+                lambda: vector_store.client.scroll(
+                    collection_name=tenant_collection,
+                    scroll_filter=Filter(
+                        must=[
+                            FieldCondition(key="user_id",     match=MatchValue(value=str(current_user.id))),
+                            FieldCondition(key="document_id", match=MatchValue(value=document_id)),
+                        ]
+                    ),
+                    limit=1,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+            )
+            # ── DEBUG: log exactly what Qdrant returned ──
+            print(f"[DEBUG ingestion-status] scroll results count    : {len(results)}")
+            if results:
+                print(f"[DEBUG ingestion-status] first point payload    : {getattr(results[0], 'payload', {})}")
+            logger.info(
+                f'{{"event": "ingestion_status_scroll_debug", "document_id": "{document_id}", '
+                f'"results_count": {len(results)}}}'
+            )
+        except Exception as scroll_err:
+            print(f"[DEBUG ingestion-status] SCROLL EXCEPTION        : {scroll_err}")
+            logger.error(
+                f'{{"event": "ingestion_status_scroll_exception", "document_id": "{document_id}", "error": "{str(scroll_err)}"}}'
+            )
+            return {"status": "processing", "progress": 30}
 
         if results:
             return {"status": "completed", "progress": 100}
@@ -263,6 +328,7 @@ async def get_ingestion_status(document_id: str, current_user: User = Depends(de
             return {"status": "processing", "progress": 50}
 
     except Exception as e:
+        print(f"[DEBUG ingestion-status] OUTER EXCEPTION           : {e}")
         logger.error(f'{{"event": "ingestion_status_failed", "document_id": "{document_id}", "error": "{str(e)}"}}')
         return {"status": "processing", "progress": 30}
 

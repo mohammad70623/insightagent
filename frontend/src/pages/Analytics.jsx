@@ -309,7 +309,7 @@ const Analytics = () => {
       const { document_id } = response.data;
       setPollingDocId(document_id);
     } catch (error) {
-      console.error("Upload failed", error);
+      console.error("DEBUG UPLOAD ERROR:", error);
       setUploading(false);
       const errorMsg = error.response?.data?.detail || error.message;
       if (errorMsg.includes("PAYWALL_LIMIT_REACHED")) {

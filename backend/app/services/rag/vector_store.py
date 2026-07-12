@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
+from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue, FilterSelector
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -41,12 +41,37 @@ class VectorStoreService:
             logger.error(f'{{"event": "qdrant_unavailable", "error": "{err}"}}')
             return False, msg
 
+    def is_collection_exists(self, collection_name: str) -> bool:
+        """
+        Thin sync wrapper around client.collection_exists.
+        Called via asyncio.to_thread from the ingestion-status endpoint so it
+        reuses the same shared QdrantClient that performed the upsert, avoiding
+        the race condition where a freshly-created collection appeared missing
+        to a brand-new QdrantClient spawned per poll.
+        """
+        return self.client.collection_exists(collection_name=collection_name)
+
     def _ensure_collection(self, collection_name: str):
         if not self.client.collection_exists(collection_name=collection_name):
             self.client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(size=self.vector_dimension, distance=Distance.COSINE),
             )
+        try:
+            # Create a payload index on user_id to enable filtering/sorting by user
+            self.client.create_payload_index(
+                collection_name=collection_name,
+                field_name="user_id",
+                field_schema="keyword"
+            )
+            # Create a payload index on document_id to enable deleting/filtering by document
+            self.client.create_payload_index(
+                collection_name=collection_name,
+                field_name="document_id",
+                field_schema="keyword"
+            )
+        except Exception as e:
+            logger.warning(f"Failed to ensure payload indexes on {collection_name}: {e}")
 
     def upsert_vectors(self, collection_name: str, points: List[PointStruct]):
         self._ensure_collection(collection_name)
@@ -55,13 +80,16 @@ class VectorStoreService:
     def delete_document_vectors(self, collection_name: str, user_id: uuid.UUID, document_id: str) -> None:
         """Purges specific isolated file vectors from the multi-user tenant schema instantly."""
         try:
+            self._ensure_collection(collection_name)
             self.client.delete(
                 collection_name=collection_name,
-                points_selector=Filter(
-                    must=[
-                        FieldCondition(key="user_id",     match=MatchValue(value=str(user_id))),
-                        FieldCondition(key="document_id", match=MatchValue(value=str(document_id)))
-                    ]
+                points_selector=FilterSelector(
+                    filter=Filter(
+                        must=[
+                            FieldCondition(key="user_id",     match=MatchValue(value=str(user_id))),
+                            FieldCondition(key="document_id", match=MatchValue(value=str(document_id)))
+                        ]
+                    )
                 )
             )
             logger.info(f'{{"event": "vectors_deleted", "document_id": "{str(document_id)}"}}')
@@ -73,15 +101,20 @@ class VectorStoreService:
         collection_name: str,
         user_id: uuid.UUID,
         query_vector: List[float],
-        top_k: int = 5
+        top_k: int = 5,
+        document_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         if not self.client.collection_exists(collection_name=collection_name):
             return []
 
+        must_filters = [FieldCondition(key="user_id", match=MatchValue(value=str(user_id)))]
+        if document_id:
+            must_filters.append(FieldCondition(key="document_id", match=MatchValue(value=str(document_id))))
+
         search_results = self.client.query_points(
             collection_name=collection_name,
             query=query_vector,
-            query_filter=Filter(must=[FieldCondition(key="user_id", match=MatchValue(value=str(user_id)))]),
+            query_filter=Filter(must=must_filters),
             limit=top_k
         ).points
         return [getattr(p, 'payload', {}) or {} for p in search_results if p is not None]

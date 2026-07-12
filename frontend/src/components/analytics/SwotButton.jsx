@@ -12,6 +12,7 @@ const SwotButton = () => {
   const [hasFiles, setHasFiles]     = useState(false);
   const [isOpen, setIsOpen]         = useState(false);
   const [swotData, setSwotData]     = useState(null);
+  const [loadedDocId, setLoadedDocId] = useState(null); // Track the document ID that swotData belongs to
   const [loading, setLoading]       = useState(false);
 
   // Drag state
@@ -31,6 +32,7 @@ const SwotButton = () => {
 
   // Fetch SWOT analysis from backend
   const fetchSwot = useCallback(async (force = false) => {
+    const activeDocId = localStorage.getItem("active_document_id");
     setLoading(true);
     try {
       // 1. Verify files exist in real-time
@@ -40,22 +42,27 @@ const SwotButton = () => {
 
       if (!filesExist) {
         setSwotData(null);
+        setLoadedDocId(null);
         setLoading(false);
         return;
       }
 
-      // 2. Fetch SWOT only if we don't have it already, or if forced
-      if (!swotData || force) {
-        if (force) setSwotData(null);
-        const res = await api.get('/chat/analytics/swot');
+      // 2. Fetch SWOT if we don't have it, or if forced, or if the active document has changed
+      if (!swotData || force || activeDocId !== loadedDocId) {
+        if (force || activeDocId !== loadedDocId) setSwotData(null);
+        const url = activeDocId 
+          ? `/chat/analytics/swot?document_id=${activeDocId}` 
+          : '/chat/analytics/swot';
+        const res = await api.get(url);
         setSwotData(res.data.swot_markdown);
+        setLoadedDocId(activeDocId);
       }
     } catch {
       setSwotData('Failed to load SWOT analysis. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
-  }, [swotData]);
+  }, [swotData, loadedDocId]);
 
   // Pointer-capture drag — no click-after-drag race condition
   const onPointerDown = useCallback((e) => {

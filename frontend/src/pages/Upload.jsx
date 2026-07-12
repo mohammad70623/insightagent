@@ -62,7 +62,7 @@ const Upload = () => {
     }
 
     const newEntries = files.map((file) => ({
-      id: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
       name: file.name,
       rawFile: file,
       status: 'READY',
@@ -85,53 +85,58 @@ const Upload = () => {
     setIsCommitting(true);
     setErrorMessage('');
 
-    // We now use the central API instance
-
-    for (const fileObj of readyFiles) {
-      // Mark as INDEXING
-      setQueuedFiles((prev) =>
-        prev.map((f) => (f.id === fileObj.id ? { ...f, status: 'INDEXING', progress: 0 } : f))
-      );
-
-      try {
-        const formData = new FormData();
-        formData.append('file', fileObj.rawFile);
-
-        await api.post('/chat/index-payload', formData, {
-          onUploadProgress: (progressEvent) => {
-            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-            setQueuedFiles((prev) =>
-              prev.map((f) =>
-                f.id === fileObj.id
-                  ? { ...f, progress: percentCompleted }
-                  : f
-              )
-            );
-          }
-        });
-
-        // Mark INDEXED, then auto-clear after 3 seconds and refresh list
+    try {
+      for (const fileObj of readyFiles) {
+        // Mark as INDEXING
         setQueuedFiles((prev) =>
-          prev.map((f) => (f.id === fileObj.id ? { ...f, status: 'INDEXED', progress: 100 } : f))
+          prev.map((f) => (f.id === fileObj.id ? { ...f, status: 'INDEXING', progress: 0 } : f))
         );
 
-        clearTimers.current[fileObj.id] = setTimeout(() => {
-          setQueuedFiles((prev) => prev.filter((f) => f.id !== fileObj.id));
-          delete clearTimers.current[fileObj.id];
-          fetchIndexedFiles();
-        }, 3000);
+        try {
+          const formData = new FormData();
+          formData.append('file', fileObj.rawFile);
 
-      } catch (err) {
-        setQueuedFiles((prev) =>
-          prev.map((f) => (f.id === fileObj.id ? { ...f, status: 'FAILED', progress: 0 } : f))
-        );
-        const errorDetail = err.response?.data?.detail || err.message;
-        setErrorMessage(`Failed to index "${fileObj.name}": ${errorDetail}`);
+          // ── FIX: Use the native apiService.indexPayload (which uses standard fetch)
+          //    instead of Axios api.post. This bypasses Axios-specific FormData serialization/boundary
+          //    bugs and ensures we send the exact same payload structure as the rest of the app.
+          await apiService.indexPayload(fileObj.rawFile);
+
+          // Update progress to 100% since native fetch completes all at once
+          setQueuedFiles((prev) =>
+            prev.map((f) =>
+              f.id === fileObj.id
+                ? { ...f, progress: 100 }
+                : f
+            )
+          );
+
+          // Mark INDEXED, then auto-clear after 3 seconds and refresh list
+          setQueuedFiles((prev) =>
+            prev.map((f) => (f.id === fileObj.id ? { ...f, status: 'INDEXED', progress: 100 } : f))
+          );
+
+          clearTimers.current[fileObj.id] = setTimeout(() => {
+            setQueuedFiles((prev) => prev.filter((f) => f.id !== fileObj.id));
+            delete clearTimers.current[fileObj.id];
+            fetchIndexedFiles();
+          }, 3000);
+
+        } catch (err) {
+          console.error("DEBUG UPLOAD ERROR:", err);
+          setQueuedFiles((prev) =>
+            prev.map((f) => (f.id === fileObj.id ? { ...f, status: 'FAILED', progress: 0 } : f))
+          );
+          const errorDetail = err.response?.data?.detail || err.message;
+          setErrorMessage(`Failed to index "${fileObj.name}": ${errorDetail}`);
+        }
       }
+    } finally {
+      // ── FIX: guarantee isCommitting resets even if an exception escapes the loop.
+      //    Without this, a crash before the for-loop permanently disables the button.
+      setIsCommitting(false);
     }
-
-    setIsCommitting(false);
   };
+
 
   // Delete an indexed file's vectors from Qdrant
   const handleDeleteIndexed = async (documentId, filename) => {
@@ -141,6 +146,11 @@ const Upload = () => {
     try {
       await apiService.deleteFile(documentId);
       setIndexedFiles((prev) => prev.filter((f) => f.document_id !== documentId));
+      
+      // Clear active document if the deleted document was active
+      if (localStorage.getItem("active_document_id") === documentId) {
+        localStorage.removeItem("active_document_id");
+      }
     } catch (err) {
       setErrorMessage(`Failed to delete "${filename}": ${err.message}`);
     } finally {
