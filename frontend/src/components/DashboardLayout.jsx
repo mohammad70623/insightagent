@@ -220,7 +220,12 @@ const DashboardLayout = () => {
             ☰
           </button>
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-primary text-black font-black text-xs">I</div>
+            <img 
+              src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
+              alt="InsightAgent Logo" 
+              className="w-9 h-9 object-cover rounded-xl border border-slate-850 shadow-md transform hover:scale-105 transition-transform duration-200"
+              crossOrigin="anonymous"
+            />
             <span className="text-sm font-bold text-white tracking-tight">InsightAgent</span>
           </div>
         </div>
@@ -251,7 +256,12 @@ const DashboardLayout = () => {
       `}>
         <div className="space-y-6">
           <div className="flex items-center gap-3 px-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary text-black font-black text-sm">I</div>
+            <img 
+              src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
+              alt="InsightAgent Logo" 
+              className="w-9 h-9 object-cover rounded-xl border border-slate-850 shadow-md transform hover:scale-105 transition-transform duration-200"
+              crossOrigin="anonymous"
+            />
             <div>
               <h2 className="text-sm font-bold tracking-tight text-white">InsightAgent</h2>
               <p className="text-[9px] uppercase tracking-widest text-brand-primary font-bold -mt-0.5 font-mono">Enterprise AI</p>
@@ -372,7 +382,7 @@ const DashboardLayout = () => {
 
               {/* Dropdown panel */}
               {showNotificationsDropdown && (
-                <div className="absolute right-0 mt-3 w-80 rounded-xl border border-gray-800 bg-[#0c0f19] p-4 shadow-2xl z-50 animate-fade-in">
+                <div className="absolute right-0 sm:right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-96 max-w-md bg-[#0B0F19]/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden transform translate-x-[40px] sm:translate-x-0 p-4">
                   <div className="flex items-center justify-between border-b border-gray-800 pb-2.5 mb-2.5">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">Notifications</span>
                     {unreadCount > 0 && (
@@ -392,12 +402,14 @@ const DashboardLayout = () => {
                         <div 
                           key={notif.id}
                           onClick={() => handleNotificationClick(notif)}
-                          className="p-2.5 rounded-lg bg-gray-900/40 hover:bg-[#131926] border border-slate-800/40 hover:border-indigo-500/30 transition-all cursor-pointer text-left"
+                          className="p-2.5 rounded-lg bg-gray-900/40 hover:bg-[#131926] border border-slate-800/40 hover:border-indigo-500/30 transition-all cursor-pointer text-left min-w-0 w-full flex items-start"
                         >
-                          <div className="text-xs font-bold text-slate-200">{notif.title}</div>
-                          <div className="text-[10px] text-slate-400 mt-1 leading-normal">{notif.message}</div>
-                          <div className="text-[8px] text-slate-600 mt-1.5 font-mono">
-                            {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <div className="min-w-0 flex-1 break-words">
+                            <div className="text-xs font-bold text-slate-200">{notif.title}</div>
+                            <div className="text-[10px] text-slate-400 mt-1 leading-normal">{notif.message}</div>
+                            <div className="text-[8px] text-slate-600 mt-1.5 font-mono">
+                              {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
                           </div>
                         </div>
                       ))

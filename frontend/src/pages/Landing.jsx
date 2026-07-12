@@ -108,7 +108,12 @@ const Landing = () => {
       {/* ─── TOP NAVIGATION HEADER ─── */}
       <header className="flex h-16 items-center justify-between border-b border-gray-800/40 bg-surface px-6 md:px-12 sticky top-0 z-50 backdrop-blur-md bg-opacity-80">
         <div className="flex items-center gap-3">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary text-black font-black text-sm">I</div>
+          <img 
+            src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
+            alt="InsightAgent Logo" 
+            className="w-9 h-9 object-cover rounded-xl border border-slate-850 shadow-md transform hover:scale-105 transition-transform duration-200"
+            crossOrigin="anonymous"
+          />
           <span className="text-sm font-bold tracking-tight text-white">InsightAgent</span>
         </div>
         <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-brand-muted">

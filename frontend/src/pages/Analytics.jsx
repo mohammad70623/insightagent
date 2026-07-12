@@ -39,7 +39,7 @@ const Analytics = () => {
   const [timelineCategories, setTimelineCategories] = useState([]);
   const [sentimentData, setSentimentData] = useState(null);
   const [urgentFeedbacks, setUrgentFeedbacks] = useState([]);
-  const [topProducts, setTopProducts] = useState(null);
+  const [reports, setReports] = useState([]);
   const [toasts, setToasts] = useState([]);
 
   const addToast = (message, severity) => {
@@ -139,11 +139,11 @@ const Analytics = () => {
         : '/chat/analytics/top-products';
       const response = await api.get(url);
       console.log("📡 TOP PRODUCTS RAW API RESPONSE:", response.data); // Debug trace
-      const productsList = response.data?.products || response.data || [];
-      setTopProducts(productsList);
+      const fetchedProducts = response.data?.products || (Array.isArray(response.data) ? response.data : []);
+      setReports(fetchedProducts);
     } catch (error) {
       console.error("Failed to fetch top products:", error);
-      setTopProducts([]);
+      setReports([]);
     }
   };
 
@@ -151,9 +151,26 @@ const Analytics = () => {
     if (activeDocumentId) {
       fetchTopProducts();
     } else {
-      setTopProducts([]);
+      setReports([]);
     }
   }, [activeDocumentId]);
+
+  useEffect(() => {
+    api.get('/chat/analytics/top-products')
+      .then(res => {
+        console.log("📡 [FRONTEND DEBUG RAW RES]:", res);
+        console.log("📦 [FRONTEND DEBUG DATA EMBED]:", res.data);
+        
+        // Fallback safe assignment
+        const dataArray = res.data?.products || res.data || [];
+        console.log("📊 [FINAL UNPACKED ARRAY STATE]:", dataArray);
+        setReports(dataArray);
+      })
+      .catch(err => {
+        console.error("❌ [API FETCH CRASH]:", err);
+        setReports([]);
+      });
+  }, []);
 
   const fetchUploadedFiles = async () => {
     try {
@@ -446,7 +463,7 @@ const Analytics = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans relative pb-20">
+    <div className="w-full h-full min-h-screen overflow-y-auto overflow-x-hidden p-4 md:p-6 text-slate-200">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white">Analytics Dashboard</h2>
@@ -475,7 +492,7 @@ const Analytics = () => {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
         <UrgentFeedbacks urgentFeedbacks={urgentFeedbacks} onSendReply={handleSendReply} />
-        <TopProducts />
+        <TopProducts reports={reports} />
       </div>
 
       <ForecastSimulator 

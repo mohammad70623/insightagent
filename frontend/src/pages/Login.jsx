@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
-import { Eye, EyeOff, ShieldCheck, Activity, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, AlertCircle, ArrowLeft } from 'lucide-react';
 import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 import TermsOfServiceModal from '../components/TermsOfServiceModal';
 import { signInWithGoogle } from '../firebase';
@@ -188,9 +188,12 @@ export default function Login() {
         <div className="absolute inset-0 bg-[radial-gradient(#ffffff03_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none" />
 
         <div className="absolute top-12 left-12 z-10 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary text-white shadow-[0_0_24px_rgba(129,140,248,0.25)]">
-            <Activity size={20} />
-          </div>
+          <img 
+            src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
+            alt="InsightAgent Logo" 
+            className="w-10 h-10 object-cover rounded-xl border border-slate-800 shadow-md"
+            crossOrigin="anonymous"
+          />
           <div>
             <h1 className="text-xl font-bold tracking-tight leading-none text-white">InsightAgent</h1>
             <p className="text-[9px] uppercase tracking-widest text-brand-primary font-bold mt-1">Enterprise AI</p>
@@ -202,9 +205,12 @@ export default function Login() {
             <div className="absolute h-40 w-40 rounded-full border border-gray-800/80 animate-[spin_30s_linear_infinite]" />
             <div className="absolute h-44 w-28 rounded-full border border-brand-primary/20 rotate-45 animate-[spin_25s_linear_infinite]" />
             <div className="absolute h-28 w-44 rounded-full border border-indigo-500/10 -rotate-45" />
-            <div className="z-10 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface border border-gray-800/80 shadow-2xl">
-              <Activity size={26} className="text-brand-primary animate-pulse" />
-            </div>
+            <img 
+              src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
+              alt="InsightAgent Logo" 
+              className="z-10 w-16 h-16 object-cover rounded-2xl border border-gray-800/80 shadow-2xl animate-pulse"
+              crossOrigin="anonymous"
+            />
             <div className="absolute top-3 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-brand-primary shadow-[0_0_12px_#818CF8]" />
             <div className="absolute bottom-8 right-5 h-2 w-2 rounded-full bg-indigo-400/80" />
           </div>

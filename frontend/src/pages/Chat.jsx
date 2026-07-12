@@ -312,7 +312,7 @@ export default function IntegratedChatPage() {
       {isMobileSidebarOpen && <div onClick={() => setIsMobileSidebarOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden" />}
 
       {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative w-full">
+      <div className="flex flex-col flex-1 h-full min-h-0 w-full overflow-hidden relative">
         
         {/* TOP NAVBAR HEADER */}
         <div className="w-full bg-slate-900/20 border-b border-slate-900 px-4 py-3 flex items-center gap-3 z-20">
@@ -334,7 +334,7 @@ export default function IntegratedChatPage() {
         </div>
 
         {/* DYNAMIC RENDERING: CHAT THREAD OR EMPTY STATE WIDGET */}
-        <div className={`flex-1 overflow-y-auto p-4 md:p-6 pb-24 scrollbar-thin scrollbar-thumb-slate-900 flex flex-col ${activeSession ? 'justify-start' : 'justify-center'}`}>
+        <div className="flex-1 overflow-y-auto w-full p-4 space-y-4">
           {activeSession ? (
             /* ACTIVE CHAT WORKSPACE SCROLL */
             <div className="space-y-4 w-full flex-1 flex flex-col justify-start">
@@ -391,7 +391,7 @@ export default function IntegratedChatPage() {
 
         {/* ABSOLUTE FIXED BOTTOM INPUT TRAYS */}
         {activeSession && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent w-full z-10">
+          <div className="flex-shrink-0 w-full p-4 bg-[#0B0F19]/80 backdrop-blur border-t border-slate-800 sticky bottom-0 z-10">
             <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-800/80 rounded-xl px-4 py-2 shadow-2xl">
               <input 
                 type="text" 
