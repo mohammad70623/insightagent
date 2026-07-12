@@ -10,7 +10,10 @@ logger = logging.getLogger(__name__)
 
 class VectorStoreService:
     def __init__(self):
-        self.client = QdrantClient(url=settings.VECTOR_DB_URL)
+        self.client = QdrantClient(
+            url=settings.VECTOR_DB_URL,
+            api_key=getattr(settings, "QDRANT_API_KEY", None) 
+        )
         self.vector_dimension = 384
 
     # ─────────────────────────────────────────────────────────────────────────

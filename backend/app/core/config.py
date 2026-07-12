@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "llama-3.3-70b-specdec"
     TAVILY_API_KEY: str
     VECTOR_DB_URL: str = "http://localhost:6333"
+    QDRANT_API_KEY: Optional[str] = None
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     LLM_MODEL_NAME: str = "llama-3.1-8b-instant"
 
