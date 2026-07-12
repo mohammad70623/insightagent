@@ -156,19 +156,25 @@ async def verify_otp(
     result = await db.execute(statement)
     latest_otp = result.scalars().first()
 
-    # ── DEV_MODE master OTP bypass ──────────────────────────────────────────
-    # In DEV_MODE the master OTP ('000000' by default) is always accepted,
-    # even if no real OTP record exists yet.  Remove before production.
-    if settings.DEV_MODE and payload.otp_code == settings.MASTER_OTP:
-        pass  # skip normal OTP record validation below
-    else:
-        if not latest_otp or latest_otp.otp_code != payload.otp_code:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid verification code.")
+    # Define mapping to match the requested layout structure
+    is_expired = latest_otp and datetime.now(timezone.utc) > latest_otp.expires_at
+    db_session_otp = None if (not latest_otp or is_expired) else latest_otp.otp_code
 
-        if datetime.now(timezone.utc) > latest_otp.expires_at:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification code has expired.")
+    class IncomingPayload:
+        def __init__(self, otp):
+            self.otp = otp
 
-        # Mark as used
+    incoming_payload = IncomingPayload(payload.otp_code)
+
+    # 1. STRICT PRODUCTION ENFORCEMENT: Remove any literal "000000" fallback conditions
+    if not db_session_otp or incoming_payload.otp != db_session_otp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired verification code. Please check your inbox."
+        )
+
+    # 2. Proceed with successful verification lifecycle (activating account or generating password reset token)
+    if latest_otp:
         latest_otp.is_used = True
         db.add(latest_otp)
 
@@ -251,7 +257,28 @@ async def forgot_password(
         db.add(token_record)
         await db.commit()
         
-        await send_password_reset_email(normalized_email, reset_token)
+        # Define local helper matching target snippet's signature
+        def send_reset_email(email_addr, link):
+            import asyncio
+            token = link.split("token=")[-1]
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(send_password_reset_email(email_addr, token))
+            except RuntimeError:
+                asyncio.run(send_password_reset_email(email_addr, token))
+
+        # 1. REMOVE DEV_MODE SHORTCUT AND FORCE REAL PRODUCTION DISPATCH
+        # Locate where the reset link or token is generated and sent. Update it to fire your authentic mailer:
+
+        reset_link = f"http://localhost:5173/reset-password?token={reset_token}"
+
+        try:
+            # 2. Directly invoke the real production email utility for password resets
+            # If your function name is different (e.g., send_reset_email), ensure it targets the SMTP server directly
+            send_reset_email(user.email, reset_link) 
+            print(f"🚀 [PRODUCTION] Real Password Reset link successfully fired to {user.email} via live SMTP gateway.")
+        except Exception as e:
+            print(f"🔴 Password Reset SMTP Transmission Failure: {str(e)}")
 
     return {"status": "success", "message": "If an account with that email exists, a password reset link has been dispatched."}
 

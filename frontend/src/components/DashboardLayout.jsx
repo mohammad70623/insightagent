@@ -15,6 +15,7 @@ const DashboardLayout = () => {
   const profilePicRef = useRef(null);
 
   const [profile, setProfile] = useState(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showPrivacyPolicyModal, setShowPrivacyPolicyModal] = useState(false);
   const [formData, setFormData] = useState({ first_name: '', last_name: '', profile_picture: '' });
@@ -206,23 +207,70 @@ const DashboardLayout = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-main text-white font-sans select-none">
+    <div className="flex h-screen w-screen overflow-hidden bg-main text-white font-sans select-none flex-col md:flex-row">
       
+      {/* Mobile/Tablet Sticky Header */}
+      <div className="md:hidden flex items-center justify-between px-6 py-4 bg-surface border-b border-gray-800 sticky top-0 z-40 w-full">
+        <div className="flex items-center gap-3">
+          <button 
+            type="button"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className="text-white hover:text-brand-primary text-2xl focus:outline-none bg-transparent border-none cursor-pointer"
+          >
+            ☰
+          </button>
+          <div className="flex items-center gap-2">
+            <img 
+              src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
+              alt="InsightAgent Logo" 
+              className="w-9 h-9 object-cover rounded-xl border border-slate-850 shadow-md transform hover:scale-105 transition-transform duration-200"
+              crossOrigin="anonymous"
+            />
+            <span className="text-sm font-bold text-white tracking-tight">InsightAgent</span>
+          </div>
+        </div>
+        
+        {isMenuOpen && (
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen(false)}
+            className="text-xs font-bold text-brand-muted hover:text-white cursor-pointer bg-transparent border-none outline-none"
+          >
+            ✕ Close
+          </button>
+        )}
+      </div>
+
+      {/* Overlay backdrop for mobile menu */}
+      {isMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 z-40 md:hidden" 
+          onClick={() => setIsMenuOpen(false)}
+        />
+      )}
+
       {/* ─── SIDEBAR PANELS ─── */}
-      <aside className="hidden w-64 flex-col justify-between border-r border-gray-800/40 bg-surface p-6 lg:flex">
+      <aside className={`
+        ${isMenuOpen ? 'flex absolute inset-y-0 left-0 z-50 bg-[#0c0f19] w-64' : 'hidden'}
+        md:flex md:relative md:w-64 flex-col justify-between border-r border-gray-800/40 bg-surface p-6
+      `}>
         <div className="space-y-6">
           <div className="flex items-center gap-3 px-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-primary text-black font-black text-sm">I</div>
+            <img 
+              src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
+              alt="InsightAgent Logo" 
+              className="w-9 h-9 object-cover rounded-xl border border-slate-850 shadow-md transform hover:scale-105 transition-transform duration-200"
+              crossOrigin="anonymous"
+            />
             <div>
               <h2 className="text-sm font-bold tracking-tight text-white">InsightAgent</h2>
               <p className="text-[9px] uppercase tracking-widest text-brand-primary font-bold -mt-0.5 font-mono">Enterprise AI</p>
             </div>
           </div>
 
-         
           <button 
             type="button"
-            onClick={() => navigate('/app/chat')} 
+            onClick={() => { navigate('/app/chat'); setIsMenuOpen(false); }} 
             className="btn btn-sm w-full border-none bg-brand-primary text-black font-bold hover:bg-indigo-400 capitalize py-2.5 h-auto rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-[0.98]"
           >
             <Plus size={15} /> New Analysis
@@ -237,7 +285,7 @@ const DashboardLayout = () => {
                 <button
                   key={item.name}
                   type="button"
-                  onClick={() => navigate(item.path)}
+                  onClick={() => { navigate(item.path); setIsMenuOpen(false); }}
                   className={`flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-xs font-semibold transition-all cursor-pointer ${
                     isActive 
                       ? 'bg-brand-primary/10 text-brand-primary border-l-2 border-brand-primary rounded-l-none' 
@@ -253,10 +301,9 @@ const DashboardLayout = () => {
 
         {/* ─── LOWER CONTROLS PANEL ─── */}
         <div className="space-y-1 border-t border-gray-800/40 pt-4">
-         
           <button 
             type="button"
-            onClick={() => setShowPrivacyPolicyModal(true)} 
+            onClick={() => { setShowPrivacyPolicyModal(true); setIsMenuOpen(false); }} 
             className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium transition-all cursor-pointer ${
               showPrivacyPolicyModal
                 ? 'bg-brand-primary/10 text-brand-primary border-l-2 border-brand-primary rounded-l-none'
@@ -268,7 +315,7 @@ const DashboardLayout = () => {
 
           <button 
             type="button"
-            onClick={() => navigate('/app/support')} 
+            onClick={() => { navigate('/app/support'); setIsMenuOpen(false); }} 
             className={`flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium transition-all cursor-pointer ${
               location.pathname === '/app/support'
                 ? 'bg-brand-primary/10 text-brand-primary border-l-2 border-brand-primary rounded-l-none'
@@ -281,7 +328,7 @@ const DashboardLayout = () => {
           {/* Logout Trigger */}
           <button 
             type="button"
-            onClick={handleLogout} 
+            onClick={() => { handleLogout(); setIsMenuOpen(false); }} 
             className="flex w-full items-center gap-3 rounded-lg px-4 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 cursor-pointer transition-all"
           >
             <Settings size={16} /> Logout
@@ -335,7 +382,7 @@ const DashboardLayout = () => {
 
               {/* Dropdown panel */}
               {showNotificationsDropdown && (
-                <div className="absolute right-0 mt-3 w-80 rounded-xl border border-gray-800 bg-[#0c0f19] p-4 shadow-2xl z-50 animate-fade-in">
+                <div className="absolute right-0 sm:right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-96 max-w-md bg-[#0B0F19]/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden transform translate-x-[40px] sm:translate-x-0 p-4">
                   <div className="flex items-center justify-between border-b border-gray-800 pb-2.5 mb-2.5">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">Notifications</span>
                     {unreadCount > 0 && (
@@ -355,12 +402,14 @@ const DashboardLayout = () => {
                         <div 
                           key={notif.id}
                           onClick={() => handleNotificationClick(notif)}
-                          className="p-2.5 rounded-lg bg-gray-900/40 hover:bg-[#131926] border border-slate-800/40 hover:border-indigo-500/30 transition-all cursor-pointer text-left"
+                          className="p-2.5 rounded-lg bg-gray-900/40 hover:bg-[#131926] border border-slate-800/40 hover:border-indigo-500/30 transition-all cursor-pointer text-left min-w-0 w-full flex items-start"
                         >
-                          <div className="text-xs font-bold text-slate-200">{notif.title}</div>
-                          <div className="text-[10px] text-slate-400 mt-1 leading-normal">{notif.message}</div>
-                          <div className="text-[8px] text-slate-600 mt-1.5 font-mono">
-                            {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          <div className="min-w-0 flex-1 break-words">
+                            <div className="text-xs font-bold text-slate-200">{notif.title}</div>
+                            <div className="text-[10px] text-slate-400 mt-1 leading-normal">{notif.message}</div>
+                            <div className="text-[8px] text-slate-600 mt-1.5 font-mono">
+                              {new Date(notif.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </div>
                           </div>
                         </div>
                       ))
@@ -439,7 +488,7 @@ const DashboardLayout = () => {
         </header>
 
         
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-main p-8">
+        <main className={`flex-1 overflow-x-hidden bg-main ${location.pathname === '/app/chat' ? 'relative overflow-hidden p-0' : 'overflow-y-auto p-8'}`}>
           <Outlet context={{ profilePicRef }} />
         </main>
       </div>

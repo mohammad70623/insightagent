@@ -4,7 +4,7 @@ import ChatInput from "./ChatInput";
 
 const UI_TEXT = {
   ACTIVE: "🟢 Secure Chat Session Active",
-  AWAITING: "⚪ Awaiting Session Matrix",
+  AWAITING: "⚪ No Active Session",
   EMPTY_PANEL: "Please select or create an agent session on the left pane to begin execution.",
   UPLINK: "Workspace Empty. Uplink established. Awaiting user injection..."
 };
@@ -19,7 +19,7 @@ const ChatWindow = ({
   chatBottomRef 
 }) => {
   return (
-    <div className="flex-1 flex flex-col bg-[#111827]">
+    <div className="flex-1 flex flex-col bg-[#111827] overflow-hidden relative h-full">
       {/* Top Banner */}
       <div className="px-6 py-4 bg-[#1f2937] border-b border-gray-700 flex justify-between items-center shadow-md">
         <div>
@@ -35,16 +35,27 @@ const ChatWindow = ({
       </div>
 
       {/* Messages Stream Screen */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar pb-24">
         {!activeSessionId ? (
-          <div className="h-full flex flex-col items-center justify-center text-gray-500 space-y-2">
-            <span className="text-4xl">🚀</span>
-            <p className="text-sm font-medium">{UI_TEXT.EMPTY_PANEL}</p>
+          <div className="h-full flex flex-col items-center justify-center text-center p-6">
+            <span className="text-4xl mb-4">🚀</span>
+            {/* Clean & Humanized Title Header */}
+            <h2 className="text-xl font-semibold text-slate-100">
+              Ready to start
+            </h2>
+
+            {/* Simple & Clear Explainer Subtext */}
+            <p className="text-sm text-slate-400 max-w-sm mt-2">
+              Select a session from the list or create a new one to start chatting with your AI agent.
+            </p>
           </div>
         ) : messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-gray-600 space-y-1">
-            <span className="text-2xl">📡</span>
-            <p className="text-xs font-mono">{UI_TEXT.UPLINK}</p>
+          <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-2">
+            <span className="text-4xl mb-2">📡</span>
+            {/* Professional & Humanized Chat Invitation */}
+            <p className="text-sm text-slate-400 font-normal tracking-wide max-w-sm mt-3 leading-relaxed">
+              Connected and ready. Send a message below to start the conversation with your AI agent!
+            </p>
           </div>
         ) : (
           messages.map((msg, idx) => (

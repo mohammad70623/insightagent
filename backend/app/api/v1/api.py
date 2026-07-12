@@ -20,4 +20,4 @@ api_router.include_router(profile.user_router, prefix="/user", tags=["User Profi
 api_router.include_router(support_router.router, tags=["Support & Live Takeover"])
 api_router.include_router(notifications.router, tags=["Notifications System"])
 api_router.include_router(ai_support.router, prefix="/ai-support", tags=["AI Support RAG Core"])
-api_router.include_router(predictive.router, prefix="/predictive", tags=["Predictive Simulation Engine"])
+api_router.include_router(predictive.router, prefix="/predictive", tags=["Predictive Simulation Engine"])

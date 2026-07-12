@@ -146,8 +146,23 @@ const UrgentFeedbacks = ({ urgentFeedbacks = [], onSendReply }) => {
       {/* Inbox Row Stack List */}
       <div className="divide-y divide-gray-850/40 max-h-[350px] overflow-y-auto">
         {urgentFeedbacks.length === 0 ? (
-          <div className="text-center py-8 text-slate-500 font-mono text-[10px]">
-            ⚡ Inbox is clean. No unread emergency tickets active.
+          <div className="flex flex-col items-center justify-center py-12 px-4 min-h-[320px] text-center w-full">
+            {/* Modern Glossy Icon Container */}
+            <div className="relative flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-teal-500/5 border border-emerald-500/20 mb-5 shadow-lg shadow-emerald-500/5 animate-pulse">
+              <span className="text-3xl filter drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]">🎉</span>
+              {/* Subtle Background Glow */}
+              <div className="absolute inset-0 rounded-2xl bg-emerald-500/10 blur-xl -z-10"></div>
+            </div>
+
+            {/* User Friendly Headline */}
+            <h3 className="text-lg font-semibold text-slate-200 tracking-tight mb-1">
+              Your Inbox is All Clear! 🎉
+            </h3>
+
+            {/* Professional Subtext */}
+            <p className="text-sm text-slate-400 max-w-sm leading-relaxed">
+              No unread emergency feedbacks or urgent alerts require attention right now. Great job keeping the queue clear!
+            </p>
           </div>
         ) : (
           urgentFeedbacks.map((item) => (

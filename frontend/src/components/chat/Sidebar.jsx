@@ -41,7 +41,8 @@ const Sidebar = ({
   isStreaming 
 }) => {
   return (
-    <div className="w-80 bg-[#1f2937] border-r border-gray-700 flex flex-col justify-between">
+    <div className="w-full md:w-80 border-b md:border-b-0 md:border-r border-slate-800 bg-slate-900/50 p-4 flex flex-col justify-between h-48 md:h-full flex-shrink-0">
+      {/* Left Session Pane: full width on mobile, fixed width on laptop */}
       <div className="p-4 flex-1 flex flex-col min-h-0">
         <h2 className="text-xl font-bold tracking-wider mb-4 text-[#38bdf8] flex items-center gap-2">
           <span>🧠</span> InsightAgent

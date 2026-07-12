@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
-import { Shield, KeyRound, Mail, User, ArrowRight, Sparkles, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Shield, KeyRound, Mail, User, ArrowRight, Sparkles, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 /**
  * @description Enterprise Standalone Registration with Native OTP Verification State
@@ -10,6 +10,7 @@ const Register = () => {
   const navigate = useNavigate();
   // ─── CORE STATES ───
   const [isSignupStep, setIsSignupStep] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -91,7 +92,12 @@ const Register = () => {
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff01_1px,transparent_1px),linear-gradient(to_bottom,#ffffff01_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
         
         <div className="flex items-center gap-3 relative z-10">
-          <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-brand-primary text-black font-black text-sm">I</div>
+          <img 
+            src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
+            alt="InsightAgent Logo" 
+            className="w-9 h-9 object-cover rounded-xl border border-slate-850 shadow-md transform hover:scale-105 transition-transform duration-200"
+            crossOrigin="anonymous"
+          />
           <div>
             <h1 className="text-sm font-black tracking-tight text-white">InsightAgent</h1>
             <p className="text-[9px] uppercase tracking-widest text-brand-primary font-bold -mt-0.5 font-mono">Enterprise AI Engine</p>
@@ -198,13 +204,20 @@ const Register = () => {
                     <input
                       id="password"
                       name="password"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       required
                       value={formData.password}
                       onChange={handleInputChange}
                       placeholder="••••••••••••"
-                      className="w-full rounded-xl border border-gray-800 bg-surface pl-10 pr-4 py-3 text-xs text-white placeholder-gray-600 outline-none transition-all focus:border-brand-primary/80 font-medium"
+                      className="w-full rounded-xl border border-gray-800 bg-surface pl-10 pr-10 py-3 text-xs text-white placeholder-gray-600 outline-none transition-all focus:border-brand-primary/80 font-medium"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3.5 text-gray-500 hover:text-white transition-colors cursor-pointer focus:outline-none"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
 

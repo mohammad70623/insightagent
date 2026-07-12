@@ -1,9 +1,14 @@
+import os
+import json
+import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.api.v1.endpoints.analytics.analyze import router as analyze_router
+
+logger = logging.getLogger(__name__)
 
 # Initialize Enterprise FastAPI Application Engine
 app = FastAPI(
@@ -15,17 +20,42 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Secures backend from unauthorized cross-origin resource execution requests
-if settings.BACKEND_CORS_ORIGINS:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[str(origin).strip("/") for origin in settings.BACKEND_CORS_ORIGINS],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
 
-# Inject the assembled V1 Router cluster into the main app core runtime
+raw_origins = getattr(settings, "BACKEND_CORS_ORIGINS", None) or os.getenv("BACKEND_CORS_ORIGINS", "[]")
+allowed_origins = []
+
+if isinstance(raw_origins, list):
+    allowed_origins = [str(origin).strip("/") for origin in raw_origins]
+elif isinstance(raw_origins, str):
+    try:
+
+        parsed = json.loads(raw_origins)
+        if isinstance(parsed, list):
+            allowed_origins = [str(origin).strip("/") for origin in parsed]
+    except json.JSONDecodeError:
+  
+        allowed_origins = [origin.strip().strip("/") for origin in raw_origins.split(",") if origin.strip()]
+
+if not allowed_origins:
+    logger.warning("⚠️ No CORS origins configured! Falling back to strict localhost defaults.")
+    allowed_origins = [
+        "http://localhost:5173",  
+        "http://localhost:3000",
+        "http://127.0.0.1:5173"
+    ]
+
+logger.info(f"🔒 Secure CORS origins loaded: {allowed_origins}")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins, 
+    allow_credentials=True,
+    allow_methods=["*"],            
+    allow_headers=["*"],            
+)
+
+
+
 app.include_router(api_router, prefix=settings.API_V1_STR)
 app.include_router(analyze_router, prefix="/api")
 
@@ -71,6 +101,6 @@ async def root_health_check():
     return {
         "status": "online",
         "engine": settings.PROJECT_NAME,
-        "environment": "development",
+        "environment": "production",
         "gateway_status": "healthy"
     }

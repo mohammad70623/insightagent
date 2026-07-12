@@ -18,12 +18,12 @@ const ChatInput = ({ inputPrompt, setInputPrompt, onSendMessage, activeSessionId
   };
 
   return (
-    <div className="p-4 bg-[#1f2937] border-t border-gray-700 shadow-2xl">
+    <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-950 via-slate-950 to-transparent w-full z-30">
       <form onSubmit={onSendMessage} className="max-w-4xl mx-auto flex gap-3">
         <input
           ref={inputRef}
           type="text"
-          placeholder={activeSessionId ? "Ask anything about your workspace documents... (Press Enter to send)" : "Terminal Locked."}
+          placeholder="Ask me anything..."
           value={inputPrompt}
           onChange={(e) => setInputPrompt(e.target.value)}
           onKeyDown={handleKeyDown}

@@ -52,6 +52,15 @@ const Upload = () => {
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files || e.dataTransfer?.files || []);
     if (!files.length) return;
+
+    // Size check validation
+    const invalidFile = files.find((file) => file.size > 10 * 1024 * 1024);
+    if (invalidFile) {
+      alert("⚠️ File Too Large: Maximum allowed file size is 10 MB. Please compress your document and try again.");
+      e.target.value = '';
+      return false;
+    }
+
     const newEntries = files.map((file) => ({
       id: (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`),
       name: file.name,
@@ -164,6 +173,7 @@ const Upload = () => {
             <div className="text-3xl">📂</div>
             <p className="text-sm text-gray-400">Drag & Drop or click to select files</p>
             <p className="text-xs text-gray-600">Supported: .txt, .csv, .json, .pdf</p>
+            <p className="text-xs text-gray-500/75 mt-0.5 font-mono">Maximum file size allowed is 10 MB.</p>
           </div>
         </label>
 

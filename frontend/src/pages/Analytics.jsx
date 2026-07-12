@@ -39,7 +39,7 @@ const Analytics = () => {
   const [timelineCategories, setTimelineCategories] = useState([]);
   const [sentimentData, setSentimentData] = useState(null);
   const [urgentFeedbacks, setUrgentFeedbacks] = useState([]);
-  const [topProducts, setTopProducts] = useState(null);
+  const [reports, setReports] = useState([]);
   const [toasts, setToasts] = useState([]);
 
   const addToast = (message, severity) => {
@@ -129,15 +129,48 @@ const Analytics = () => {
     }
   };
 
+  // Dynamic resolution of the active document
+  const activeDocumentId = activeFiles.length > 0 ? (activeFiles[0].document_id || activeFiles[0].id) : null;
+
   const fetchTopProducts = async () => {
     try {
-      const response = await api.get('/chat/analytics/top-products');
-      setTopProducts(response.data || []);
+      const url = activeDocumentId 
+        ? `/chat/analytics/top-products?doc_id=${activeDocumentId}`
+        : '/chat/analytics/top-products';
+      const response = await api.get(url);
+      console.log("📡 TOP PRODUCTS RAW API RESPONSE:", response.data); // Debug trace
+      const fetchedProducts = response.data?.products || (Array.isArray(response.data) ? response.data : []);
+      setReports(fetchedProducts);
     } catch (error) {
       console.error("Failed to fetch top products:", error);
-      setTopProducts([]);
+      setReports([]);
     }
   };
+
+  useEffect(() => {
+    if (activeDocumentId) {
+      fetchTopProducts();
+    } else {
+      setReports([]);
+    }
+  }, [activeDocumentId]);
+
+  useEffect(() => {
+    api.get('/chat/analytics/top-products')
+      .then(res => {
+        console.log("📡 [FRONTEND DEBUG RAW RES]:", res);
+        console.log("📦 [FRONTEND DEBUG DATA EMBED]:", res.data);
+        
+        // Fallback safe assignment
+        const dataArray = res.data?.products || res.data || [];
+        console.log("📊 [FINAL UNPACKED ARRAY STATE]:", dataArray);
+        setReports(dataArray);
+      })
+      .catch(err => {
+        console.error("❌ [API FETCH CRASH]:", err);
+        setReports([]);
+      });
+  }, []);
 
   const fetchUploadedFiles = async () => {
     try {
@@ -248,7 +281,13 @@ const Analytics = () => {
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      setUploadFile(e.target.files[0]);
+      const file = e.target.files[0];
+      if (file.size > 10 * 1024 * 1024) {
+        alert("⚠️ File Too Large: Maximum allowed file size is 10 MB. Please compress your document and try again.");
+        e.target.value = '';
+        return false;
+      }
+      setUploadFile(file);
     }
   };
 
@@ -430,7 +469,7 @@ const Analytics = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto animate-fade-in font-sans relative pb-20">
+    <div className="w-full h-full min-h-screen overflow-y-auto overflow-x-hidden p-4 md:p-6 text-slate-200">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white">Analytics Dashboard</h2>
@@ -459,41 +498,7 @@ const Analytics = () => {
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
         <UrgentFeedbacks urgentFeedbacks={urgentFeedbacks} onSendReply={handleSendReply} />
-        {topProducts === null ? (
-          <div className="md:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between animate-pulse min-h-[220px]">
-            <div className="h-4 bg-gray-800 rounded w-1/3 mb-4"></div>
-            <div className="space-y-4 flex-1 flex flex-col justify-center">
-              <div className="space-y-2">
-                <div className="h-3 bg-gray-800 rounded w-full"></div>
-                <div className="h-1.5 bg-gray-900 rounded-full w-full"></div>
-              </div>
-              <div className="space-y-2">
-                <div className="h-3 bg-gray-800 rounded w-full"></div>
-                <div className="h-1.5 bg-gray-900 rounded-full w-full"></div>
-              </div>
-              <div className="space-y-2">
-                <div className="h-3 bg-gray-800 rounded w-full"></div>
-                <div className="h-1.5 bg-gray-900 rounded-full w-full"></div>
-              </div>
-            </div>
-          </div>
-        ) : topProducts.length === 0 ? (
-          <div className="md:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-center items-center text-center py-12 text-slate-500 font-mono text-[10px] leading-relaxed min-h-[220px]">
-            <span className="text-lg mb-2">⚡</span>
-            <span>No document context found. Please ingest a valid performance report via Data Ingestion Control to track metrics.</span>
-          </div>
-        ) : (
-          <TopProducts products={topProducts.map(prod => {
-            const isUp = prod.trend >= 0;
-            return {
-              name: prod.name,
-              rate: `${prod.conversion}%`,
-              delta: `${isUp ? '+' : ''}${prod.trend}%`,
-              isUp,
-              width: `w-[${prod.conversion}%]`
-            };
-          })} />
-        )}
+        <TopProducts reports={reports} />
       </div>
 
       <ForecastSimulator 
@@ -524,6 +529,7 @@ const Analytics = () => {
                 <Database size={14} className="text-brand-primary" /> Active Vector Base
               </h4>
               <p className="text-[10px] text-gray-500 mt-0.5">Manage custom knowledge base documents for enterprise RAG indexing.</p>
+              <p className="text-[10px] text-gray-500/70 mt-0.5 font-mono">Maximum file size allowed is 10 MB.</p>
             </div>
             
             <div className="flex items-center gap-4 bg-[#0B0F19] rounded-xl p-4 border border-gray-850 flex-wrap">

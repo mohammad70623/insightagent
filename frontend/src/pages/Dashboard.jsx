@@ -240,8 +240,9 @@ const Dashboard = () => {
               <h3 className="text-sm font-bold uppercase tracking-wider text-brand-muted mb-4 font-mono flex items-center gap-2">
                 <FileText size={16} className="text-brand-primary" /> Recent Data Inventory Table
               </h3>
-              <p className="text-xs text-brand-muted mb-6 leading-relaxed">
-                Below are the active document modules synchronized in your vector store.
+              {/* Business-Friendly & Clear Subtitle */}
+              <p className="text-sm text-slate-400 font-normal leading-relaxed mt-1">
+                Below are the uploaded documents currently processed and ready for analysis.
               </p>
 
               <div className="overflow-x-auto text-xs w-full flex-1 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">

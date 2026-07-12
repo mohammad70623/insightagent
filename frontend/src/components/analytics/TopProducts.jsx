@@ -1,34 +1,111 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { api } from '../../services/api';
 
-const TopProducts = ({ products }) => {
+export default function TopProducts({ reports: propReports }) {
+  const [internalReports, setInternalReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const isControlled = propReports !== undefined;
+  const reports = isControlled ? propReports : internalReports;
+  const activeLoading = isControlled ? false : loading;
+
+  // 1. DIRECT API INGESTION WITH NO PARENT DEPENDENCY
+  useEffect(() => {
+    if (isControlled) return;
+
+    const fetchTopProductsDirectly = () => {
+      setLoading(true);
+      console.log("🚀 [Atomic Fetch] Attempting to pull directly from /api/v1/chat/analytics/top-products");
+      
+      api.get('/chat/analytics/top-products')
+        .then(res => {
+          // Safely unpack the inner products array from the dictionary response object
+          const targetProducts = res.data?.products || res.data || [];
+          setInternalReports(targetProducts);
+        })
+        .catch(err => {
+          console.error(err);
+          setInternalReports([]);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    };
+
+    fetchTopProductsDirectly();
+    
+    // Optional: Poll or refresh data when window refocuses or local storage changes
+    window.addEventListener('focus', fetchTopProductsDirectly);
+    return () => window.removeEventListener('focus', fetchTopProductsDirectly);
+  }, [isControlled]);
+
   return (
-    <div className="md:col-span-5 rounded-xl border border-gray-800/40 bg-surface p-6 shadow-xl flex flex-col justify-between">
-      <div className="flex items-center justify-between mb-4">
-        <h4 className="text-xs font-bold uppercase tracking-widest text-brand-muted font-mono">
+    <div className="md:col-span-5 bg-[#0B0F19]/60 backdrop-blur border border-slate-850 rounded-2xl p-6 shadow-xl flex flex-col h-full w-full min-h-[250px]">
+      
+      {/* 1. HEADER ROW - THIS MUST ALWAYS BE VISIBLE */}
+      <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 mb-4">
+        <h3 className="text-sm font-semibold text-slate-200 uppercase tracking-wider flex items-center gap-2">
           🚀 Top Performing Products
-        </h4>
-        <span className="text-[9px] text-gray-500 font-bold">Sorted by Conversion</span>
+        </h3>
+        <span className="text-[10px] md:text-xs text-indigo-400 font-medium bg-indigo-500/10 px-2.5 py-1 rounded-md tracking-wide">
+          Sorted by Conversion ⚡
+        </span>
       </div>
-      <div className="space-y-4 flex-1 flex flex-col justify-center">
-        {products.map((prod, index) => (
-          <div key={index} className="space-y-1.5">
-            <div className="flex justify-between text-xs font-semibold">
-              <span className="text-white">{prod.name}</span>
-              <span className="text-brand-primary font-mono">
-                {prod.rate}{' '}
-                <span className={`text-[10px] font-bold ${prod.isUp ? 'text-green-400' : 'text-red-400'}`}>
-                  {prod.delta}
-                </span>
-              </span>
-            </div>
-            <div className="w-full bg-gray-900 h-1.5 rounded-full overflow-hidden border border-gray-800/50">
-              <div className={`bg-brand-primary ${prod.width} h-full rounded-full transition-all duration-500`} />
-            </div>
+
+      {/* 2. INNER DYNAMIC CONTENT AREA */}
+      <div className="flex-1 flex flex-col justify-center items-center w-full">
+        {activeLoading ? (
+          /* LOADING SPINNER IN CONTEXT */
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
           </div>
-        ))}
+        ) : Array.isArray(reports) && reports.length > 0 ? (
+          /* RENDER DATA VIEWS & CHARTS */
+          <div className="w-full space-y-4 animate-fade-in">
+            {reports.map((item, index) => {
+              // Direct console logger to reveal exactly what keys are dropping from the network stream
+              console.log(`📦 [Item Trace #${index}] Structure:`, item);
+
+              // Support every possible variant naming convention dynamically
+              const displayName = item.name || item.product_name || item.title || "Processed Item";
+              const displayConversion = item.conversion !== undefined ? Number(item.conversion) : (Number(item.conversion_rate) || 0);
+              const displayGrowth = item.growth !== undefined ? Number(item.growth) : (Number(item.growth_rate) || Number(item.change) || 0);
+
+              return (
+                <div key={index} className="flex flex-col w-full text-left">
+                  <div className="flex justify-between items-center mb-1 text-xs md:text-sm">
+                    <span className="text-slate-200 font-medium">{displayName}</span>
+                    <div className="flex gap-3 font-semibold text-xs">
+                      <span className="text-indigo-400">{displayConversion}%</span>
+                      <span className="text-emerald-400">+{displayGrowth}%</span>
+                    </div>
+                  </div>
+                  <div className="w-full bg-slate-800/60 h-1.5 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-indigo-500 h-1.5 rounded-full transition-all duration-500"
+                      style={{ width: `${displayConversion}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* RENDER EMPTY STATE TEXT ONLY WITH CLEAN SPACING */
+          <div className="w-full flex flex-col items-center justify-center py-8 text-center max-w-xs mx-auto space-y-4">
+            <div className="p-3 bg-slate-900/60 border border-slate-800 rounded-xl shadow-inner">
+              <img 
+                src="https://img.icons8.com/fluency/48/combo-chart.png" 
+                alt="Analytics Icon" 
+                className="w-10 h-10 opacity-75"
+              />
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed font-normal px-2">
+              No reports uploaded yet. Please upload a performance document in the sidebar to see your analytics dashboard.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
-};
-
-export default TopProducts;
+}

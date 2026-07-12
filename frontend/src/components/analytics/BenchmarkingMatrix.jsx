@@ -6,6 +6,7 @@ const BenchmarkingMatrix = ({ searchMeta, benchmarks = [] }) => {
   
   const query = searchMeta?.query || "Dynamic Web Matrix";
   const timestamp = searchMeta?.time || "2026-07-06 17:09:32 UTC";
+  const userCompany = benchmarks.find(b => b.is_user)?.name || "Target Company";
 
   return (
     <div className="lg:col-span-12 bg-[#111625] p-6 rounded-xl border border-[#1e293b] w-full text-white">
@@ -148,7 +149,7 @@ const BenchmarkingMatrix = ({ searchMeta, benchmarks = [] }) => {
                     Competitive Battlecard
                   </h4>
                   <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                    InsightAgent vs {selectedCompetitor.name}
+                    {userCompany} vs {selectedCompetitor.name}
                   </p>
                 </div>
               </div>
