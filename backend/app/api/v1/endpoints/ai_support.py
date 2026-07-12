@@ -18,7 +18,10 @@ from app.services.rag.vector_store import vector_store
 router = APIRouter()
 logger = logging.getLogger("ai_support_router")
 
-PDF_PATH = "c:/SaasProject/insightagent/backend/app/assets/insightAgent support document.pdf"
+# --- DYNAMIC PRODUCTION-READY ABSOLUTE PATH RESOLUTION ---
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+PDF_PATH = os.path.abspath(os.path.join(CURRENT_DIR, "..", "..", "..", "assets", "insightAgent support document.pdf"))
+# ---------------------------------------------------------
 COLLECTION_NAME = "system_support"
 SUPPORT_MANUAL_TEXT = ""
 

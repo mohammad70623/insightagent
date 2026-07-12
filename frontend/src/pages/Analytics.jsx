@@ -281,7 +281,13 @@ const Analytics = () => {
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
-      setUploadFile(e.target.files[0]);
+      const file = e.target.files[0];
+      if (file.size > 10 * 1024 * 1024) {
+        alert("⚠️ File Too Large: Maximum allowed file size is 10 MB. Please compress your document and try again.");
+        e.target.value = '';
+        return false;
+      }
+      setUploadFile(file);
     }
   };
 
@@ -523,6 +529,7 @@ const Analytics = () => {
                 <Database size={14} className="text-brand-primary" /> Active Vector Base
               </h4>
               <p className="text-[10px] text-gray-500 mt-0.5">Manage custom knowledge base documents for enterprise RAG indexing.</p>
+              <p className="text-[10px] text-gray-500/70 mt-0.5 font-mono">Maximum file size allowed is 10 MB.</p>
             </div>
             
             <div className="flex items-center gap-4 bg-[#0B0F19] rounded-xl p-4 border border-gray-850 flex-wrap">
