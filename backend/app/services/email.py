@@ -9,9 +9,10 @@ logger = logging.getLogger(__name__)
 
 def _smtp_send(msg: EmailMessage):
     """Blocking SMTP send – runs in a thread via asyncio.to_thread."""
+    import ssl
     with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
         server.ehlo()
-        server.starttls()
+        server.starttls(context=ssl.create_default_context())
         server.ehlo()
         server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         server.send_message(msg)
