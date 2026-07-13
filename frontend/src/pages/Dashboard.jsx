@@ -254,7 +254,7 @@ const Dashboard = () => {
 
               <div className="overflow-x-auto text-xs w-full flex-1 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
                 {loadingFiles ? (
-                  <div className="text-gray-500 font-mono text-[11px] py-4 animate-pulse">Synchronizing vector index status...</div>
+                  <div className="text-gray-500 font-mono text-[11px] py-4 animate-pulse">Verifying Document Connection...</div>
                 ) : uploadedFiles.length === 0 ? (
                   <div className="text-gray-500 font-mono text-[11px] py-4">No data files found in your inventory. Get started by uploading one!</div>
                 ) : (

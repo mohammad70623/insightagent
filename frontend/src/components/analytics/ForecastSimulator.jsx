@@ -296,7 +296,7 @@ const ForecastSimulator = ({
             <div className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-5 flex flex-col justify-between transition-all duration-300 hover:border-gray-700 min-h-[320px] relative">
               {loadingAI && (
                 <div className="absolute inset-0 bg-[#0B0F19]/80 rounded-lg flex items-center justify-center text-[10px] font-mono text-brand-primary z-10">
-                  <span className="animate-spin mr-2">⏳</span> SYNTHESIZING...
+                  <span className="animate-spin mr-2">⏳</span> Preparing Analysis Report...
                 </div>
               )}
               <div className="flex items-center gap-[10px] border-b border-gray-850 pb-2 mb-3">
@@ -308,7 +308,7 @@ const ForecastSimulator = ({
               <div className="flex-1 overflow-y-auto max-h-[220px] custom-scrollbar pr-1">
                 <div className="text-[11px] font-mono text-brand-muted leading-relaxed italic prose prose-invert max-w-none">
                   <ReactMarkdown>
-                    {insightText || "Awaiting simulation variables..."}
+                    {insightText || "Change parameters above to update report..."}
                   </ReactMarkdown>
                 </div>
               </div>

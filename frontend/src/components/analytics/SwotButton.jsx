@@ -9,19 +9,24 @@ import SwotModal from './SwotModal';
  * Mounted in DashboardLayout so it shows on every authenticated page.
  */
 const SwotButton = () => {
-  const [hasFiles, setHasFiles]     = useState(false);
-  const [isOpen, setIsOpen]         = useState(false);
-  const [swotData, setSwotData]     = useState(null);
+  const [hasFiles, setHasFiles] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [swotData, setSwotData] = useState(null);
   const [loadedDocId, setLoadedDocId] = useState(null); // Track the document ID that swotData belongs to
-  const [loading, setLoading]       = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // Drag state
-  const [pos, setPos] = useState({
-    x: window.innerWidth  - 90,
-    y: window.innerHeight - 110,
-  });
+  // Drag state (Fallback safely for mobile viewports)
+  const [pos, setPos] = useState({ x: 0, y: 0 });
   const drag = useRef({ active: false, ox: 0, oy: 0, moved: false });
   const btnRef = useRef(null);
+
+  // Set initial position safely after component mounts
+  useEffect(() => {
+    setPos({
+      x: window.innerWidth > 0 ? window.innerWidth - 80 : 280,
+      y: window.innerHeight > 0 ? window.innerHeight - 100 : 500
+    });
+  }, []);
 
   // Check if user has uploaded files (runs once on mount for the initial button color)
   useEffect(() => {
@@ -32,7 +37,10 @@ const SwotButton = () => {
 
   // Fetch SWOT analysis from backend
   const fetchSwot = useCallback(async (force = false) => {
-    const activeDocId = localStorage.getItem("active_document_id");
+    const rawDocId = localStorage.getItem("active_document_id");
+   
+    const activeDocId = (rawDocId && rawDocId !== "null" && rawDocId !== "undefined") ? rawDocId : null;
+
     setLoading(true);
     try {
       // 1. Verify files exist in real-time
@@ -50,15 +58,19 @@ const SwotButton = () => {
       // 2. Fetch SWOT if we don't have it, or if forced, or if the active document has changed
       if (!swotData || force || activeDocId !== loadedDocId) {
         if (force || activeDocId !== loadedDocId) setSwotData(null);
+        
+    
         const url = activeDocId 
           ? `/chat/analytics/swot?document_id=${activeDocId}` 
           : '/chat/analytics/swot';
+
         const res = await api.get(url);
         setSwotData(res.data.swot_markdown);
         setLoadedDocId(activeDocId);
       }
-    } catch {
-      setSwotData('Failed to load SWOT analysis. Please check your connection and try again.');
+    } catch (err) {
+      console.error("SWOT Fetch Error:", err);
+      setSwotData('## ⚠️ Analysis Temporarily Unavailable\n\nUnable to retrieve real-time SWOT framework. Please ensure your cloud environment is operational and try refreshing again.');
     } finally {
       setLoading(false);
     }
@@ -75,7 +87,7 @@ const SwotButton = () => {
     if (!drag.current.active) return;
     drag.current.moved = true;
     setPos({
-      x: Math.max(16, Math.min(window.innerWidth  - 68, e.clientX - drag.current.ox)),
+      x: Math.max(16, Math.min(window.innerWidth - 68, e.clientX - drag.current.ox)),
       y: Math.max(16, Math.min(window.innerHeight - 68, e.clientY - drag.current.oy)),
     });
   }, []);
@@ -98,40 +110,40 @@ const SwotButton = () => {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         style={{
-          position:    'fixed',
-          left:        pos.x,
-          top:         pos.y,
-          zIndex:      99999,
+          position: 'fixed',
+          left: pos.x,
+          top: pos.y,
+          zIndex: 99999,
           touchAction: 'none',
-          width:       64,
-          height:      64,
-          borderRadius:'50%',
-          border:      hasFiles ? '1.5px solid rgba(129,140,248,0.55)' : '1.5px solid rgba(255,255,255,0.08)',
-          background:  hasFiles
+          width: 64,
+          height: 64,
+          borderRadius: '50%',
+          border: hasFiles ? '1.5px solid rgba(129,140,248,0.55)' : '1.5px solid rgba(255,255,255,0.08)',
+          background: hasFiles
             ? 'linear-gradient(135deg,#4f46e5,#7c3aed)'
             : 'linear-gradient(135deg,#1f2937,#374151)',
-          boxShadow:   hasFiles
+          boxShadow: hasFiles
             ? '0 0 20px rgba(99,102,241,0.45),0 6px 24px rgba(0,0,0,0.5)'
             : '0 4px 16px rgba(0,0,0,0.4)',
-          cursor:      'grab',
-          display:     'flex',
-          flexDirection:'column',
-          alignItems:  'center',
-          justifyContent:'center',
-          gap:         3,
-          userSelect:  'none',
-          transition:  'background 0.3s,box-shadow 0.3s',
+          cursor: 'grab',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 3,
+          userSelect: 'none',
+          transition: 'background 0.3s,box-shadow 0.3s',
         }}
         title={hasFiles ? 'Click for AI SWOT Analysis' : 'Upload a document to enable SWOT'}
       >
         {loading
           ? <RefreshCw size={18} style={{ color: '#c7d2fe', animation: 'swot-spin 1s linear infinite' }} />
           : <>
-              <ShieldAlert size={16} style={{ color: hasFiles ? '#c7d2fe' : '#6b7280' }} />
-              <span style={{ fontSize: 9, fontWeight: 800, color: hasFiles ? '#fff' : '#6b7280', fontFamily: 'monospace', letterSpacing: '0.1em' }}>
-                SWOT
-              </span>
-            </>
+            <ShieldAlert size={16} style={{ color: hasFiles ? '#c7d2fe' : '#6b7280' }} />
+            <span style={{ fontSize: 9, fontWeight: 800, color: hasFiles ? '#fff' : '#6b7280', fontFamily: 'monospace', letterSpacing: '0.1em' }}>
+              SWOT
+            </span>
+          </>
         }
       </button>
 
