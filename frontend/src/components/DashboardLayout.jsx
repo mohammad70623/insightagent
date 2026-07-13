@@ -381,8 +381,8 @@ const DashboardLayout = () => {
 
               {/* Dropdown panel */}
               {showNotificationsDropdown && (
-                <div className="absolute right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-96 max-w-md bg-[#0B0F19]/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden p-4">
-                  <div className="flex items-center justify-between border-b border-gray-800 pb-2.5 mb-2.5">
+                <div className="absolute right-[-140px] sm:right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-96 max-w-md bg-[#0B0F19]/95 backdrop-blur-md border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden p-4">
+                <div className="flex items-center justify-between border-b border-gray-800 pb-2.5 mb-2.5">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">Notifications</span>
                     {unreadCount > 0 && (
                       <span className="text-[9px] bg-red-500/10 border border-red-500/20 text-red-400 font-semibold px-2 py-0.5 rounded-full font-mono">
