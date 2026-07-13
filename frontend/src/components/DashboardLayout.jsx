@@ -201,11 +201,10 @@ const DashboardLayout = () => {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user_role'); 
+    localStorage.clear();
+    sessionStorage.clear(); 
     navigate('/login');
   };
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-main text-white font-sans select-none flex-col md:flex-row">
       

@@ -1,6 +1,6 @@
 import axios from "axios";
 
-// 🌐 InsightAgent Enterprise API Gateway Service
+//  InsightAgent Enterprise API Gateway Service
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api/v1";
 
 /**
@@ -26,12 +26,16 @@ api.interceptors.request.use((config) => {
   return config;
 }, (error) => Promise.reject(error));
 
+//  Axios Response Interceptor (Updated with full clear & 403 support)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user_role");
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      console.warn("Unauthorized/Forbidden token detected by Axios. Clearing all session data...");
+      
+      localStorage.clear();
+      sessionStorage.clear();
+      
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";
       }
@@ -41,14 +45,18 @@ api.interceptors.response.use(
 );
 
 /**
- * Global 401 guard for fetch responses — when any authenticated request gets a 401, the stale
- * token is cleared and the user is hard-redirected to /login.
+ * Global 401/403 guard for fetch responses — when any authenticated request gets a 401/403, the stale
+ * token and cache are cleared and the user is hard-redirected to /login.
  * This eliminates the infinite auth loop caused by expired tokens.
  */
 const handleResponse = async (response) => {
-  if (response.status === 401) {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user_role");
+  if (response.status === 401 || response.status === 403) {
+    console.warn("Unauthorized/Forbidden token detected by Fetch. Clearing all session data...");
+    
+   
+    localStorage.clear();
+    sessionStorage.clear();
+    
     if (window.location.pathname !== "/login") {
       window.location.href = "/login";
     }
