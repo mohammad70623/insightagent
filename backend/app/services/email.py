@@ -1,4 +1,3 @@
-import smtplib
 import logging
 import asyncio
 from email.message import EmailMessage
@@ -7,24 +6,90 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
-def _smtp_send(msg: EmailMessage):
-    """Blocking SMTP send – runs in a thread via asyncio.to_thread."""
-    import ssl
-    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=10) as server:
-        server.ehlo()
-        server.starttls(context=ssl.create_default_context())
-        server.ehlo()
-        server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        server.send_message(msg)
+def _smtp_send(msg):
+    """Sends email via Brevo HTTP API using robust environment variable loading."""
+    import os
+    import requests
+    from pathlib import Path
+    from dotenv import load_dotenv
+
+    base_dir = Path(__file__).resolve().parent.parent.parent  # backend/
+    env_path = base_dir / '.env'
+    load_dotenv(dotenv_path=env_path)
+
+    api_key = os.getenv("BREVO_API_KEY")
+
+    # Debug line - remove once everything works
+    print(f"DEBUG: env_path={env_path}, exists={env_path.exists()}, key_loaded={'YES (len=' + str(len(api_key)) + ')' if api_key else 'NO'}")
+
+    if not api_key:
+        error_msg = f"BREVO_API_KEY is missing! Path checked: {env_path}"
+        print(f"🔴 SMTP Direct Failure: {error_msg}")
+        raise Exception(error_msg)
+
+    try:
+        target_email = msg.get("To") or msg["to"]
+        subject = msg.get("Subject") or msg["subject"]
+    except Exception:
+        target_email = getattr(msg, "to", "")
+        subject = getattr(msg, "subject", "OTP Verification")
+
+    # Extract HTML content safely
+    html_content = ""
+    try:
+        if hasattr(msg, "is_multipart") and msg.is_multipart():
+            for part in msg.walk():
+                if part.get_content_type() == "text/html":
+                    html_content = part.get_payload(decode=True).decode()
+        else:
+            if hasattr(msg, "get_payload"):
+                payload = msg.get_payload(decode=True)
+                html_content = payload.decode() if payload else str(msg)
+            else:
+                html_content = str(msg)
+    except Exception:
+        html_content = "Your OTP Verification Code"
+
+    # Brevo v3 REST API Setup
+    url = "https://api.brevo.com/v3/smtp/email"
+    headers = {
+        "accept": "application/json",
+        "api-key": api_key.strip(),
+        "content-type": "application/json"
+    }
+
+    payload = {
+        "sender": {
+            "name": "InsightAgent",
+            "email": "mohammad70623@gmail.com"
+        },
+        "to": [
+            {
+                "email": str(target_email).strip()
+            }
+        ],
+        "subject": str(subject),
+        "htmlContent": str(html_content)
+    }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=10)
+        if response.status_code in [200, 201, 202]:
+            print(f"✅ OTP Email successfully sent via Brevo to {target_email}")
+        else:
+            error_msg = f"Brevo API Failure: {response.status_code} - {response.text}"
+            print(f"🔴 {error_msg}")
+            raise Exception(error_msg)
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Network error connecting to Brevo API: {str(e)}"
+        print(f"🔴 {error_msg}")
+        raise Exception(error_msg)
+
 
 async def send_otp_email(to_email: str, otp_code: str, purpose: str):
     """
     Sends a beautifully formatted HTML email containing the cryptographic OTP code.
-    In DEV_MODE the email is skipped and the OTP is printed to the console instead.
     """
-    # Force real production execution by removing the mock string check or setting DEV_MODE to False
-    DEV_MODE = False 
-
     async def _send_otp_email_authentic(email, generated_otp):
         msg = EmailMessage()
         msg["Subject"] = f"InsightAgent: Your {purpose.capitalize()} Verification Code"
@@ -119,23 +184,23 @@ async def send_otp_email(to_email: str, otp_code: str, purpose: str):
                     <h1 class="title">InsightAgent</h1>
                     <p class="subtitle">Enterprise AI Engine</p>
                 </div>
-                
+
                 <div class="content">
                     <p class="text-body">
                         You have initiated a secure <strong>{purpose}</strong> request for your Enterprise AI workspace.<br>
                         Please use the following 6-digit cryptographic verification code to proceed:
                     </p>
-                    
+
                     <div class="otp-box">
                         <p class="otp-code">{generated_otp}</p>
                     </div>
-                    
+
                     <p class="text-body" style="font-size: 12px;">
                         This code will expire in 10 minutes. <br>
                         <span class="warning">If you did not request this, please contact your systems administrator immediately.</span>
                     </p>
                 </div>
-                
+
                 <div class="footer">
                     <p>SOC2 Type II Certified Infrastructure • © 2026 InsightAgent AI Corp.</p>
                 </div>
@@ -148,35 +213,28 @@ async def send_otp_email(to_email: str, otp_code: str, purpose: str):
         await asyncio.to_thread(_smtp_send, msg)
         logger.info(f"Successfully dispatched {purpose} OTP to {email}")
 
-    # Locate the conditional block handling the email dispatch and change it to strictly fire the real mailer:
     try:
-        # 1. Force remove the mock check and trigger the authentic SMTP function directly
         email = to_email
         generated_otp = otp_code
 
         await _send_otp_email_authentic(email, generated_otp)
-        print(f"🚀 [PRODUCTION] Real OTP email successfully fired to {email} via live SMTP gateway.")
+        print(f"🚀 [PRODUCTION] Real OTP email successfully fired to {email} via Brevo API.")
     except Exception as e:
-        print(f"🔴 SMTP Direct Failure: {str(e)}")
+        print(f"🔴 OTP Email Failure: {str(e)}")
         raise
+
 
 async def send_password_reset_email(to_email: str, reset_token: str):
     """
     Sends an HTML email with a secure link to reset the user's password.
-    In DEV_MODE the link is printed to the console instead.
     """
-    reset_link = f"http://localhost:5173/reset-password?token={reset_token}"
-
-    # Force real production execution by removing the mock string check or setting DEV_MODE to False
-    DEV_MODE = False
+    reset_link = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
 
     try:
         msg = EmailMessage()
         msg["Subject"] = "🔑 Action Required: Reset Your InsightAgent Password"
         msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_USER}>"
         msg["To"] = to_email
-        
-        reset_link = f"http://localhost:5173/reset-password?token={reset_token}"
 
         html_content = f"""
         <!DOCTYPE html>
@@ -256,21 +314,21 @@ async def send_password_reset_email(to_email: str, reset_token: str):
                     <h1 class="title">InsightAgent</h1>
                     <p class="subtitle">Enterprise AI Engine</p>
                 </div>
-                
+
                 <div class="content">
                     <p class="text-body">
                         We received a request to reset the password for your corporate identity channel.<br>
                         Click the secure button below to establish a new credential lock.
                     </p>
-                    
+
                     <a href="{reset_link}" class="btn">Reset Secure Password</a>
-                    
+
                     <p class="text-body" style="font-size: 12px; margin-bottom: 0;">
                         This link will safely expire in exactly 15 minutes.<br>
                         If you did not request a password reset, you can safely ignore this email.
                     </p>
                 </div>
-                
+
                 <div class="footer">
                     <p>SOC2 Type II Certified Infrastructure • © 2026 InsightAgent AI Corp.</p>
                 </div>
@@ -284,5 +342,5 @@ async def send_password_reset_email(to_email: str, reset_token: str):
         await asyncio.to_thread(_smtp_send, msg)
         logger.info(f"Successfully dispatched password reset email to {to_email}")
     except Exception as e:
-        logger.error(f"SMTP failure – could not send password reset email to {to_email}: {e}", exc_info=True)
+        logger.error(f"Email failure – could not send password reset email to {to_email}: {e}", exc_info=True)
         raise
