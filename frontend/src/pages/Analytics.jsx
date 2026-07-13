@@ -463,7 +463,7 @@ const Analytics = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96 text-xs font-mono tracking-widest text-brand-primary animate-pulse">
-        SYNCING LIVE ENTERPRISE BUSINESS METRICS...
+       Loading Analytics Dashboard...
       </div>
     );
   }

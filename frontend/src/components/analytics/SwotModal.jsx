@@ -176,7 +176,7 @@ const SwotModal = ({ isOpen, onClose, hasFiles, swotData, loading, onRefresh }) 
                   <ShieldAlert size={14} style={{ color:'#818cf8' }} />
                 </div>
               </div>
-              <div style={{ color:'#a5b4fc', fontSize:11, fontFamily:'monospace', letterSpacing:'0.14em' }}>GENERATING SWOT MATRIX...</div>
+              <div style={{ color:'#a5b4fc', fontSize:11, fontFamily:'monospace', letterSpacing:'0.14em' }}>Analyzing Strengths & Risks...</div>
               <div style={{ color:'#4b5563', fontSize:10, fontFamily:'monospace' }}>Querying LLaMA 3 70B with your documents</div>
             </div>
           )}

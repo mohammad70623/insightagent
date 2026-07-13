@@ -234,7 +234,7 @@ async def chat_support(payload: ChatRequest):
         )
         
         # Verify vector confidence score matches threshold
-        if search_results.points and search_results.points[0].score >= 0.85:
+        if search_results.points and search_results.points[0].score >= 0.40:
             context_chunks = []
             for point in search_results.points:
                 payload_data = getattr(point, "payload", {}) or {}

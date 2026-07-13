@@ -137,7 +137,7 @@ const Admin = () => {
           <div className="overflow-x-auto text-[11px] w-full flex-1">
             {loading && tenants.length === 0 ? (
               <div className="flex items-center justify-center py-12 text-brand-primary animate-pulse font-mono tracking-widest">
-                SYNCING SECURE TENANT REGISTRY...
+                 Fetching Member Database...
               </div>
             ) : tenants.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 bg-[#0B0F19]/50 rounded-lg border border-gray-850">

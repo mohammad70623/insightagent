@@ -219,7 +219,7 @@ const ForecastSimulator = ({
             <div className="rounded-lg bg-[#0B0F19]/60 border border-gray-850/50 p-5 flex flex-col justify-between transition-all duration-300 hover:border-gray-700 min-h-[320px] relative">
               {forecastLoading && (
                 <div className="absolute inset-0 bg-[#0B0F19]/80 rounded-lg flex items-center justify-center text-[10px] font-mono text-brand-primary z-10">
-                  <span className="animate-spin mr-2">⏳</span> RE-CALCULATING...
+                  <span className="animate-spin mr-2">⏳</span> Updating Forecast...
                 </div>
               )}
               <div className="flex items-center justify-between mb-3">
