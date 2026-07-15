@@ -465,8 +465,7 @@ async def google_login(
     import secrets
     from google_auth_oauthlib.flow import Flow
 
-    redirect_uri = "http://localhost:8000/api/v1/auth/google/callback"
-
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/v1/auth/google/callback")
     client_config = {
         "web": {
             "client_id": os.getenv("GOOGLE_CLIENT_ID"),
@@ -520,7 +519,7 @@ async def google_callback(
         user_id = state
         code_verifier = None
 
-    redirect_uri = "http://localhost:8000/api/v1/auth/google/callback"
+    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/v1/auth/google/callback")
 
     client_config = {
         "web": {
