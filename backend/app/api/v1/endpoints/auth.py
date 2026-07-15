@@ -18,7 +18,12 @@ from app.models.auth import OTPVerification, PasswordResetToken
 from app.models.user import User, Invoice
 from app.services.email import send_otp_email, send_password_reset_email
 import firebase_admin
+import os
+from google_auth_oauthlib.flow import Flow
+from fastapi.responses import RedirectResponse
+from app.core.security import encrypt_token
 from firebase_admin import credentials, auth as firebase_auth
+
 
 # Safe singleton initialization for Firebase Admin SDK
 if not firebase_admin._apps:
@@ -507,10 +512,7 @@ async def google_callback(
     Callback endpoint captured from Google's consent screen.
     Exchanges authorization code for long-lived credentials and encrypts refresh_token.
     """
-    import os
-    from google_auth_oauthlib.flow import Flow
-    from fastapi.responses import RedirectResponse
-    from app.core.security import encrypt_token
+    
 
     # Parse state parameters (UserId and Code Verifier)
     if ":" in state:
@@ -563,7 +565,7 @@ async def google_callback(
                 detail="Google OAuth consent failed to return a refresh token. Revoke access from your Google Account and try again."
             )
 
-    return RedirectResponse(url="http://localhost:5173/app/dashboard?gmail_connected=true")
+    return RedirectResponse(url="https://insightagent-kappa.vercel.app/app/dashboard?gmail_connected=true")
 
 
 @router.get("/google/status")
