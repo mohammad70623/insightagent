@@ -131,7 +131,7 @@ async def ensure_support_indexed():
                 pages_text = [p.extract_text(layout=True) for p in pdf.pages if p.extract_text(layout=True)]
                 text_content = "\n".join(pages_text)
 
-            splitter = RecursiveCharacterTextSplitter(chunk_size=800, chunk_overlap=100)
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=350)
             chunks = splitter.split_text(text_content)
 
             batch_size = 32

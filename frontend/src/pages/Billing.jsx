@@ -106,7 +106,7 @@ const Billing = () => {
   const handleDownloadReceipt = (invoiceItem) => {
     // Dynamically fetch authenticated user email from your app's state/context
     const emailToUse = userEmail || "mohammad70623@gmail.com";
-    
+
     // Extract explicit properties from the row data object dynamically
     const invoiceId = invoiceItem?.id || invoiceItem?.invoiceId || "TXN-DEMO-960B7670";
     const invoiceDate = invoiceItem?.date || "June 26, 2026";

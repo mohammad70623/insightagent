@@ -14,6 +14,7 @@ export default function Support() {
   const [priority, setPriority] = useState('P3 - General Guidance');
   const [diagnostics, setDiagnostics] = useState('');
   const [tickets, setTickets] = useState([]);
+  const [notification, setNotification] = useState(null);
 
   const fetchMyTickets = async () => {
     try {
@@ -54,10 +55,18 @@ export default function Support() {
       });
       setDiagnostics('');
       fetchMyTickets();
-      alert(`Request ${response.data.id} submitted successfully!`);
+      setNotification({
+        type: 'success',
+        message: `Ticket #IA-${response.data.id} created successfully. Our engineering support team has received your request and is reviewing it right now.`
+      });
+      setTimeout(() => setNotification(null), 6000);
     } catch (error) {
       console.error("Failed to submit request", error);
-      alert("Failed to submit support request. Please try again.");
+      setNotification({
+        type: 'error',
+        message: "We encountered a problem sending your request to the support team. Please check your network and try again."
+      });
+      setTimeout(() => setNotification(null), 6000);
     }
   };
 
@@ -397,6 +406,33 @@ export default function Support() {
         </div>
 
       </div>
+
+      {notification && (
+        <div className="fixed bottom-6 right-6 z-[99999] max-w-sm w-full bg-[#0F1423] border border-gray-800 rounded-xl shadow-2xl p-4 flex gap-3 animate-fade-in">
+          <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+            notification.type === 'success' 
+              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' 
+              : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+          }`}>
+            {notification.type === 'success' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+          </div>
+          <div className="flex-1">
+            <h4 className="text-[10px] font-bold text-white uppercase font-mono tracking-wider">
+              {notification.type === 'success' ? 'Request Confirmed' : 'System Notice'}
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+              {notification.message}
+            </p>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setNotification(null)}
+            className="text-slate-500 hover:text-white transition-colors h-fit text-xs font-bold font-mono bg-transparent border-none cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
     </div>
   );

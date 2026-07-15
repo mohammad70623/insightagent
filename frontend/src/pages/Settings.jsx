@@ -269,6 +269,8 @@ const Settings = () => {
 
             {activeTab === 'security' && (
               <div className="space-y-8 animate-fade-in">
+
+
                 <form onSubmit={savePassword} className="space-y-6">
                   <div className="space-y-2 border-b border-gray-850/40 pb-4">
                     <h3 className="text-lg font-bold text-white">Change Password</h3>
@@ -340,6 +342,8 @@ const Settings = () => {
                     </button>
                   </form>
                 </div>
+
+
               </div>
             )}
           </div>

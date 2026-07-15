@@ -67,6 +67,7 @@ async def startup_event():
     try:
         async with engine.begin() as conn:
             await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS profile_picture VARCHAR;'))
+            await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS google_refresh_token VARCHAR;'))
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS ticket (
                     id VARCHAR(50) PRIMARY KEY,
@@ -90,9 +91,37 @@ async def startup_event():
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
                 );
             """))
-            print("✅ Database migration: ADD COLUMN profile_picture, CREATE TABLE ticket & notification successful!")
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS urgentfeedback (
+                    id UUID PRIMARY KEY,
+                    user_id UUID NOT NULL,
+                    email_message_id VARCHAR(255) UNIQUE NOT NULL,
+                    thread_id VARCHAR(255) NOT NULL,
+                    subject VARCHAR(255),
+                    snippet TEXT,
+                    source VARCHAR(50) NOT NULL DEFAULT 'Email',
+                    sender VARCHAR(255) NOT NULL,
+                    sender_name VARCHAR(255),
+                    severity VARCHAR(50) NOT NULL DEFAULT 'MEDIUM',
+                    timestamp VARCHAR(50),
+                    body TEXT,
+                    red_flag BOOLEAN DEFAULT TRUE NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE
+                );
+            """))
+            print("✅ Database migration successful!")
     except Exception as e:
         print(f"⚠️ Database migration info/error: {e}")
+
+    # Launch Gmail Ingestion Background Task
+    import asyncio
+    try:
+        from app.api.v1.endpoints.analytics.metrics import sync_all_users_emails_loop
+        asyncio.create_task(sync_all_users_emails_loop())
+        print("🚀 Gmail Ingestion background task spawned successfully!")
+    except Exception as worker_err:
+        print(f"⚠️ Gmail Ingestion background task failed to spawn: {worker_err}")
 
 
 @app.get("/", tags=["Health Check"])

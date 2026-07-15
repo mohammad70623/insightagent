@@ -125,3 +125,27 @@ def decode_and_verify_token(token: str, expected_type: str = "access") -> Dict[s
         raise TokenExpiredError("Cryptographic lifecycle signature has expired.")
     except InvalidTokenError as token_error:
         raise TokenInvalidError(f"Token validation crashed: {str(token_error)}")
+
+
+# Fernet Symmetric Encryption Helpers for Token Protection
+def get_fernet_key() -> bytes:
+    import base64
+    import hashlib
+    digest = hashlib.sha256(settings.SECRET_KEY.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest)
+
+def encrypt_token(plain_token: str) -> str:
+    """Encrypts a plain string token using Fernet cryptography."""
+    if not plain_token:
+        return ""
+    from cryptography.fernet import Fernet
+    f = Fernet(get_fernet_key())
+    return f.encrypt(plain_token.encode("utf-8")).decode("utf-8")
+
+def decrypt_token(encrypted_token: str) -> str:
+    """Decrypts a Fernet encrypted string token."""
+    if not encrypted_token:
+        return ""
+    from cryptography.fernet import Fernet
+    f = Fernet(get_fernet_key())
+    return f.decrypt(encrypted_token.encode("utf-8")).decode("utf-8")

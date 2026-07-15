@@ -443,3 +443,164 @@ async def login_with_google(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Google token validation failed: {str(error)}"
         )
+
+
+# ============================================================
+# GOOGLE GMAIL OAUTH PIPELINE
+# ============================================================
+
+@router.get("/google/login")
+@router.get("/google/login/")
+@router.get("/auth/google/login")
+@router.get("/auth/google/login/")
+async def google_login(
+    current_user: User = Depends(deps.get_current_user)
+) -> Any:
+    """
+    Generates the Google OAuth authorization URL.
+    Passes the current user's ID encoded in the state parameter.
+    """
+    import os
+    import base64
+    import secrets
+    from google_auth_oauthlib.flow import Flow
+
+    redirect_uri = "http://localhost:8000/api/v1/auth/google/callback"
+
+    client_config = {
+        "web": {
+            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [redirect_uri]
+        }
+    }
+    
+    flow = Flow.from_client_config(
+        client_config,
+        scopes=[
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.send"
+        ]
+    )
+    flow.redirect_uri = redirect_uri
+    flow.code_verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode("ascii")
+    
+    authorization_url, state = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+        state=f"{current_user.id}:{flow.code_verifier}"
+    )
+    return {"authorization_url": authorization_url}
+
+
+@router.get("/google/callback")
+@router.get("/google/callback/")
+@router.get("/auth/google/callback")
+@router.get("/auth/google/callback/")
+async def google_callback(
+    code: str,
+    state: str,
+    db: AsyncSession = Depends(deps.get_db)
+) -> Any:
+    """
+    Callback endpoint captured from Google's consent screen.
+    Exchanges authorization code for long-lived credentials and encrypts refresh_token.
+    """
+    import os
+    from google_auth_oauthlib.flow import Flow
+    from fastapi.responses import RedirectResponse
+    from app.core.security import encrypt_token
+
+    # Parse state parameters (UserId and Code Verifier)
+    if ":" in state:
+        user_id, code_verifier = state.split(":", 1)
+    else:
+        user_id = state
+        code_verifier = None
+
+    redirect_uri = "http://localhost:8000/api/v1/auth/google/callback"
+
+    client_config = {
+        "web": {
+            "client_id": os.getenv("GOOGLE_CLIENT_ID"),
+            "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": [redirect_uri]
+        }
+    }
+
+    flow = Flow.from_client_config(
+        client_config,
+        scopes=[
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/gmail.send"
+        ]
+    )
+    flow.redirect_uri = redirect_uri
+    if code_verifier:
+        flow.code_verifier = code_verifier
+    flow.fetch_token(code=code, code_verifier=code_verifier)
+    
+    credentials = flow.credentials
+    refresh_token = credentials.refresh_token
+
+    user = await UserRepository.get_by_id(db, user_id=user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User account not found.")
+
+    if refresh_token:
+        user.google_refresh_token = encrypt_token(refresh_token)
+        db.add(user)
+        await db.commit()
+    else:
+        # If the user previously authorized and Google didn't return a new refresh token,
+        # fallback by checking if user already has one.
+        if not user.google_refresh_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google OAuth consent failed to return a refresh token. Revoke access from your Google Account and try again."
+            )
+
+    return RedirectResponse(url="http://localhost:5173/app/dashboard?gmail_connected=true")
+
+
+@router.get("/google/status")
+@router.get("/google/status/")
+@router.get("/auth/google/status")
+@router.get("/auth/google/status/")
+async def google_status(
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db)
+) -> Any:
+    """
+    Check if the authenticated user has a linked Google account.
+    """
+    is_connected = current_user.google_refresh_token is not None
+    if is_connected:
+        return {"is_connected": True, "email": current_user.email}
+    return {"is_connected": False}
+
+
+@router.post("/google/disconnect")
+@router.post("/google/disconnect/")
+@router.post("/auth/google/disconnect")
+@router.post("/auth/google/disconnect/")
+async def google_disconnect(
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db)
+) -> Any:
+    """
+    Disconnect Google account by clearing token and wiping associated user feedback logs.
+    """
+    current_user.google_refresh_token = None
+    db.add(current_user)
+    
+    from app.models.urgent_feedback import UrgentFeedback
+    from sqlalchemy import delete
+    await db.execute(delete(UrgentFeedback).where(UrgentFeedback.user_id == current_user.id))
+    await db.commit()
+    
+    return {"success": True}

@@ -73,8 +73,29 @@ class VectorStoreService:
         except Exception as e:
             logger.warning(f"Failed to ensure payload indexes on {collection_name}: {e}")
 
-    def upsert_vectors(self, collection_name: str, points: List[PointStruct]):
-        self._ensure_collection(collection_name)
+    def upsert_vectors(self, collection_name: str, points: List[PointStruct], force_reset: bool = False):
+        if force_reset:
+            if self.client.collection_exists(collection_name=collection_name):
+                self.client.delete_collection(collection_name=collection_name)
+            self.client.create_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(size=self.vector_dimension, distance=Distance.COSINE),
+            )
+            try:
+                self.client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name="user_id",
+                    field_schema="keyword"
+                )
+                self.client.create_payload_index(
+                    collection_name=collection_name,
+                    field_name="document_id",
+                    field_schema="keyword"
+                )
+            except Exception as e:
+                logger.warning(f"Failed to ensure payload indexes on reset {collection_name}: {e}")
+        else:
+            self._ensure_collection(collection_name)
         self.client.upsert(collection_name=collection_name, points=points)
 
     def delete_document_vectors(self, collection_name: str, user_id: uuid.UUID, document_id: str) -> None:
@@ -101,7 +122,7 @@ class VectorStoreService:
         collection_name: str,
         user_id: uuid.UUID,
         query_vector: List[float],
-        top_k: int = 5,
+        top_k: int = 10,
         document_id: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         if not self.client.collection_exists(collection_name=collection_name):

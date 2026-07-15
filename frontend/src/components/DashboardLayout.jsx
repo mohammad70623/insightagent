@@ -28,6 +28,8 @@ const DashboardLayout = () => {
   const [settingsView, setSettingsView] = useState("view");
   const [showCurrentPass, setShowCurrentPass] = useState(false);
   const [showNewPass, setShowNewPass] = useState(false);
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailEmail, setGmailEmail] = useState("");
 
   // Notifications state management
   const [unreadNotifications, setUnreadNotifications] = useState([]);
@@ -82,6 +84,37 @@ const DashboardLayout = () => {
       console.error("Failed to load user profile", err);
     }
   };
+
+  const fetchGoogleStatus = async () => {
+    try {
+      const res = await api.get('/auth/google/status');
+      setGmailConnected(res.data.is_connected);
+      setGmailEmail(res.data.email || "");
+    } catch (err) {
+      console.error("Failed to load Google OAuth status", err);
+    }
+  };
+
+  const handleGmailDisconnect = async () => {
+    if (!window.confirm("Are you sure you want to disconnect your Gmail account? All associated unread email feedbacks will be removed.")) {
+      return;
+    }
+    try {
+      await api.post('/auth/google/disconnect');
+      setGmailConnected(false);
+      setGmailEmail("");
+      alert("Gmail account disconnected successfully.");
+    } catch (err) {
+      console.error("Failed to disconnect Gmail", err);
+      alert("Failed to disconnect Gmail account.");
+    }
+  };
+
+  useEffect(() => {
+    if (showProfileModal) {
+      fetchGoogleStatus();
+    }
+  }, [showProfileModal]);
 
   useEffect(() => {
     fetchProfile();
@@ -567,6 +600,44 @@ const DashboardLayout = () => {
                   >
                     🔒 Change Account Password
                   </button>
+                  {!gmailConnected ? (
+                    <button 
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          const response = await api.get('/auth/google/login');
+                          if (response.data && response.data.authorization_url) {
+                            window.location.href = response.data.authorization_url;
+                          } else {
+                            alert("Failed to retrieve connection authorization URL.");
+                          }
+                        } catch (error) {
+                          console.error("Failed to generate authorization URL:", error);
+                          alert("Failed to connect to authentication gateway.");
+                        }
+                      }}
+                      className="w-full btn bg-indigo-600 text-white font-bold text-xs rounded-lg px-6 py-3 hover:bg-indigo-500 transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                        <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-6.887 4.114-4.68 0-8.52-3.882-8.52-8.52s3.84-8.52 8.52-8.52c2.1 0 4.005.765 5.505 2.025l3.24-3.24C18.6 1.77 15.63 0 12.24 0 5.58 0 0 5.58 0 12.24s5.58 12.24 12.24 12.24c6.96 0 12.24-4.86 12.24-12.24 0-.825-.075-1.62-.225-2.22H12.24z"/>
+                      </svg>
+                      Connect Gmail Inbox
+                    </button>
+                  ) : (
+                    <div className="flex flex-col gap-3">
+                      <div className="w-full py-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-center font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-not-allowed">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Gmail Connected: {gmailEmail}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleGmailDisconnect}
+                        className="w-full py-2.5 bg-rose-650 hover:bg-rose-600 border border-rose-600 text-white font-bold rounded-lg text-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        🔴 Disconnect Gmail
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

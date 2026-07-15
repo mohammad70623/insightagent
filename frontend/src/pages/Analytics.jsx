@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
-import { TrendingUp, AlertTriangle, Clock, ArrowUpRight, MessageSquare, Mail, MessageCircle, Upload, Trash2, Loader2, Database, FileText } from 'lucide-react';
+import { TrendingUp, AlertTriangle, Clock, ArrowUpRight, MessageSquare, Mail, MessageCircle, Upload, Trash2, Loader2, Database, FileText, CheckCircle2 } from 'lucide-react';
 
 import MetricsGrid from '../components/analytics/MetricsGrid';
 import TrendChart from '../components/analytics/TrendChart';
@@ -107,10 +107,10 @@ const Analytics = () => {
       // 2. Instantly remove the resolved mail from UI state so it disappears
       setUrgentFeedbacks(prev => prev.filter(item => item.id !== emailId));
       
-      alert("Response dispatched successfully! Ticket resolved and cleared from queue.");
+      addToast("Reply successfully dispatched to the customer. This ticket is now resolved and has been cleared from your active queue.", "SUCCESS");
     } catch (err) {
       console.error("Outbound transmission failed:", err);
-      alert(`Outbound transmission failed: ${err.response?.data?.detail || err.message}`);
+      addToast(`Outbound email transmission failed. Our mail gateway returned: ${err.response?.data?.detail || err.message}`, "ERROR");
     }
   };
 
@@ -283,7 +283,7 @@ const Analytics = () => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       if (file.size > 10 * 1024 * 1024) {
-        alert("⚠️ File Too Large: Maximum allowed file size is 10 MB. Please compress your document and try again.");
+        addToast("File Too Large: Maximum allowed file size is 10 MB. Please compress your document and try again.", "ERROR");
         e.target.value = '';
         return false;
       }
@@ -313,9 +313,9 @@ const Analytics = () => {
       setUploading(false);
       const errorMsg = error.response?.data?.detail || error.message;
       if (errorMsg.includes("PAYWALL_LIMIT_REACHED")) {
-        alert("Subscription Ingestion Limit Reached! Please upgrade or renew your subscription tier on the Billing & Subscriptions page to upload more files.");
+        addToast("Subscription Ingestion Limit Reached! Please upgrade or renew your subscription tier on the Billing & Subscriptions page to upload more files.", "ERROR");
       } else {
-        alert(`Failed to upload document: ${errorMsg}`);
+        addToast(`Failed to upload document: ${errorMsg}`, "ERROR");
       }
     }
   };
@@ -600,16 +600,30 @@ const Analytics = () => {
         {toasts.map((toast) => (
           <div 
             key={toast.id}
-            className={`p-4 rounded-xl border shadow-2xl flex items-start gap-3 animate-slide-in text-xs font-mono backdrop-blur-md ${
+            className={`p-4 rounded-xl border shadow-2xl flex items-start gap-3 animate-slide-in text-xs backdrop-blur-md ${
               toast.severity === 'CRITICAL' 
-                ? 'bg-red-950/80 border-red-500/40 text-red-200' 
-                : 'bg-amber-950/80 border-amber-500/40 text-amber-200'
+                ? 'bg-red-950/80 border-red-500/40 text-red-200 font-mono' 
+                : toast.severity === 'SUCCESS'
+                ? 'bg-emerald-950/80 border-emerald-500/40 text-emerald-200'
+                : toast.severity === 'ERROR'
+                ? 'bg-rose-950/80 border-rose-500/40 text-rose-200'
+                : 'bg-amber-950/80 border-amber-500/40 text-amber-200 font-mono'
             }`}
           >
-            <AlertTriangle className="flex-shrink-0 animate-bounce mt-0.5" size={14} />
+            {toast.severity === 'SUCCESS' ? (
+              <CheckCircle2 className="flex-shrink-0 mt-0.5 text-emerald-400" size={14} />
+            ) : toast.severity === 'ERROR' ? (
+              <AlertTriangle className="flex-shrink-0 mt-0.5 text-rose-400" size={14} />
+            ) : (
+              <AlertTriangle className="flex-shrink-0 animate-bounce mt-0.5" size={14} />
+            )}
             <div>
               <div className="font-bold uppercase tracking-wider text-[9px] mb-0.5 text-white">
-                🚨 {toast.severity} Threat Detected
+                {toast.severity === 'SUCCESS' 
+                  ? '✓ Action Complete' 
+                  : toast.severity === 'ERROR' 
+                  ? '✕ System Error' 
+                  : `🚨 ${toast.severity} Threat Detected`}
               </div>
               <p className="leading-relaxed">{toast.message}</p>
             </div>

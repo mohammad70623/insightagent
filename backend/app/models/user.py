@@ -1,4 +1,5 @@
 import uuid
+from typing import Optional
 from sqlalchemy import String, Boolean, DateTime, Integer, Float, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -23,6 +24,8 @@ class User(Base):
     profile_picture: Mapped[str] = mapped_column(String, nullable=True)
     is_2fa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
+    google_refresh_token: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
     # Onboarding Progress Checklist Flags
     has_uploaded_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     has_processed_data: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -32,6 +35,7 @@ class User(Base):
     updated_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     chat_sessions = relationship("ChatSession", back_populates="user", cascade="all, delete-orphan")
     invoices = relationship("Invoice", back_populates="user", cascade="all, delete-orphan")
+    urgent_feedbacks = relationship("UrgentFeedback", back_populates="user", cascade="all, delete-orphan")
 
 class Invoice(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4, index=True)

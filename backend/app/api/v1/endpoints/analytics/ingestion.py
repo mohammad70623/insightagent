@@ -98,12 +98,15 @@ import shutil
 UPLOAD_DIR = Path("uploaded_documents")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
+from app.api.v1.endpoints.analytics.metrics import clear_global_analytics_cache
+
 @router.post("/index-payload")
 async def index_payload(
     file: UploadFile = File(...),
     current_user: User = Depends(deps.get_current_user),
     db: AsyncSession = Depends(deps.get_db)
 ):
+    clear_global_analytics_cache()
     """
     Accepts incoming payload binary buffers, streams them in safe 1MB chunk boundaries,
     writes the file permanently to disk, invokes layout-aware extraction, and awaits solid Qdrant insertion.

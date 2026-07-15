@@ -9,6 +9,14 @@ export default function TopProducts({ reports: propReports }) {
   const reports = isControlled ? propReports : internalReports;
   const activeLoading = isControlled ? false : loading;
 
+  const sortedReports = Array.isArray(reports) 
+    ? [...reports].sort((a, b) => {
+        const aVal = a.conversion !== undefined ? a.conversion : (a.conversion_rate || '0');
+        const bVal = b.conversion !== undefined ? b.conversion : (b.conversion_rate || '0');
+        return parseFloat(String(bVal).replace('%', '')) - parseFloat(String(aVal).replace('%', ''));
+      })
+    : [];
+
   // 1. DIRECT API INGESTION WITH NO PARENT DEPENDENCY
   useEffect(() => {
     if (isControlled) return;
@@ -40,7 +48,7 @@ export default function TopProducts({ reports: propReports }) {
   }, [isControlled]);
 
   return (
-    <div className="md:col-span-5 bg-[#0B0F19]/60 backdrop-blur border border-slate-850 rounded-2xl p-6 shadow-xl flex flex-col h-full w-full min-h-[250px]">
+    <div className="md:col-span-5 bg-[#0B0F19]/60 backdrop-blur border border-slate-850 rounded-2xl p-6 shadow-xl flex flex-col h-auto w-full min-h-[250px]">
       
       {/* 1. HEADER ROW - THIS MUST ALWAYS BE VISIBLE */}
       <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 mb-4">
@@ -59,12 +67,12 @@ export default function TopProducts({ reports: propReports }) {
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500"></div>
           </div>
-        ) : Array.isArray(reports) && reports.length > 0 ? (
+        ) : Array.isArray(sortedReports) && sortedReports.length > 0 ? (
           /* RENDER DATA VIEWS & CHARTS */
-          <div className="w-full space-y-4 animate-fade-in">
-            {reports.map((item, index) => {
-              // Direct console logger to reveal exactly what keys are dropping from the network stream
-              console.log(`📦 [Item Trace #${index}] Structure:`, item);
+          <div className="w-full space-y-4 animate-fade-in max-h-[350px] overflow-y-auto pr-1">
+            {sortedReports.map((item, index) => {
+                // Direct console logger to reveal exactly what keys are dropping from the network stream
+                console.log(`📦 [Item Trace #${index}] Structure:`, item);
 
               // Support every possible variant naming convention dynamically
               const displayName = item.name || item.product_name || item.title || "Processed Item";

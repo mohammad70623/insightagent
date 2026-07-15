@@ -344,3 +344,143 @@ async def send_password_reset_email(to_email: str, reset_token: str):
     except Exception as e:
         logger.error(f"Email failure – could not send password reset email to {to_email}: {e}", exc_info=True)
         raise
+
+def send_otp_via_brevo(receiver_email: str, username: str, otp_code: str):
+    """
+    Render-Friendly Brevo HTTP API Helper (For Signup OTP)
+    Sends a beautifully formatted HTML email using Brevo's v3 HTTP API.
+    """
+    import os
+    import requests
+
+    api_key = os.getenv("BREVO_API_KEY")
+    if not api_key:
+        raise ValueError("BREVO_API_KEY environment variable is not set")
+
+    sender_email = os.getenv("SENDER_EMAIL", "mohammad70623@gmail.com")
+    sender_name = os.getenv("SENDER_NAME", "InsightAgent")
+
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                background-color: #0B0F19;
+                color: #ffffff;
+                margin: 0;
+                padding: 0;
+            }}
+            .container {{
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 40px 20px;
+                background-color: #0B0F19;
+            }}
+            .header {{
+                text-align: left;
+                padding-bottom: 20px;
+                border-bottom: 1px solid rgba(255,255,255,0.1);
+                margin-bottom: 30px;
+            }}
+            .title {{
+                font-size: 24px;
+                font-weight: 800;
+                margin: 0;
+                color: #ffffff;
+                letter-spacing: -0.5px;
+            }}
+            .subtitle {{
+                font-size: 10px;
+                color: #818CF8;
+                text-transform: uppercase;
+                letter-spacing: 2px;
+                font-family: monospace;
+                margin-top: 5px;
+            }}
+            .content {{
+                background-color: #111827;
+                border: 1px solid rgba(255,255,255,0.05);
+                border-radius: 12px;
+                padding: 40px;
+                text-align: center;
+            }}
+            .text-body {{
+                font-size: 14px;
+                color: #9CA3AF;
+                line-height: 1.6;
+                margin-bottom: 30px;
+            }}
+            .otp-box {{
+                background: linear-gradient(135deg, rgba(129, 140, 248, 0.1), rgba(129, 140, 248, 0.05));
+                border: 1px solid rgba(129, 140, 248, 0.2);
+                border-radius: 8px;
+                padding: 20px;
+                margin: 25px auto;
+                display: inline-block;
+                letter-spacing: 6px;
+            }}
+            .otp-code {{
+                font-size: 32px;
+                font-weight: 900;
+                color: #818CF8;
+                margin: 0;
+                font-family: monospace;
+                padding-left: 6px;
+            }}
+            .footer {{
+                margin-top: 40px;
+                text-align: center;
+                font-size: 11px;
+                color: #6B7280;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1 class="title">InsightAgent</h1>
+                <p class="subtitle">Verification Gateway</p>
+            </div>
+            
+            <div class="content">
+                <p class="text-body">
+                    Hello {username},<br>
+                    Please use the secure authorization code below to complete your verification sequence.
+                </p>
+                
+                <div class="otp-box">
+                    <p class="otp-code">{otp_code}</p>
+                </div>
+                
+                <p class="text-body" style="font-size: 12px;">
+                    This code will expire in 10 minutes. <br>
+                    If you did not request this, please contact your systems administrator immediately.
+                </p>
+            </div>
+            
+            <div class="footer">
+                <p>SOC2 Type II Certified Infrastructure • © 2026 InsightAgent AI Corp.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    payload = {
+        "sender": {"email": sender_email, "name": sender_name},
+        "to": [{"email": receiver_email}],
+        "subject": "🔑 Action Required: Verify Your InsightAgent Account",
+        "htmlContent": html_content
+    }
+
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "api-key": api_key
+    }
+
+    response = requests.post("https://api.brevo.com/v3/smtp/email", json=payload, headers=headers, timeout=15)
+    response.raise_for_status()
+    logger.info(f"Successfully dispatched signup OTP to {receiver_email} via Brevo HTTP API.")
