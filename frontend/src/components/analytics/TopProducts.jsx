@@ -17,13 +17,13 @@ export default function TopProducts({ reports: propReports }) {
       })
     : [];
 
-  // 1. DIRECT API INGESTION WITH NO PARENT DEPENDENCY
+  // 1. DIRECT API INGESTION WITH CUSTOM EVENT-BASED TRIGGER
   useEffect(() => {
     if (isControlled) return;
 
     const fetchTopProductsDirectly = () => {
       setLoading(true);
-      console.log("🚀 [Atomic Fetch] Attempting to pull directly from /api/v1/chat/analytics/top-products");
+      console.log("🚀 [Atomic Fetch] Pulling latest data from /api/v1/chat/analytics/top-products");
       
       api.get('/chat/analytics/top-products')
         .then(res => {
@@ -40,12 +40,21 @@ export default function TopProducts({ reports: propReports }) {
         });
     };
 
+   
     fetchTopProductsDirectly();
     
-    // Optional: Poll or refresh data when window refocuses or local storage changes
+    
     window.addEventListener('focus', fetchTopProductsDirectly);
-    return () => window.removeEventListener('focus', fetchTopProductsDirectly);
-  }, [isControlled]);
+    window.addEventListener('storage', fetchTopProductsDirectly); 
+    window.addEventListener('reportUploaded', fetchTopProductsDirectly); 
+
+    return () => {
+      window.removeEventListener('focus', fetchTopProductsDirectly);
+      window.removeEventListener('storage', fetchTopProductsDirectly);
+      window.removeEventListener('reportUploaded', fetchTopProductsDirectly);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isControlled, propReports]); 
 
   return (
     <div className="md:col-span-5 bg-[#0B0F19]/60 backdrop-blur border border-slate-850 rounded-2xl p-6 shadow-xl flex flex-col h-auto w-full min-h-[250px]">
@@ -71,8 +80,8 @@ export default function TopProducts({ reports: propReports }) {
           /* RENDER DATA VIEWS & CHARTS */
           <div className="w-full space-y-4 animate-fade-in max-h-[350px] overflow-y-auto pr-1">
             {sortedReports.map((item, index) => {
-                // Direct console logger to reveal exactly what keys are dropping from the network stream
-                console.log(`📦 [Item Trace #${index}] Structure:`, item);
+              // Direct console logger to reveal exactly what keys are dropping from the network stream
+              console.log(`📦 [Item Trace #${index}] Structure:`, item);
 
               // Support every possible variant naming convention dynamically
               const displayName = item.name || item.product_name || item.title || "Processed Item";

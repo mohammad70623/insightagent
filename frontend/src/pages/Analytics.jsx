@@ -132,28 +132,29 @@ const Analytics = () => {
   // Dynamic resolution of the active document
   const activeDocumentId = activeFiles.length > 0 ? (activeFiles[0].document_id || activeFiles[0].id) : null;
 
-  const fetchTopProducts = async () => {
-    try {
-      const url = activeDocumentId 
-        ? `/chat/analytics/top-products?doc_id=${activeDocumentId}`
-        : '/chat/analytics/top-products';
-      const response = await api.get(url);
-      console.log("📡 TOP PRODUCTS RAW API RESPONSE:", response.data); // Debug trace
-      const fetchedProducts = response.data?.products || (Array.isArray(response.data) ? response.data : []);
-      setReports(fetchedProducts);
-    } catch (error) {
-      console.error("Failed to fetch top products:", error);
-      setReports([]);
-    }
-  };
+ const fetchTopProducts = async (explicitId = null) => {
+  try {
+    const currentId = explicitId || activeDocumentId;
+    
+    const url = currentId 
+      ? `/chat/analytics/top-products?doc_id=${currentId}`
+      : '/chat/analytics/top-products';
+      
+    const response = await api.get(url);
+    console.log("📡 TOP PRODUCTS RAW API RESPONSE:", response.data); // Debug trace
+    const fetchedProducts = response.data?.products || (Array.isArray(response.data) ? response.data : []);
+    setReports(fetchedProducts);
+  } catch (error) {
+    console.error("Failed to fetch top products:", error);
+    setReports([]);
+  }
+};
 
-  useEffect(() => {
-    if (activeDocumentId) {
-      fetchTopProducts();
-    } else {
-      setReports([]);
-    }
-  }, [activeDocumentId]);
+ useEffect(() => {
+  if (!activeDocumentId) return;
+  
+   fetchTopProducts();
+}, [activeDocumentId]);
 
   useEffect(() => {
     api.get('/chat/analytics/top-products')
@@ -173,25 +174,32 @@ const Analytics = () => {
   }, []);
 
   const fetchUploadedFiles = async () => {
-    try {
-      const response = await api.get('/chat/uploaded-files');
-      setActiveFiles(response.data);
-      
-      const kpiRes = await api.get('/chat/analytics/kpi-summary');
-      setKpiSummary(kpiRes.data);
-    } catch (error) {
-      console.error("Failed to fetch active vector base files", error);
-    }
+  try {
+    
+    const response = await api.get('/chat/uploaded-files');
+    const files = response.data;
+    setActiveFiles(files);
+    
+    const kpiRes = await api.get('/chat/analytics/kpi-summary');
+    setKpiSummary(kpiRes.data);
 
-    // Call sub-fetches independently to prevent one crash from blocking others
-    Promise.all([
+    
+    const targetId = files && files.length > 0 ? (files[0].document_id || files[0].id) : null;
+
+    
+    await Promise.all([
       fetchComplaintsTimeline().catch(e => console.error(e)),
       fetchSentimentDistribution().catch(e => console.error(e)),
       fetchCompetitorMatrix().catch(e => console.error(e)),
       fetchUrgentFeedbacks().catch(e => console.error(e)),
-      fetchTopProducts().catch(e => console.error(e))
+      
+      fetchTopProducts(targetId).catch(e => console.error(e)) 
     ]);
-  };
+
+  } catch (error) {
+    console.error("Failed to fetch active vector base files", error);
+  }
+};
 
   useEffect(() => {
     const fetchAnalyticsForecastAndBenchmarking = async () => {
