@@ -518,6 +518,7 @@ async def google_login(
 @router.get("/google/callback/")
 @router.get("/auth/google/callback")
 @router.get("/auth/google/callback/")
+
 async def google_callback(
     request: Request,
     code: str,
@@ -537,15 +538,16 @@ async def google_callback(
         user_id = state
         code_verifier = None
 
-    host = request.headers.get("host", "")
-    env = os.getenv("ENV", "development")
     
-    if "localhost" in host or "127.0.0.1" in host or env == "development":
-        redirect_uri = "http://localhost:8000/api/v1/auth/google/callback"
-        frontend_base_url = "http://localhost:5173"
-    else:
+    env = os.getenv("APP_MODE", "development")
+    
+    if env == "production":
         redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "https://insightagent-backend.onrender.com/api/v1/auth/google/callback")
         frontend_base_url = os.getenv("FRONTEND_URL", "https://insightagent-kappa.vercel.app")
+    else:
+        
+        redirect_uri = "http://localhost:8000/api/v1/auth/google/callback"
+        frontend_base_url = "http://localhost:5173"
 
     client_config = {
         "web": {
@@ -591,8 +593,6 @@ async def google_callback(
 
     frontend_redirect_url = f"{frontend_base_url.rstrip('/')}/app/urgent-feedbacks?gmail_connected=true&status=success"
     return RedirectResponse(url=frontend_redirect_url)
-
-
 @router.get("/google/status")
 @router.get("/google/status/")
 @router.get("/auth/google/status")
