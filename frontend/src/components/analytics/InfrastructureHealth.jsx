@@ -94,7 +94,7 @@ export default function InfrastructureHealth({ riskAlerts = [], isAnalyzing, cur
           <Cpu className={`w-4 h-4 mb-1.5 ${isAnalyzing ? 'text-cyan-400 animate-spin' : 'text-slate-400'}`} style={{ animationDuration: '3s' }} />
           <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest font-bold">MODEL</span>
           <span className="text-[11px] font-mono text-slate-200 font-bold mt-0.5 truncate max-w-full" title={isAnalyzing ? "LLaMA 3 (Groq)..." : "LLaMA 3 (Groq)"}>
-            {isAnalyzing ? "LLaMA 3 (Groq)..." : "LLaMA 3 (Groq)"}
+            {isAnalyzing ? "Open AI..." : "Open AI."}
           </span>
         </div>
 

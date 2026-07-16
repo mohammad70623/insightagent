@@ -41,6 +41,7 @@ export default function IntegratedChatPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [creating, setCreating] = useState(false);
   const [errorBanner, setErrorBanner] = useState(null);
+  const [pendingSessionTitle, setPendingSessionTitle] = useState("");
 
   const chatBottomRef = useRef(null);
   const bufferRef = useRef("");
@@ -101,6 +102,7 @@ export default function IntegratedChatPage() {
     bufferRef.current = "";
     setMessages([]);
     setActiveSession(session);
+    setPendingSessionTitle("");
     setErrorBanner(null);
     setIsMobileSidebarOpen(false); // Close sidebar on mobile switch
 
@@ -126,6 +128,7 @@ export default function IntegratedChatPage() {
 
       if (activeSession?.id === id) {
         setActiveSession(null);
+        setPendingSessionTitle("");
         setMessages([]);
         bufferRef.current = "";
       }
@@ -137,24 +140,15 @@ export default function IntegratedChatPage() {
   /**
    * Session Creation
    */
-  const handleCreateSession = async (e) => {
+  const handleCreateSession = (e) => {
     if (e) e.preventDefault();
-    if (!newSessionName.trim() || creating) return;
+    if (!newSessionName.trim()) return;
 
-    setCreating(true);
-    setErrorBanner(null);
-    try {
-      const newSession = await apiService.createChatSession(newSessionName.trim());
-      setSessions((prev) => [newSession, ...prev]);
-      setActiveSession(newSession);
-      setMessages([]);
-      setNewSessionName("");
-      setIsMobileSidebarOpen(false);
-    } catch (err) {
-      setErrorBanner(`Workspace Initialization Error: ${err.message}`);
-    } finally {
-      setCreating(false);
-    }
+    setPendingSessionTitle(newSessionName.trim());
+    setActiveSession(null);
+    setMessages([]);
+    setNewSessionName("");
+    setIsMobileSidebarOpen(false);
   };
 
   /**
@@ -162,7 +156,7 @@ export default function IntegratedChatPage() {
    */
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
-    if (!inputPrompt.trim() || !activeSession || isStreaming) return;
+    if (!inputPrompt.trim() || isStreaming) return;
 
     const userPromptText = inputPrompt.trim();
     setInputPrompt("");
@@ -175,12 +169,30 @@ export default function IntegratedChatPage() {
     setIsStreaming(true);
     bufferRef.current = "";
 
-    bumpSessionActivity(activeSession.id);
+    const sessionIdToSend = activeSession ? activeSession.id : "new";
+    const sessionTitleToSend = activeSession ? null : (pendingSessionTitle || null);
+
+    if (activeSession) {
+      bumpSessionActivity(activeSession.id);
+    }
 
     await apiService.streamChatResponse(
-      activeSession.id,
+      sessionIdToSend,
       userPromptText,
       (token) => {
+        if (token.startsWith("session_id:")) {
+          const parts = token.split(":");
+          const newId = parts[1];
+          const newTitle = parts.slice(2).join(":");
+          const newSess = { id: newId, title: newTitle, name: newTitle };
+          
+          setActiveSession(newSess);
+          setSessions((prev) => [newSess, ...prev]);
+          setPendingSessionTitle("");
+          bumpSessionActivity(newId);
+          return;
+        }
+
         const cleanToken = token.startsWith("'") && token.endsWith("'") ? token.slice(1, -1) : token;
         const processedToken = cleanToken === "\\n" ? "\n" : cleanToken;
 
@@ -207,141 +219,124 @@ export default function IntegratedChatPage() {
       (errorMsg) => {
         setIsStreaming(false);
         setErrorBanner(`Streaming Fault Detected: ${errorMsg}`);
-      }
+      },
+      sessionTitleToSend
     );
   };
 
   return (
-    <div className="flex w-full h-[calc(100vh-65px)] bg-slate-950 overflow-hidden relative">
+    <div className="flex w-full h-full bg-slate-950 overflow-hidden relative">
       
       {/* Production Error Banner UI */}
       {errorBanner && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 bg-red-500/90 text-white font-mono text-xs px-4 py-2 rounded-lg border border-red-600 shadow-2xl flex items-center gap-2 animate-bounce">
           ⚠️ {errorBanner}
-          <button onClick={() => setErrorBanner(null)} className="font-bold hover:text-black ml-2">×</button>
+          <button onClick={() => setErrorBanner(null)} className="text-white hover:text-slate-200 ml-1">×</button>
         </div>
       )}
 
-      {/* SIDEBAR COMPONENT (DRAWER FOR MOBILE, FIXED FOR DESKTOP) */}
+      {/* Workspace Sidebar Wrapper */}
       <div className={`
-        fixed inset-y-0 left-0 z-40 w-72 bg-slate-900 border-r border-slate-800 p-4 flex flex-col justify-between
-        transform transition-transform duration-300 ease-in-out
-        ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-        md:relative md:translate-x-0 md:flex md:w-80 md:z-0 md:bg-slate-900/40
+        absolute inset-y-0 left-0 z-40 w-64 bg-slate-900 border-r border-slate-800/80 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
+        ${isMobileSidebarOpen ? "translate-x-0" : "-translate-x-full"}
       `}>
-        <div className="space-y-4 flex-1 flex flex-col min-h-0">
+        {/* Sidebar Header */}
+        <div className="p-4 border-b border-slate-800 flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-md font-semibold text-slate-200 flex items-center gap-2">🧠 InsightAgent</h3>
-            <button onClick={() => setIsMobileSidebarOpen(false)} className="md:hidden text-slate-400 hover:text-slate-200">✕</button>
-          </div>
-
-          {/* Sidebar Input Trigger */}
-          <form onSubmit={handleCreateSession} className="flex gap-2">
-            <input 
-              type="text" 
-              placeholder={creating ? "Creating..." : "New Session Name..."}
-              value={newSessionName}
-              onChange={(e) => setNewSessionName(e.target.value)}
-              disabled={creating || isStreaming}
-              className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-300 outline-none focus:border-indigo-500 transition-colors disabled:opacity-50"
-            />
+            <span className="text-[10px] font-black tracking-widest text-indigo-400 font-mono uppercase">InsightAgent AI</span>
             <button 
-              type="submit"
-              disabled={creating || isStreaming || !newSessionName.trim()}
-              className="bg-indigo-600 border border-indigo-500 text-white px-3 py-1.5 rounded-lg text-sm hover:bg-indigo-500 disabled:opacity-50 transition-all"
+              onClick={() => setIsMobileSidebarOpen(false)} 
+              className="md:hidden text-slate-400 hover:text-slate-200"
             >
-              {creating ? "..." : "+"}
+              ✕
             </button>
-          </form>
-
-          {/* Sessions List */}
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-            {sessions.length === 0 ? (
-              <p className="text-slate-500 text-xs italic p-2">No active sessions.</p>
-            ) : (
-              sessions.map((sess) => (
-                <div
-                  key={sess.id}
-                  className={`group flex items-center justify-between px-3 py-1.5 rounded-lg text-xs transition font-medium ${
-                    activeSession?.id === sess.id
-                      ? "bg-indigo-600 text-white shadow-lg"
-                      : "bg-slate-950/40 border border-slate-800 text-slate-300 hover:bg-slate-900/60"
-                  }`}
-                >
-                  <button
-                    onClick={() => handleSessionSwitch(sess)}
-                    disabled={isStreaming}
-                    className="flex-1 text-left truncate py-1 outline-none cursor-pointer flex flex-col"
-                  >
-                    <span className="truncate">📁 {sess.title || sess.name}</span>
-                    <span className={`text-[10px] mt-0.5 ${
-                      activeSession?.id === sess.id
-                        ? "text-indigo-200"
-                        : "text-slate-500 group-hover:text-slate-400 transition-colors"
-                    }`}>
-                      {formatRelativeTime(sess.updated_at || sess.created_at)}
-                    </span>
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm(`Are you sure you want to delete session "${sess.title || sess.name}"?`)) {
-                        handleDeleteSession(sess.id);
-                      }
-                    }}
-                    disabled={isStreaming}
-                    title="Delete Session"
-                    className={`ml-2 p-1 rounded hover:bg-red-500/20 text-red-500 transition-colors focus:outline-none cursor-pointer ${
-                      activeSession?.id === sess.id 
-                        ? "text-white hover:bg-black/10 opacity-100" 
-                        : "opacity-0 group-hover:opacity-100"
-                    }`}
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </div>
-              ))
-            )}
           </div>
+          <button 
+            onClick={() => {
+              setActiveSession(null);
+              setPendingSessionTitle("");
+              setMessages([]);
+              setIsMobileSidebarOpen(false);
+            }}
+            className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg"
+          >
+            <span>💬</span> New Chat
+          </button>
         </div>
-        <div className="pt-4 border-t border-slate-800/80 text-center text-[10px] text-slate-500 font-mono">SECURE_NODE_V2</div>
+
+        {/* Sidebar Scrollable Workspace List */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-2 h-[calc(100%-120px)] custom-scrollbar">
+          {sessions.map((session) => {
+            const isActive = activeSession?.id === session.id;
+            return (
+              <div 
+                key={session.id}
+                className={`
+                  group w-full flex items-center justify-between gap-2 p-3 rounded-xl transition-all cursor-pointer border
+                  ${isActive 
+                    ? "bg-indigo-600/10 border-indigo-500/30 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.08)]" 
+                    : "bg-slate-900/30 border-transparent hover:bg-slate-800/40 text-slate-400 hover:text-slate-300"}
+                `}
+                onClick={() => handleSessionSwitch(session)}
+              >
+                <div className="flex-1 truncate text-left py-1">
+                  <p className="text-xs font-bold font-mono truncate">{session.title || session.name}</p>
+                </div>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteSession(session.id);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 ease-in-out cursor-pointer"
+                  title="Delete Conversation"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {isMobileSidebarOpen && <div onClick={() => setIsMobileSidebarOpen(false)} className="fixed inset-0 bg-black/60 backdrop-blur-sm z-30 md:hidden" />}
-
-      {/* MAIN CONTENT AREA */}
-      <div className="flex flex-col flex-1 h-full min-h-0 w-full overflow-hidden relative">
+      {/* Main Chat Deck */}
+      <div className="flex-1 flex flex-col h-full relative">
         
-        {/* TOP NAVBAR HEADER */}
-        <div className="w-full bg-slate-900/20 border-b border-slate-900 px-4 py-3 flex items-center gap-3 z-20">
-          <button onClick={() => setIsMobileSidebarOpen(true)} className="md:hidden flex flex-col gap-1 p-2 border border-slate-800 rounded-lg bg-slate-900/60">
+        {/* Dynamic Navigation Header */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800">
+          <button 
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="md:hidden flex flex-col gap-1 p-1 hover:bg-slate-800 rounded"
+          >
             <span className="w-4 h-0.5 bg-slate-300"></span>
             <span className="w-4 h-0.5 bg-slate-300"></span>
             <span className="w-4 h-0.5 bg-slate-300"></span>
           </button>
           <div className="flex items-center gap-2 text-xs md:text-sm tracking-wide font-medium text-slate-400">
             {activeSession ? (
-              <span className="text-emerald-400 flex items-center gap-2">
+              <span className="text-emerald-400 flex items-center gap-2 font-mono">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Active Session: {activeSession.title || activeSession.name}
               </span>
             ) : (
-              <span className="text-amber-500">🔒 Chat Session Locked</span>
+              <span className="text-slate-400 flex items-center gap-2 font-mono">
+                <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                {pendingSessionTitle ? `Pending Workspace: ${pendingSessionTitle}` : "New Conversation"}
+              </span>
             )}
           </div>
         </div>
 
-        {/* DYNAMIC RENDERING: CHAT THREAD OR EMPTY STATE WIDGET */}
-        <div className="flex-1 overflow-y-auto w-full p-4 space-y-4">
+        {/* DYNAMIC RENDERING: CHAT THREAD OR WELCOME SUGGESTIONS PANEL */}
+        <div className="flex-1 overflow-y-auto w-full p-4 space-y-4 flex flex-col">
           {activeSession ? (
             /* ACTIVE CHAT WORKSPACE SCROLL */
             <div className="space-y-4 w-full flex-1 flex flex-col justify-start">
               {messages.length === 0 ? (
                 <div className="flex justify-start w-full">
                   <div className="max-w-[85%] md:max-w-[70%] bg-slate-900/60 border border-slate-800/80 text-slate-300 rounded-xl p-4 text-sm md:text-base">
-                    <div className="text-[10px] font-semibold uppercase text-slate-500 mb-1">✨ INSIGHTAGENT</div>
+                    <div className="text-[10px] font-semibold uppercase text-slate-500 mb-1 font-mono">✨ INSIGHTAGENT</div>
                     <p>Session initialized successfully! How can I help you unlock insights today?</p>
                   </div>
                 </div>
@@ -358,59 +353,44 @@ export default function IntegratedChatPage() {
               <div ref={chatBottomRef} />
             </div>
           ) : (
-            /* PREMIUM CENTRALIZED INTERACTIVE MOBILE ENTRY HOOK */
-            <div className="max-w-sm mx-auto w-full bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 text-center shadow-xl space-y-4 my-auto">
-              <div className="text-3xl">🧠</div>
-              <h2 className="text-sm font-semibold text-slate-200 uppercase tracking-wider">
-                Start a New Conversation
-              </h2>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Give your chat session a name to keep your insights organized and start analyzing your workspace documents.
-              </p>
+            /* WELCOME PANEL WITH QUICK SUGGESTION SUGGESTIONS */
+            <div className="max-w-2xl mx-auto w-full flex-1 flex flex-col items-center justify-center text-center space-y-6 px-4 my-auto">
+              <div className="w-16 h-16 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center text-3xl shadow-[0_0_15px_rgba(99,102,241,0.15)]">
+                🧠
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-slate-100 tracking-tight">
+                 InsightAgent Chat Engine
+                </h2>
+                <p className="text-xs text-slate-400 max-w-md leading-relaxed mx-auto">
+                  Welcome! Type your query below to automatically search your knowledge base, cross-reference data
+                </p>
+              </div>
               
-              <form onSubmit={handleCreateSession} className="space-y-2">
-                <input 
-                  type="text" 
-                  placeholder="e.g., Q2 Performance Review"
-                  value={newSessionName}
-                  onChange={(e) => setNewSessionName(e.target.value)}
-                  disabled={creating || isStreaming}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-200 outline-none text-center focus:border-indigo-500 transition-colors disabled:opacity-50"
-                />
-                <button 
-                  type="submit"
-                  disabled={creating || isStreaming || !newSessionName.trim()}
-                  className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs uppercase tracking-widest py-3 rounded-xl transition-all shadow-lg disabled:opacity-50"
-                >
-                  {creating ? "Starting Session..." : "Start New Session"}
-                </button>
-              </form>
             </div>
           )}
         </div>
 
-        {/* ABSOLUTE FIXED BOTTOM INPUT TRAYS */}
-        {activeSession && (
-          <div className="flex-shrink-0 w-full p-4 bg-[#0B0F19]/80 backdrop-blur border-t border-slate-800 sticky bottom-0 z-10">
-            <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-800/80 rounded-xl px-4 py-2 shadow-2xl">
-              <input 
-                type="text" 
-                placeholder="Ask me anything..." 
-                value={inputPrompt}
-                onChange={(e) => setInputPrompt(e.target.value)}
-                disabled={isStreaming}
-                className="flex-1 bg-transparent text-slate-200 placeholder-slate-500 text-sm md:text-base outline-none py-2 disabled:opacity-50"
-              />
-              <button 
-                type="submit"
-                disabled={isStreaming || !inputPrompt.trim()}
-                className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs uppercase tracking-wider px-4 py-2 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50 disabled:bg-slate-850"
-              >
-                {isStreaming ? "..." : "SEND"}
-              </button>
-            </form>
-          </div>
-        )}
+        {/* RESPONSIVE STICKY BOTTOM INPUT TRAY */}
+        <div className="w-full sticky bottom-0 bg-[#0B0F19] z-50 p-4 border-t border-slate-800">
+          <form onSubmit={handleSendMessage} className="max-w-4xl mx-auto flex items-center gap-2 bg-slate-900/90 backdrop-blur-md border border-slate-800/80 rounded-xl px-4 py-2 shadow-2xl">
+            <input 
+              type="text" 
+              placeholder={creating ? "Initializing session..." : "Ask me anything..."}
+              value={inputPrompt}
+              onChange={(e) => setInputPrompt(e.target.value)}
+              disabled={isStreaming || creating}
+              className="flex-1 bg-transparent text-slate-200 placeholder-slate-500 text-sm md:text-base outline-none py-2 disabled:opacity-50"
+            />
+            <button 
+              type="submit"
+              disabled={isStreaming || creating || !inputPrompt.trim()}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs uppercase tracking-wider px-4 py-2 rounded-lg transition-colors flex-shrink-0 disabled:opacity-50 disabled:bg-slate-850"
+            >
+              {isStreaming ? "..." : "SEND"}
+            </button>
+          </form>
+        </div>
 
       </div>
     </div>

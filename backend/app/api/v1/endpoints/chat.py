@@ -46,17 +46,6 @@ async def create_chat_workspace(
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    stmt = select(ChatSession).where(
-        ChatSession.user_id == current_user.id,
-        ChatSession.title == payload.title,
-        ChatSession.deleted_at == None
-    )
-    res = await db.execute(stmt)
-    if res.scalar_one_or_none() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Session name already exists"
-        )
     return await chat_history_service.create_new_session(db, user_id=current_user.id, title=payload.title)
 
 
@@ -129,25 +118,41 @@ async def purge_chat_workspace(
 
 @router.post("/stream/{session_id}")
 async def trigger_live_agent_stream(
-    session_id: uuid.UUID,
+    session_id: str,
     payload: ChatStreamRequest,
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user)
 ):
-    session_query = select(ChatSession).where(
-        ChatSession.id == session_id,
-        ChatSession.user_id == current_user.id,
-        ChatSession.deleted_at == None
-    )
-    session_check = await db.execute(session_query)
-    if not session_check.scalar_one_or_none():
-        logger.warning(
-            f'{{"event": "unauthorized_stream_blocked", "user_id": "{str(current_user.id)}", "session_id": "{str(session_id)}"}}'
+    auto_created = False
+    auto_title = ""
+    if session_id in ["new", "auto", "default"]:
+        auto_title = payload.user_prompt[:30] + "..." if len(payload.user_prompt) > 30 else payload.user_prompt
+        new_session = await chat_history_service.create_new_session(db, user_id=current_user.id, title=auto_title)
+        actual_session_id = new_session.id
+        auto_created = True
+    else:
+        try:
+            actual_session_id = uuid.UUID(session_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid session ID format."
+            )
+
+        session_query = select(ChatSession).where(
+            ChatSession.id == actual_session_id,
+            ChatSession.user_id == current_user.id,
+            ChatSession.deleted_at == None
         )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: session does not exist or is unauthorized."
-        )
+        session_check = await db.execute(session_query)
+        if not session_check.scalar_one_or_none():
+            logger.warning(
+                f'{{"event": "unauthorized_stream_blocked", "user_id": "{str(current_user.id)}", "session_id": "{str(actual_session_id)}"}}'
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied: session does not exist or is unauthorized."
+            )
 
     # User successfully triggered a RAG analysis prompt, mark onboarding step complete
     if not current_user.has_explored_insights:
@@ -155,13 +160,16 @@ async def trigger_live_agent_stream(
         db.add(current_user)
         await db.commit()
 
-    history_frames = await chat_history_service.get_cursor_paginated_history(
-        db, session_id=session_id, limit=15
-    )
-    llm_history = [{"role": f["role"], "content": f["content"]} for f in history_frames]
+    if auto_created:
+        llm_history = []
+    else:
+        history_frames = await chat_history_service.get_cursor_paginated_history(
+            db, session_id=actual_session_id, limit=15
+        )
+        llm_history = [{"role": f["role"], "content": f["content"]} for f in history_frames]
 
     await chat_history_service.append_chat_message(
-        db, session_id=session_id, role="user", content=payload.user_prompt
+        db, session_id=actual_session_id, role="user", content=payload.user_prompt
     )
 
     tenant_collection_namespace = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
@@ -169,6 +177,10 @@ async def trigger_live_agent_stream(
     async def token_stream_generator():
         full_response_accumulator = []
         try:
+            if auto_created:
+                # Yield the session id details so the client binds it
+                yield f"data: session_id:{str(actual_session_id)}:{auto_title}\n\n"
+
             async for token in rag_engine.stream_agent_handshake(
                 collection_name=tenant_collection_namespace,
                 user_id=current_user.id,
@@ -183,13 +195,13 @@ async def trigger_live_agent_stream(
             if full_response_accumulator:
                 await chat_history_service.append_chat_message(
                     db,
-                    session_id=session_id,
+                    session_id=actual_session_id,
                     role="assistant",
                     content="".join(full_response_accumulator)
                 )
         except Exception as streaming_fault:
             logger.error(
-                f'{{"event": "stream_engine_collapsed", "session_id": "{str(session_id)}", "error": "{str(streaming_fault)}"}}'
+                f'{{"event": "stream_engine_collapsed", "session_id": "{str(actual_session_id)}", "error": "{str(streaming_fault)}"}}'
             )
             yield "data: \n[SYSTEM NOTICE]: Streaming temporarily unavailable. Please retry.\n\n"
 

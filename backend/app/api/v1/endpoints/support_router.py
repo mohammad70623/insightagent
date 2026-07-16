@@ -167,7 +167,8 @@ async def query_support_rag(user_query: str) -> str:
             chat_model = ChatOpenAI(
                 api_key=openai_key,
                 model=target_model,
-                temperature=0.0
+                temperature=0.0,
+                timeout=30.0
             )
             messages = [
                 SystemMessage(content=system_instruction),
@@ -178,7 +179,7 @@ async def query_support_rag(user_query: str) -> str:
         except Exception as e:
             logger.warning(f"LangChain ChatOpenAI failed: {str(e)}. Falling back to raw AsyncOpenAI...")
             from openai import AsyncOpenAI
-            client = AsyncOpenAI(api_key=openai_key)
+            client = AsyncOpenAI(api_key=openai_key, timeout=30.0)
             completion = await client.chat.completions.create(
                 model=target_model,
                 messages=[

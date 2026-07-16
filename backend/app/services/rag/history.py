@@ -14,15 +14,6 @@ class ChatHistoryService:
     async def create_new_session(self, db: AsyncSession, user_id: uuid.UUID, title: str = "New Chat Adventure") -> ChatSession:
         """Provisions an isolated chat workspace container under explicit atomic commit blocks."""
         try:
-            # Validate if an active session with the same title already exists
-            stmt = select(ChatSession).where(
-                ChatSession.user_id == user_id,
-                ChatSession.title == title,
-                ChatSession.deleted_at == None
-            )
-            result = await db.execute(stmt)
-            if result.scalar_one_or_none() is not None:
-                raise HTTPException(status_code=400, detail="An active session with this name already exists.")
 
             new_session = ChatSession(
                 id=uuid.uuid4(),

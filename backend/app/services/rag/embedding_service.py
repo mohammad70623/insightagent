@@ -16,7 +16,8 @@ class EmbeddingService:
         
         self._model = OpenAIEmbeddings(
             model=model_name,
-            openai_api_key=openai_key
+            openai_api_key=openai_key,
+            timeout=30.0
         )
         logger.info(f"OpenAI Embeddings initialized with model: {model_name}")
 

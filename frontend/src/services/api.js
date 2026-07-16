@@ -141,12 +141,12 @@ export const apiService = {
   /**
    * 5. Trigger live SSE streaming response from the RAG agent
    */
-  streamChatResponse: async (sessionId, prompt, onChunkReceived, onStreamComplete, onError) => {
+  streamChatResponse: async (sessionId, prompt, onChunkReceived, onStreamComplete, onError, sessionTitle = null) => {
     try {
       const response = await fetch(`${BASE_URL}/chat/stream/${sessionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeader() },
-        body: JSON.stringify({ user_prompt: prompt }),
+        body: JSON.stringify({ user_prompt: prompt, session_title: sessionTitle }),
       });
 
       await handleResponse(response);

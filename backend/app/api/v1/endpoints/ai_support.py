@@ -269,7 +269,7 @@ async def chat_support(payload: ChatRequest):
         return {"reply": fallback_response}
 
     from openai import AsyncOpenAI
-    client = AsyncOpenAI(api_key=openai_key)
+    client = AsyncOpenAI(api_key=openai_key, timeout=30.0)
     target_model = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
     
     try:

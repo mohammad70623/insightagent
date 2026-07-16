@@ -640,10 +640,10 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 llm_model_name = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
 
 # Initialize the 4 distinct account instances
-client_competitor = OpenAI(api_key=openai_api_key) if openai_api_key else None
-client_email      = OpenAI(api_key=openai_api_key) if openai_api_key else None
-client_risk       = OpenAI(api_key=openai_api_key) if openai_api_key else None
-client_default    = OpenAI(api_key=openai_api_key) if openai_api_key else None
+client_competitor = OpenAI(api_key=openai_api_key, timeout=30.0) if openai_api_key else None
+client_email      = OpenAI(api_key=openai_api_key, timeout=30.0) if openai_api_key else None
+client_risk       = OpenAI(api_key=openai_api_key, timeout=30.0) if openai_api_key else None
+client_default    = OpenAI(api_key=openai_api_key, timeout=30.0) if openai_api_key else None
 
 def get_groq_client_by_route(feature_scope: str) -> OpenAI:
     """
@@ -665,6 +665,7 @@ llm_competitor = ChatOpenAI(
     openai_api_key=openai_api_key, 
     temperature=0.2,
     max_retries=5,
+    timeout=30.0,
     model_kwargs={"response_format": {"type": "json_object"}}
 ) if openai_api_key else None
 
@@ -673,6 +674,7 @@ llm_email = ChatOpenAI(
     openai_api_key=openai_api_key, 
     temperature=0.2,
     max_retries=5,
+    timeout=30.0,
     model_kwargs={"response_format": {"type": "json_object"}}
 ) if openai_api_key else None
 
@@ -681,6 +683,7 @@ llm_default = ChatOpenAI(
     openai_api_key=openai_api_key, 
     temperature=0.2,
     max_retries=5,
+    timeout=30.0,
     model_kwargs={"response_format": {"type": "json_object"}}
 ) if openai_api_key else None
 

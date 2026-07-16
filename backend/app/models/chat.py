@@ -30,13 +30,6 @@ class ChatSession(Base):
         
         Index("ix_chat_session_user_created", "user_id", "created_at"),
         Index("ix_chat_session_active_lookup", "id", "deleted_at"),
-        Index(
-            'uq_user_session_title_active',
-            'user_id', 
-            'title',
-            unique=True,
-            postgresql_where=text("deleted_at IS NULL")
-        ),
     )
 
 
