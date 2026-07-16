@@ -19,12 +19,9 @@ def _smtp_send(msg):
 
     api_key = os.getenv("BREVO_API_KEY")
 
-    # Debug line - remove once everything works
-    print(f"DEBUG: env_path={env_path}, exists={env_path.exists()}, key_loaded={'YES (len=' + str(len(api_key)) + ')' if api_key else 'NO'}")
-
     if not api_key:
         error_msg = f"BREVO_API_KEY is missing! Path checked: {env_path}"
-        print(f"🔴 SMTP Direct Failure: {error_msg}")
+        logger.error(f"SMTP Direct Failure: {error_msg}")
         raise Exception(error_msg)
 
     try:
@@ -75,14 +72,14 @@ def _smtp_send(msg):
     try:
         response = requests.post(url, json=payload, headers=headers, timeout=10)
         if response.status_code in [200, 201, 202]:
-            print(f"✅ OTP Email successfully sent via Brevo to {target_email}")
+            logger.info(f"OTP Email successfully sent via Brevo to {target_email}")
         else:
             error_msg = f"Brevo API Failure: {response.status_code} - {response.text}"
-            print(f"🔴 {error_msg}")
+            logger.error(error_msg)
             raise Exception(error_msg)
     except requests.exceptions.RequestException as e:
         error_msg = f"Network error connecting to Brevo API: {str(e)}"
-        print(f"🔴 {error_msg}")
+        logger.error(error_msg)
         raise Exception(error_msg)
 
 
@@ -218,9 +215,9 @@ async def send_otp_email(to_email: str, otp_code: str, purpose: str):
         generated_otp = otp_code
 
         await _send_otp_email_authentic(email, generated_otp)
-        print(f"🚀 [PRODUCTION] Real OTP email successfully fired to {email} via Brevo API.")
+        logger.info(f"Real OTP email successfully fired to {email} via Brevo API.")
     except Exception as e:
-        print(f"🔴 OTP Email Failure: {str(e)}")
+        logger.error(f"OTP Email Failure: {str(e)}")
         raise
 
 

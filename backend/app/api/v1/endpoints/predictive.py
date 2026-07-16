@@ -32,10 +32,10 @@ async def simulate_scenario(
     document_texts = await get_user_document_texts(tenant_collection, current_user.id)
     raw_corpus = " ".join(document_texts.values())[:4000] if document_texts else ""
 
-    # ── 2. DRAFT PROMPT FOR GROQ INFERENCE ──
-    groq_default_key = os.getenv("GROQ_API_KEY_DEFAULT") or settings.GROQ_API_KEY
-    if not groq_default_key:
-        raise HTTPException(status_code=500, detail="Groq API key not configured on server.")
+    # ── 2. DRAFT PROMPT FOR OPENAI INFERENCE ──
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
+        raise HTTPException(status_code=500, detail="OpenAI API key not configured on server.")
 
     source_label = "dynamic business document analysis context" if raw_corpus.strip() else "general industry benchmark models"
 

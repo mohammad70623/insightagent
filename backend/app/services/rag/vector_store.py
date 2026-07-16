@@ -3,6 +3,7 @@ import uuid
 from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue, FilterSelector
+import os
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -14,7 +15,7 @@ class VectorStoreService:
             url=settings.VECTOR_DB_URL,
             api_key=getattr(settings, "QDRANT_API_KEY", None) 
         )
-        self.vector_dimension = 384
+        self.vector_dimension = 1536
 
     # ─────────────────────────────────────────────────────────────────────────
     # HEALTH CHECK — call this before any Qdrant operation.
@@ -52,7 +53,29 @@ class VectorStoreService:
         return self.client.collection_exists(collection_name=collection_name)
 
     def _ensure_collection(self, collection_name: str):
-        if not self.client.collection_exists(collection_name=collection_name):
+        exists = self.client.collection_exists(collection_name=collection_name)
+        if exists:
+            try:
+                collection_info = self.client.get_collection(collection_name=collection_name)
+                vector_params = collection_info.config.params.vectors
+                if hasattr(vector_params, "size"):
+                    existing_size = vector_params.size
+                elif isinstance(vector_params, dict) and "size" in vector_params:
+                    existing_size = vector_params["size"]
+                else:
+                    existing_size = None
+                
+                if existing_size is not None and existing_size != self.vector_dimension:
+                    logger.warning(
+                        f"Dimension mismatch for collection '{collection_name}' (expected {self.vector_dimension}, found {existing_size}). "
+                        f"Recreating collection to resolve mismatch."
+                    )
+                    self.client.delete_collection(collection_name=collection_name)
+                    exists = False
+            except Exception as e:
+                logger.warning(f"Error inspecting collection {collection_name} dimension: {e}")
+
+        if not exists:
             self.client.create_collection(
                 collection_name=collection_name,
                 vectors_config=VectorParams(size=self.vector_dimension, distance=Distance.COSINE),

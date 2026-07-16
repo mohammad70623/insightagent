@@ -154,111 +154,40 @@ async def query_support_rag(user_query: str) -> str:
             f"User Question: {user_query}"
         )
         
-        llm_provider = os.getenv("LLM_PROVIDER", "groq").lower()
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if not openai_key:
+            logger.error("No valid API keys found for OpenAI (OPENAI_API_KEY).")
+            return "ROUTE_TO_HUMAN"
         
-        if llm_provider == "openai" or not settings.GROQ_API_KEY:
-            openai_key = os.getenv("OPENAI_API_KEY")
-            if not openai_key:
-                logger.error("No valid API keys found for OpenAI (OPENAI_API_KEY).")
-                return "ROUTE_TO_HUMAN"
-            
-            try:
-                from langchain_openai import ChatOpenAI
-                from langchain_core.messages import SystemMessage, HumanMessage
-                chat_model = ChatOpenAI(
-                    api_key=openai_key,
-                    model_name=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                    temperature=0.0
-                )
-                messages = [
-                    SystemMessage(content=system_instruction),
-                    HumanMessage(content=user_content)
-                ]
-                response = await chat_model.ainvoke(messages)
-                answer = response.content.strip()
-            except Exception as e:
-                logger.warning(f"LangChain ChatOpenAI failed: {str(e)}. Falling back to raw AsyncOpenAI...")
-                from openai import AsyncOpenAI
-                client = AsyncOpenAI(api_key=openai_key)
-                completion = await client.chat.completions.create(
-                    model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-                    messages=[
-                        {"role": "system", "content": system_instruction},
-                        {"role": "user", "content": user_content}
-                    ],
-                    temperature=0.0
-                )
-                answer = completion.choices[0].message.content.strip()
-        else:
-            # Use ChatGroq with ainvoke — routed to GROQ_API_KEY_DEFAULT
-            groq_default_key = os.getenv("GROQ_API_KEY_DEFAULT") or settings.GROQ_API_KEY
-            chat_model = None
-            try:
-                from langchain_groq import ChatGroq
-                chat_model = ChatGroq(
-                    api_key=groq_default_key,
-                    model=settings.LLM_MODEL_NAME,
-                    temperature=0.0,
-                    max_retries=5
-                )
-            except ImportError:
-                try:
-                    from langchain_community.chat_models import ChatGroq
-                    chat_model = ChatGroq(
-                        api_key=groq_default_key,
-                        model=settings.LLM_MODEL_NAME,
-                        temperature=0.0,
-                        max_retries=5
-                    )
-                except ImportError:
-                    pass
-
-            if chat_model is not None:
-                from langchain_core.messages import SystemMessage, HumanMessage
-                messages = [
-                    SystemMessage(content=system_instruction),
-                    HumanMessage(content=user_content)
-                ]
-                try:
-                    response = await chat_model.ainvoke(messages)
-                    answer = response.content.strip()
-                except Exception as retry_exc:
-                    if "429" in str(retry_exc) or "rate_limit" in str(retry_exc).lower():
-                        logger.warning(f'{{"event": "rate_limit_backoff", "route": "support_chat", "error": "{retry_exc}"}}')
-                        await asyncio.sleep(8)
-                        response = await chat_model.ainvoke(messages)
-                        answer = response.content.strip()
-                    else:
-                        raise
-            else:
-                # Raw AsyncGroq fallback — routed to GROQ_API_KEY_DEFAULT
-                from groq import AsyncGroq
-                client = AsyncGroq(api_key=groq_default_key)
-                try:
-                    completion = await client.chat.completions.create(
-                        model=settings.LLM_MODEL_NAME,
-                        messages=[
-                            {"role": "system", "content": system_instruction},
-                            {"role": "user", "content": user_content}
-                        ],
-                        temperature=0.0
-                    )
-                    answer = completion.choices[0].message.content.strip()
-                except Exception as retry_exc:
-                    if "429" in str(retry_exc) or "rate_limit" in str(retry_exc).lower():
-                        logger.warning(f'{{"event": "rate_limit_backoff", "route": "support_chat_async", "error": "{retry_exc}"}}')
-                        await asyncio.sleep(8)
-                        completion = await client.chat.completions.create(
-                            model=settings.LLM_MODEL_NAME,
-                            messages=[
-                                {"role": "system", "content": system_instruction},
-                                {"role": "user", "content": user_content}
-                            ],
-                            temperature=0.0
-                        )
-                        answer = completion.choices[0].message.content.strip()
-                    else:
-                        raise
+        target_model = os.getenv("LLM_MODEL_NAME") or os.getenv("OPENAI_MODEL") or "gpt-4o-mini"
+        
+        try:
+            from langchain_openai import ChatOpenAI
+            from langchain_core.messages import SystemMessage, HumanMessage
+            chat_model = ChatOpenAI(
+                api_key=openai_key,
+                model=target_model,
+                temperature=0.0
+            )
+            messages = [
+                SystemMessage(content=system_instruction),
+                HumanMessage(content=user_content)
+            ]
+            response = await chat_model.ainvoke(messages)
+            answer = response.content.strip()
+        except Exception as e:
+            logger.warning(f"LangChain ChatOpenAI failed: {str(e)}. Falling back to raw AsyncOpenAI...")
+            from openai import AsyncOpenAI
+            client = AsyncOpenAI(api_key=openai_key)
+            completion = await client.chat.completions.create(
+                model=target_model,
+                messages=[
+                    {"role": "system", "content": system_instruction},
+                    {"role": "user", "content": user_content}
+                ],
+                temperature=0.0
+            )
+            answer = completion.choices[0].message.content.strip()
             
         return answer
 

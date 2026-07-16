@@ -25,7 +25,8 @@ from app.api import deps
 from app.models.user import User
 from app.services.rag.vector_store import vector_store
 from langgraph.graph import StateGraph, END
-from langchain_groq import ChatGroq
+from langchain_openai import ChatOpenAI
+from openai import OpenAI
 from tavily import TavilyClient
 from app.core.config import settings
 
@@ -260,7 +261,8 @@ async def get_dynamic_business_metrics(
     current_user: User = Depends(deps.get_current_user)
 ):
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
-    groq_key = os.getenv("GROQ_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
+    llm_model = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
     
     fallback_insights = {
         "total_interactions": "0",
@@ -303,11 +305,13 @@ async def get_dynamic_business_metrics(
         
         async with httpx.AsyncClient() as client:
             for attempt in range(3):
+                # Stagger requests to mitigate rate limits
+                await asyncio.sleep(0.5)
                 response = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                    "https://api.openai.com/v1/chat/completions",
+                    headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
                     json={
-                        "model": "llama3-70b-8192",
+                        "model": llm_model,
                         "messages": [{"role": "user", "content": llama_prompt}],
                         "temperature": 0.1,
                         "response_format": {"type": "json_object"}
@@ -317,7 +321,7 @@ async def get_dynamic_business_metrics(
                 if response.status_code == 200:
                     return json.loads(response.json()["choices"][0]["message"]["content"])
                 elif response.status_code == 429:
-                    logger.warning(f"Groq API Rate Limit (429) hit. Retrying in {2 ** attempt}s...")
+                    logger.warning(f"OpenAI API Rate Limit (429) hit. Retrying in {2 ** attempt}s...")
                     await asyncio.sleep(2 ** attempt)
                 else:
                     break
@@ -632,15 +636,16 @@ async def get_real_sentiment_distribution(
 TAVILY_API_KEY = settings.TAVILY_API_KEY
 tavily_client = TavilyClient(api_key=TAVILY_API_KEY) if TAVILY_API_KEY else None
 
-from groq import Groq
+openai_api_key = os.getenv("OPENAI_API_KEY")
+llm_model_name = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
 
 # Initialize the 4 distinct account instances
-client_competitor = Groq(api_key=os.getenv("GROQ_API_KEY_COMPETITOR"))
-client_email      = Groq(api_key=os.getenv("GROQ_API_KEY_EMAIL"))
-client_risk       = Groq(api_key=os.getenv("GROQ_API_KEY_RISK"))
-client_default    = Groq(api_key=os.getenv("GROQ_API_KEY_DEFAULT"))
+client_competitor = OpenAI(api_key=openai_api_key) if openai_api_key else None
+client_email      = OpenAI(api_key=openai_api_key) if openai_api_key else None
+client_risk       = OpenAI(api_key=openai_api_key) if openai_api_key else None
+client_default    = OpenAI(api_key=openai_api_key) if openai_api_key else None
 
-def get_groq_client_by_route(feature_scope: str) -> Groq:
+def get_groq_client_by_route(feature_scope: str) -> OpenAI:
     """
     Routes the execution runtime to the specific account pool based on feature scope.
     Falls back directly to client_default for any general chatbot or unmapped services.
@@ -655,29 +660,29 @@ def get_groq_client_by_route(feature_scope: str) -> Groq:
         # All other chat routines and generic endpoints fall back here
         return client_default
 
-llm_competitor = ChatGroq(
-    model=settings.GROQ_MODEL, 
-    groq_api_key=os.getenv("GROQ_API_KEY_COMPETITOR"), 
+llm_competitor = ChatOpenAI(
+    model=llm_model_name, 
+    openai_api_key=openai_api_key, 
     temperature=0.2,
     max_retries=5,
     model_kwargs={"response_format": {"type": "json_object"}}
-) if os.getenv("GROQ_API_KEY_COMPETITOR") else None
+) if openai_api_key else None
 
-llm_email = ChatGroq(
-    model=settings.GROQ_MODEL, 
-    groq_api_key=os.getenv("GROQ_API_KEY_EMAIL"), 
+llm_email = ChatOpenAI(
+    model=llm_model_name, 
+    openai_api_key=openai_api_key, 
     temperature=0.2,
     max_retries=5,
     model_kwargs={"response_format": {"type": "json_object"}}
-) if os.getenv("GROQ_API_KEY_EMAIL") else None
+) if openai_api_key else None
 
-llm_default = ChatGroq(
-    model=settings.GROQ_MODEL, 
-    groq_api_key=os.getenv("GROQ_API_KEY_DEFAULT"), 
+llm_default = ChatOpenAI(
+    model=llm_model_name, 
+    openai_api_key=openai_api_key, 
     temperature=0.2,
     max_retries=5,
     model_kwargs={"response_format": {"type": "json_object"}}
-) if os.getenv("GROQ_API_KEY_DEFAULT") else None
+) if openai_api_key else None
 
 # Maintain backwards compatibility/central imports mapping llm to llm_default
 llm = llm_default
@@ -685,13 +690,17 @@ llm = llm_default
 
 async def invoke_with_retry(client, model: str, messages: list, *, route: str = "unknown", **kwargs):
     """
-    Centralized async wrapper for Groq chat.completions.create with a single
-    8-second cool-down retry on 429 / rate_limit errors.
+    Centralized async wrapper for OpenAI chat.completions.create with a single
+    8-second cool-down retry on 429 / rate_limit errors and initial micro-delay.
     """
+    # CRITICAL UX SHIELD - Stagger concurrent metric calls
+    await asyncio.sleep(0.5)
+    
+    target_model = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
     try:
         return await asyncio.to_thread(
             client.chat.completions.create,
-            model=model,
+            model=target_model,
             messages=messages,
             **kwargs
         )
@@ -704,7 +713,7 @@ async def invoke_with_retry(client, model: str, messages: list, *, route: str = 
             await asyncio.sleep(8)
             return await asyncio.to_thread(
                 client.chat.completions.create,
-                model=model,
+                model=target_model,
                 messages=messages,
                 **kwargs
             )
@@ -1083,6 +1092,9 @@ async def fetch_urgent_feedbacks_queue(
     db: AsyncSession = Depends(deps.get_db)
 ):
     """Retrieve rows from UrgentFeedback filtered strictly by authenticated user."""
+    if current_user.google_refresh_token is None:
+        return {"gmail_connected": False, "feedbacks": [], "alerts": []}
+
     from app.models.urgent_feedback import UrgentFeedback
     statement = select(UrgentFeedback).where(UrgentFeedback.user_id == current_user.id).order_by(UrgentFeedback.created_at.desc())
     res = await db.execute(statement)
@@ -1090,6 +1102,19 @@ async def fetch_urgent_feedbacks_queue(
     
     compiled_queue = []
     for f in feedbacks:
+        # Lowercase subject and body for comprehensive matching
+        sb_text = f"{(f.subject or '')} {(f.body or '')}".lower()
+        if any(term in sb_text for term in ["billing", "price", "expense", "opex"]):
+            code = "INFRA-99X"
+        elif any(term in sb_text for term in ["security", "auth", "token", "key", "fraud"]):
+            code = "SEC-404"
+        elif any(term in sb_text for term in ["latency", "residency", "compliance", "cache"]):
+            code = "COMP-881"
+        elif any(term in sb_text for term in ["kafka", "memory", "cluster", "schema"]):
+            code = "SYS-102"
+        else:
+            code = f"SYS-{int(f.id.hex[:4], 16) % 900 + 100}"
+            
         compiled_queue.append({
             "id": str(f.id),
             "source": f.source,
@@ -1100,10 +1125,32 @@ async def fetch_urgent_feedbacks_queue(
             "body": f.body or "",
             "severity": f.severity,
             "timestamp": f.timestamp or "Just now",
-            "red_flag": f.red_flag
+            "red_flag": f.red_flag,
+            "alert_code": code
         })
-        
-    return {"success": True, "feedbacks": compiled_queue}
+
+        # Issue real-time system notification if critical/high and not already notified
+        if str(f.severity).upper() in ["CRITICAL", "HIGH"]:
+            from app.models.notification import Notification
+            import uuid
+            notif_stmt = select(Notification).where(
+                Notification.user_id == str(current_user.id),
+                Notification.redirect_url.like(f"%{str(f.id)}%")
+            )
+            existing_notif = (await db.execute(notif_stmt)).scalars().first()
+            if not existing_notif:
+                new_notif = Notification(
+                    id=uuid.uuid4(),
+                    user_id=str(current_user.id),
+                    title=f"Urgent Incident: {code}",
+                    message=f"Critical email detected: {f.snippet or f.subject or 'Emergency operational warning.'}",
+                    redirect_url=f"/app/urgent-feedbacks?id={str(f.id)}",
+                    is_read=False
+                )
+                db.add(new_notif)
+                await db.commit()
+
+    return {"success": True, "gmail_connected": True, "feedbacks": compiled_queue}
 
 class ReplyFeedbackPayload(BaseModel):
     reply_text: str
@@ -1182,6 +1229,33 @@ async def reply_to_feedback(
     except Exception as send_err:
         logger.error(f"Gmail send reply failure: {send_err}")
         raise HTTPException(status_code=500, detail=f"Failed to send email reply: {send_err}")
+
+@router.post("/urgent-feedbacks/{feedback_id}/acknowledge")
+async def acknowledge_feedback(
+    feedback_id: uuid.UUID,
+    current_user: User = Depends(deps.get_current_user),
+    db: AsyncSession = Depends(deps.get_db)
+):
+    """
+    Explicitly acknowledge a high-priority incident.
+    Saves state permanently in database by setting red_flag=False and severity='WARNING'.
+    """
+    from app.models.urgent_feedback import UrgentFeedback
+    statement = select(UrgentFeedback).where(
+        UrgentFeedback.id == feedback_id,
+        UrgentFeedback.user_id == current_user.id
+    )
+    res = await db.execute(statement)
+    feedback = res.scalars().first()
+    if not feedback:
+        raise HTTPException(status_code=404, detail="Feedback instance not found.")
+
+    feedback.red_flag = False
+    feedback.severity = "WARNING"
+    db.add(feedback)
+    await db.commit()
+
+    return {"success": True}
 
 # Background email sync tasks
 async def sync_all_users_emails():
@@ -1298,7 +1372,7 @@ async def sync_all_users_emails():
                                 user_id=str(user.id),
                                 title=f"Urgent {agent_res['severity']} Email Feedback",
                                 message=f"From {sender_email}: {subject}",
-                                redirect_url="/app/analytics"
+                                redirect_url="/app/urgent-feedbacks"
                             )
                 await db.commit()
             except Exception as user_err:
@@ -1439,7 +1513,7 @@ async def get_top_products(
         user_cache["top_products"] = []
         return TopProductsResponse(products=[])
  
-    # 2. Invoke LLaMA via ChatGroq to parse the products
+    # 2. Invoke model via ChatOpenAI to parse the products
     if not llm_default:
         user_cache["top_products"] = []
         return TopProductsResponse(products=[])
@@ -1507,12 +1581,12 @@ async def get_top_products(
             if json_match:
                 cleaned_json_string = json_match.group(1)
                 parsed_data = json.loads(cleaned_json_string)
-                print("🚀 [Backend Parser] Successfully stripped extra data and parsed dynamic JSON!")
+                logger.info("Successfully stripped extra data and parsed dynamic JSON in backend parser.")
             else:
                 raise ValueError("No matching JSON structures discovered in the text content.")
                 
         except (json.JSONDecodeError, ValueError) as parse_error:
-            print(f"⚠️ [Dynamic Fix Triggered] Strict parsing collapsed due to extra data: {str(parse_error)}")
+            logger.warning(f"Strict parsing collapsed due to extra data: {str(parse_error)}")
             # Safe Empty Fallback: Avoid returning dynamic food mock data entirely
             parsed_data = {"products": []}
 
@@ -1569,10 +1643,7 @@ async def get_top_products(
 
         user_cache["top_products"] = products_list
 
-        print("\n" + "="*60)
-        print("📡 [SERVER OUTBOUND TRACE] Data package leaving /top-products:")
-        print(f"📦 Payload Content: {products_list}")
-        print("="*60 + "\n")
+        logger.debug(f"Data package leaving /top-products: {products_list}")
 
         return TopProductsResponse(products=products_list)
         

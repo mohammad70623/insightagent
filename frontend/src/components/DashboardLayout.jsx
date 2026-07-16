@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History, Eye, EyeOff } from 'lucide-react';
+import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import SwotButton from './analytics/SwotButton';
 import { api } from '../services/api';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
@@ -120,18 +120,31 @@ const DashboardLayout = () => {
     fetchProfile();
     fetchUnreadNotifications();
     
+    // Check if redirected from Google OAuth callback
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('gmail_connected') === 'true') {
+      window.history.replaceState({}, document.title, window.location.pathname);
+      fetchGoogleStatus();
+    }
+    
     // Listen to user context refreshes (e.g. from upgrade or profile edit)
     const handleRefresh = () => {
       fetchProfile();
       fetchUnreadNotifications();
+      fetchGoogleStatus();
+    };
+    const handleOpenProfileModal = () => {
+      setShowProfileModal(true);
     };
     window.addEventListener('user-context-refresh', handleRefresh);
+    window.addEventListener('openProfileModal', handleOpenProfileModal);
     
     // Dynamic polling setup
     const interval = setInterval(fetchUnreadNotifications, 60000);
     
     return () => {
       window.removeEventListener('user-context-refresh', handleRefresh);
+      window.removeEventListener('openProfileModal', handleOpenProfileModal);
       clearInterval(interval);
     };
   }, []);
@@ -225,6 +238,7 @@ const DashboardLayout = () => {
     { name: 'Analytics', path: '/app/analytics', icon: BarChart3 },
     { name: 'Data Upload', path: '/app/upload', icon: CloudUpload },
     { name: 'AI Chat', path: '/app/chat', icon: MessageSquare },
+    { name: 'Urgent Feedbacks', path: '/app/urgent-feedbacks', icon: AlertTriangle },
     { name: 'Billing', path: '/app/billing', icon: CreditCard },
   ];
 

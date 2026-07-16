@@ -7,7 +7,6 @@ import TrendChart from '../components/analytics/TrendChart';
 import SentimentCircle from '../components/analytics/SentimentCircle';
 import BenchmarkingMatrix from '../components/analytics/BenchmarkingMatrix';
 import ForecastSimulator from '../components/analytics/ForecastSimulator';
-import UrgentFeedbacks from '../components/analytics/UrgentFeedbacks';
 import TopProducts from '../components/analytics/TopProducts';
 
 const Analytics = () => {
@@ -38,7 +37,6 @@ const Analytics = () => {
   const [complaintsTimeline, setComplaintsTimeline] = useState([]);
   const [timelineCategories, setTimelineCategories] = useState([]);
   const [sentimentData, setSentimentData] = useState(null);
-  const [urgentFeedbacks, setUrgentFeedbacks] = useState([]);
   const [reports, setReports] = useState([]);
   const [toasts, setToasts] = useState([]);
 
@@ -73,46 +71,7 @@ const Analytics = () => {
     }
   };
 
-  const fetchUrgentFeedbacks = async () => {
-    try {
-      const res = await api.get('/chat/analytics/urgent-feedbacks');
-      const liveData = res.data?.feedbacks || res.data?.data || res.data || [];
-      
-      setUrgentFeedbacks(prev => {
-        // Create a unique index of existing item IDs to avoid duplicates
-        const existingIds = new Set(prev.map(item => item.id));
-        const newUniqueItems = liveData.filter(item => item.id && !existingIds.has(item.id));
-        
-        // Trigger toast for new unique items
-        newUniqueItems.forEach(item => {
-          addToast(`🚨 EMERGENCY: ${item.message_snippet}`, item.severity);
-        });
-        
-        return [...newUniqueItems, ...prev]; // Stack new critical tickets directly on top
-      });
-    } catch (err) {
-      console.error("Error updating triage buffer:", err);
-    }
-  };
 
-  const handleSendReply = async (emailId, recipient, subject, bodyText) => {
-    try {
-      // 1. Dispatch active SMTP payload to backend
-      await api.post('/chat/analytics/send-reply', {
-        to_email: recipient,
-        subject: subject,
-        reply_body: bodyText
-      });
-      
-      // 2. Instantly remove the resolved mail from UI state so it disappears
-      setUrgentFeedbacks(prev => prev.filter(item => item.id !== emailId));
-      
-      addToast("Reply successfully dispatched to the customer. This ticket is now resolved and has been cleared from your active queue.", "SUCCESS");
-    } catch (err) {
-      console.error("Outbound transmission failed:", err);
-      addToast(`Outbound email transmission failed. Our mail gateway returned: ${err.response?.data?.detail || err.message}`, "ERROR");
-    }
-  };
 
   const fetchCompetitorMatrix = async () => {
     try {
@@ -191,8 +150,6 @@ const Analytics = () => {
       fetchComplaintsTimeline().catch(e => console.error(e)),
       fetchSentimentDistribution().catch(e => console.error(e)),
       fetchCompetitorMatrix().catch(e => console.error(e)),
-      fetchUrgentFeedbacks().catch(e => console.error(e)),
-      
       fetchTopProducts(targetId).catch(e => console.error(e)) 
     ]);
 
@@ -276,16 +233,7 @@ const Analytics = () => {
     return () => clearTimeout(delayDebounceFn);
   }, [priceAdjuster, marketingBoost, productInnovation, opEfficiency, supportCapacity, competitionThreat]);
 
-  useEffect(() => {
-    fetchUrgentFeedbacks();
-    
-    // Set a clean 60-second interval pool for background checks
-    const interval = setInterval(() => {
-      fetchUrgentFeedbacks();
-    }, 60000);
-    
-    return () => clearInterval(interval);
-  }, []);
+
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -505,7 +453,6 @@ const Analytics = () => {
       <BenchmarkingMatrix searchMeta={searchMeta} benchmarks={benchmarks} />
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-        <UrgentFeedbacks urgentFeedbacks={urgentFeedbacks} onSendReply={handleSendReply} />
         <TopProducts reports={reports} />
       </div>
 

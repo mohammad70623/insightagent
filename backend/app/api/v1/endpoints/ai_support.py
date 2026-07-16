@@ -124,7 +124,7 @@ async def ensure_support_indexed():
             
             vector_store.client.create_collection(
                 collection_name=COLLECTION_NAME,
-                vectors_config=VectorParams(size=384, distance=Distance.COSINE)
+                vectors_config=VectorParams(size=1536, distance=Distance.COSINE)
             )
 
             with pdfplumber.open(PDF_PATH) as pdf:
@@ -264,16 +264,17 @@ async def chat_support(payload: ChatRequest):
         f"Task: Answer the user question accurately based ONLY on the context parameters above. If the context is completely empty and doesn't mention the topic at all, return exactly: '{fallback_response}'"
     )
 
-    groq_default_key = os.getenv("GROQ_API_KEY_DEFAULT") or settings.GROQ_API_KEY
-    if not groq_default_key:
+    openai_key = os.getenv("OPENAI_API_KEY")
+    if not openai_key:
         return {"reply": fallback_response}
 
-    from groq import AsyncGroq
-    client = AsyncGroq(api_key=groq_default_key)
+    from openai import AsyncOpenAI
+    client = AsyncOpenAI(api_key=openai_key)
+    target_model = os.getenv("LLM_MODEL_NAME", "gpt-4o-mini")
     
     try:
         completion = await client.chat.completions.create(
-            model=settings.LLM_MODEL_NAME,
+            model=target_model,
             messages=[
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_content}
@@ -286,7 +287,7 @@ async def chat_support(payload: ChatRequest):
             logger.warning(f"Rate limit hit in support LLM, backing off: {retry_exc}")
             await asyncio.sleep(8)
             completion = await client.chat.completions.create(
-                model=settings.LLM_MODEL_NAME,
+                model=target_model,
                 messages=[
                     {"role": "system", "content": system_instruction},
                     {"role": "user", "content": user_content}

@@ -110,18 +110,18 @@ async def startup_event():
                     FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE
                 );
             """))
-            print("✅ Database migration successful!")
+            logger.info("Database migration successful!")
     except Exception as e:
-        print(f"⚠️ Database migration info/error: {e}")
+        logger.warning(f"Database migration info/error: {e}")
 
     # Launch Gmail Ingestion Background Task
     import asyncio
     try:
         from app.api.v1.endpoints.analytics.metrics import sync_all_users_emails_loop
         asyncio.create_task(sync_all_users_emails_loop())
-        print("🚀 Gmail Ingestion background task spawned successfully!")
+        logger.info("Gmail Ingestion background task spawned successfully!")
     except Exception as worker_err:
-        print(f"⚠️ Gmail Ingestion background task failed to spawn: {worker_err}")
+        logger.warning(f"Gmail Ingestion background task failed to spawn: {worker_err}")
 
 
 @app.get("/", tags=["Health Check"])

@@ -3,7 +3,7 @@ import logging
 import time
 import uuid
 from typing import AsyncGenerator, List, Dict, Any
-from groq import Groq
+from openai import OpenAI
 from app.core.config import settings
 import os
 from app.services.rag.embedding_service import embedding_service
@@ -14,9 +14,8 @@ logger = logging.getLogger(__name__)
 
 class RAGEngine:
     def __init__(self):
-        # Use the dedicated GROQ_API_KEY_DEFAULT for RAG chat isolation
-        default_key = os.getenv("GROQ_API_KEY_DEFAULT") or settings.GROQ_API_KEY
-        self.llm_client = Groq(api_key=default_key)
+        openai_key = os.getenv("OPENAI_API_KEY")
+        self.llm_client = OpenAI(api_key=openai_key) if openai_key else None
 
     def _chunk_text(self, raw_text: str, chunk_size: int = 2000, overlap: int = 300) -> List[str]:
         """
@@ -188,7 +187,7 @@ class RAGEngine:
                 return await asyncio.wait_for(
                     asyncio.to_thread(
                         self.llm_client.chat.completions.create,
-                        model=settings.LLM_MODEL_NAME,
+                        model=os.getenv("LLM_MODEL_NAME", "gpt-4o-mini"),
                         messages=messages,
                         temperature=0.0,
                         stream=True
@@ -218,7 +217,7 @@ class RAGEngine:
             success = True
 
         except asyncio.TimeoutError:
-            logger.critical(f'{{"event": "groq_timeout", "user_id": "{str(user_id)}"}}')
+            logger.critical(f'{{"event": "openai_timeout", "user_id": "{str(user_id)}"}}')
             yield "\n[TIMEOUT]: The AI response timed out. Please try again."
 
         except Exception as e:

@@ -57,7 +57,7 @@ export default function TopProducts({ reports: propReports }) {
   }, [isControlled, propReports]); 
 
   return (
-    <div className="md:col-span-5 bg-[#0B0F19]/60 backdrop-blur border border-slate-850 rounded-2xl p-6 shadow-xl flex flex-col h-auto w-full min-h-[250px]">
+    <div className="md:col-span-12 bg-[#0B0F19]/60 backdrop-blur border border-slate-850 rounded-2xl p-6 shadow-xl flex flex-col h-auto w-full min-h-[250px]">
       
       {/* 1. HEADER ROW - THIS MUST ALWAYS BE VISIBLE */}
       <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 mb-4">

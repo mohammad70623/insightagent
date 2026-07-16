@@ -31,9 +31,9 @@ async def get_competitor_benchmarking(
     from app.core.config import settings
     
     tavily_key = settings.TAVILY_API_KEY
-    groq_key = settings.GROQ_API_KEY
+    openai_key = os.getenv("OPENAI_API_KEY")
     
-    if not tavily_key or not groq_key:
+    if not tavily_key or not openai_key:
         raise HTTPException(
             status_code=500, 
             detail="Missing environment variables for live internet scraping inside core settings config."
@@ -87,14 +87,14 @@ async def get_competitor_benchmarking(
         """
         
         async with httpx.AsyncClient() as client:
-            groq_response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
+            openai_response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
                 headers={
-                    "Authorization": f"Bearer {groq_key}",
+                    "Authorization": f"Bearer {openai_key}",
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "llama3-70b-8192",
+                    "model": os.getenv("LLM_MODEL_NAME", "gpt-4o-mini"),
                     "messages": [{"role": "user", "content": llama_prompt}],
                     "temperature": 0.1,
                     "response_format": {"type": "json_object"}
@@ -102,8 +102,8 @@ async def get_competitor_benchmarking(
                 timeout=12.0
             )
             
-            if groq_response.status_code == 200:
-                parsed_benchmarks = json.loads(groq_response.json()["choices"][0]["message"]["content"])
+            if openai_response.status_code == 200:
+                parsed_benchmarks = json.loads(openai_response.json()["choices"][0]["message"]["content"])
                 return {
                     "search_query_used": search_query,
                     "last_scraped_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),

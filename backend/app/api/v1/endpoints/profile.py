@@ -83,8 +83,11 @@ user_router = APIRouter()
 async def get_user_onboarding_status(
     current_user: User = Depends(deps.get_current_user)
 ):
+    is_gmail_linked = current_user.google_refresh_token is not None
     return {
         "has_uploaded_data": current_user.has_uploaded_data,
         "has_processed_data": current_user.has_processed_data,
-        "has_explored_insights": current_user.has_explored_insights
+        "has_explored_insights": current_user.has_explored_insights,
+        "gmail_authorized": is_gmail_linked,
+        "gmail_connected": is_gmail_linked
     }

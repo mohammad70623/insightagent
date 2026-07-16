@@ -18,6 +18,7 @@ const Settings = lazy(() => import('../pages/Settings'));
 const Support = lazy(() => import('../pages/Support'));
 const Docs = lazy(() => import('../pages/Docs'));
 const Feedback = lazy(() => import('../pages/Feedback'));
+const UrgentFeedbacksPage = lazy(() => import('../pages/UrgentFeedbacks'));
 
 const LazyFallback = () => (
   <div className="flex h-[80vh] w-full items-center justify-center bg-transparent">
@@ -101,6 +102,10 @@ const router = createBrowserRouter([
       {
         path: "chat",
         element: <Suspense fallback={<LazyFallback />}><Chat /></Suspense>
+      },
+      {
+        path: "urgent-feedbacks",
+        element: <Suspense fallback={<LazyFallback />}><UrgentFeedbacksPage /></Suspense>
       },
       {
         path: "admin",

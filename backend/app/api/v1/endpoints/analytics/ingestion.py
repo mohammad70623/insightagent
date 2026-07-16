@@ -180,10 +180,6 @@ async def index_payload(
         )
 
         # ── DEBUG: surface exact runtime state of the indexing call ──
-        print(f"[DEBUG index-payload] rag_engine.index_document_payload returned: {success}")
-        print(f"[DEBUG index-payload] document_id passed to Qdrant  : '{str(document_id)}'  (type={type(document_id).__name__})")
-        print(f"[DEBUG index-payload] user_id passed to Qdrant      : '{str(current_user.id)}'")
-        print(f"[DEBUG index-payload] collection_name               : '{tenant_collection_namespace}'")
         logger.info(
             f'{{"event": "index_payload_debug", "success": {success}, '
             f'"document_id": "{str(document_id)}", "user_id": "{str(current_user.id)}", '
@@ -283,9 +279,6 @@ async def get_ingestion_status(document_id: str, current_user: User = Depends(de
         )
 
         # ── DEBUG: log collection existence check ──
-        print(f"[DEBUG ingestion-status] document_id from frontend  : '{document_id}'")
-        print(f"[DEBUG ingestion-status] tenant_collection          : '{tenant_collection}'")
-        print(f"[DEBUG ingestion-status] collection_exists          : {collection_exists}")
         logger.info(
             f'{{"event": "ingestion_status_debug", "document_id": "{document_id}", '
             f'"collection": "{tenant_collection}", "collection_exists": {collection_exists}}}'
@@ -311,15 +304,11 @@ async def get_ingestion_status(document_id: str, current_user: User = Depends(de
                 )
             )
             # ── DEBUG: log exactly what Qdrant returned ──
-            print(f"[DEBUG ingestion-status] scroll results count    : {len(results)}")
-            if results:
-                print(f"[DEBUG ingestion-status] first point payload    : {getattr(results[0], 'payload', {})}")
             logger.info(
                 f'{{"event": "ingestion_status_scroll_debug", "document_id": "{document_id}", '
                 f'"results_count": {len(results)}}}'
             )
         except Exception as scroll_err:
-            print(f"[DEBUG ingestion-status] SCROLL EXCEPTION        : {scroll_err}")
             logger.error(
                 f'{{"event": "ingestion_status_scroll_exception", "document_id": "{document_id}", "error": "{str(scroll_err)}"}}'
             )
@@ -331,7 +320,6 @@ async def get_ingestion_status(document_id: str, current_user: User = Depends(de
             return {"status": "processing", "progress": 50}
 
     except Exception as e:
-        print(f"[DEBUG ingestion-status] OUTER EXCEPTION           : {e}")
         logger.error(f'{{"event": "ingestion_status_failed", "document_id": "{document_id}", "error": "{str(e)}"}}')
         return {"status": "processing", "progress": 30}
 

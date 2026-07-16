@@ -33,7 +33,7 @@ async def detect_business_anomalies(
     current_user: User = Depends(deps.get_current_user)
 ):
     tenant_collection = f"tenant_cluster_{str(current_user.id).replace('-', '_')}"
-    groq_key = os.getenv("GROQ_API_KEY")
+    openai_key = os.getenv("OPENAI_API_KEY")
     
     fallback_response = {"status": "success", "anomalies_found": 0, "alerts": []}
     
@@ -69,10 +69,10 @@ async def detect_business_anomalies(
         
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={"Authorization": f"Bearer {groq_key}", "Content-Type": "application/json"},
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
                 json={
-                    "model": "llama3-70b-8192",
+                    "model": os.getenv("LLM_MODEL_NAME", "gpt-4o-mini"),
                     "messages": [{"role": "user", "content": llama_prompt}],
                     "temperature": 0.1,
                     "response_format": {"type": "json_object"}

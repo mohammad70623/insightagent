@@ -38,10 +38,7 @@ async def get_current_user(
     """
     Identity Verification Guard: Patched for ultimate raw debugging
     """
-    print("\n" + "="*50)
-    print(f"📡 [DEBUG INCOMING] Raw Token Received from Frontend: '{token}'")
-    print(f"📡 [DEBUG TYPE] Token Variable Type: {type(token)}")
-    print("="*50 + "\n")
+    logger.debug(f"[DEBUG INCOMING] Raw Token Received from Frontend: '{token}' (Type: {type(token).__name__})")
 
     try:
         payload: Dict[str, Any] = decode_and_verify_token(token)
