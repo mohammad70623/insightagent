@@ -6,27 +6,14 @@ import MetricsGrid from '../components/analytics/MetricsGrid';
 import TrendChart from '../components/analytics/TrendChart';
 import SentimentCircle from '../components/analytics/SentimentCircle';
 import BenchmarkingMatrix from '../components/analytics/BenchmarkingMatrix';
-import ForecastSimulator from '../components/analytics/ForecastSimulator';
 import TopProducts from '../components/analytics/TopProducts';
 
 const Analytics = () => {
   const [liveMetrics, setLiveMetrics] = useState(null);
   const [kpiSummary, setKpiSummary] = useState(null);
-  const [forecastData, setForecastData] = useState(null);
-  const [forecastLoading, setForecastLoading] = useState(false);
   const [benchmarks, setBenchmarks] = useState([]);
   const [searchMeta, setSearchMeta] = useState({ query: '', time: '' });
   const [loading, setLoading] = useState(true);
-
-  // 6 Sliders Simulation states
-  const [priceAdjuster, setPriceAdjuster] = useState(0);
-  const [marketingBoost, setMarketingBoost] = useState(0);
-  const [productInnovation, setProductInnovation] = useState(0);
-  const [opEfficiency, setOpEfficiency] = useState(0);
-  const [supportCapacity, setSupportCapacity] = useState(0);
-  const [competitionThreat, setCompetitionThreat] = useState(0);
-  const [insightText, setInsightText] = useState("Awaiting simulation variables...");
-  const [loadingAI, setLoadingAI] = useState(false);
 
   // Ingestion & Vector Base States
   const [activeFiles, setActiveFiles] = useState([]);
@@ -177,8 +164,7 @@ const Analytics = () => {
       try {
         await Promise.all([
           fetchAnalyticsForecastAndBenchmarking(),
-          fetchUploadedFiles(),
-          fetchForecast(0, 0)
+          fetchUploadedFiles()
         ]);
       } catch (error) {
         console.error("Failed to complete initial analytical suite sync:", error);
@@ -189,49 +175,6 @@ const Analytics = () => {
 
     initFetch();
   }, []);
-
-  const fetchForecast = async (priceVal = 0, effVal = 0) => {
-    setForecastLoading(true);
-    try {
-      const response = await api.post('/chat/analytics/forecast', {
-        price_adjuster: priceVal,
-        op_efficiency: effVal
-      });
-      setForecastData(response.data);
-    } catch (error) {
-      console.error("Failed to fetch predictive insights forecasting:", error);
-      setForecastData({ status: "error", projected_revenue: 0, base_revenue: 50000, ai_insight: "Forecast unavailable — please check your connection and retry." });
-    } finally {
-      setForecastLoading(false);
-    }
-  };
-
-  const fetchLiveAISimulation = async () => {
-    setLoadingAI(true);
-    try {
-      const response = await api.post("/predictive/simulate", {
-        priceAdjuster: Number(priceAdjuster),
-        marketingBoost: Number(marketingBoost),
-        productInnovation: Number(productInnovation),
-        opEfficiency: Number(opEfficiency),
-        supportCapacity: Number(supportCapacity),
-        competitionThreat: Number(competitionThreat)
-      });
-      setInsightText(response.data.aiMarkdownReport);
-    } catch (error) {
-      console.error("AI Live Sync failed", error);
-    } finally {
-      setLoadingAI(false);
-    }
-  };
-
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      fetchForecast(priceAdjuster, opEfficiency);
-      fetchLiveAISimulation();
-    }, 800);
-    return () => clearTimeout(delayDebounceFn);
-  }, [priceAdjuster, marketingBoost, productInnovation, opEfficiency, supportCapacity, competitionThreat]);
 
 
 
@@ -456,24 +399,6 @@ const Analytics = () => {
         <TopProducts reports={reports} />
       </div>
 
-      <ForecastSimulator 
-        forecastData={forecastData}
-        forecastLoading={forecastLoading}
-        priceAdjuster={priceAdjuster}
-        setPriceAdjuster={setPriceAdjuster}
-        marketingBoost={marketingBoost}
-        setMarketingBoost={setMarketingBoost}
-        productInnovation={productInnovation}
-        setProductInnovation={setProductInnovation}
-        opEfficiency={opEfficiency}
-        setOpEfficiency={setOpEfficiency}
-        supportCapacity={supportCapacity}
-        setSupportCapacity={setSupportCapacity}
-        competitionThreat={competitionThreat}
-        setCompetitionThreat={setCompetitionThreat}
-        insightText={insightText}
-        loadingAI={loadingAI}
-      />
 
       {/* ─── INGESTION & VECTOR BASE INVENTORY WIDGET ─── */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">

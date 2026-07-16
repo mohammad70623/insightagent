@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../services/api';
 import { 
   ShieldAlert, 
@@ -21,6 +21,7 @@ import {
 
 export default function UrgentFeedbacks() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isGmailConnected, setIsGmailConnected] = useState(false);
   const [statusLoading, setStatusLoading] = useState(true);
   const [selectedAlert, setSelectedAlert] = useState(null);
@@ -67,6 +68,19 @@ export default function UrgentFeedbacks() {
       fetchFeedbacks();
     }
   }, [isGmailConnected]);
+
+  useEffect(() => {
+    if (feedbacks.length > 0) {
+      const searchParams = new URLSearchParams(location.search);
+      const targetId = searchParams.get('id');
+      if (targetId) {
+        const matchingAlert = feedbacks.find(f => String(f.id) === targetId);
+        if (matchingAlert) {
+          setSelectedAlert(matchingAlert);
+        }
+      }
+    }
+  }, [location.search, feedbacks]);
 
   const showToast = (message, severity = 'success') => {
     setToast({ message, severity });
@@ -295,7 +309,7 @@ export default function UrgentFeedbacks() {
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 bg-[#0B0F19]/30 border border-slate-850 rounded-2xl min-h-[300px]">
             <Loader2 size={36} className="text-indigo-500 animate-spin mb-4" />
-            <span className="text-xs font-mono text-slate-400">Querying secure telemetry vectors...</span>
+            <span className="text-xs font-mono text-slate-400">Scanning internal knowledge base...</span>
           </div>
         ) : highPriorityAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 bg-[#0B0F19]/40 border border-slate-850 rounded-2xl min-h-[250px] text-center px-4">

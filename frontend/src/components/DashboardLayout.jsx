@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, Outlet } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, BarChart3, CloudUpload, MessageSquare, CreditCard, Shield, Settings, HelpCircle, Plus, Search, Bell, History, Eye, EyeOff, AlertTriangle, TrendingUp } from 'lucide-react';
 import SwotButton from './analytics/SwotButton';
 import { api } from '../services/api';
 import PrivacyPolicyModal from './PrivacyPolicyModal';
@@ -239,6 +239,7 @@ const DashboardLayout = () => {
     { name: 'Data Upload', path: '/app/upload', icon: CloudUpload },
     { name: 'AI Chat', path: '/app/chat', icon: MessageSquare },
     { name: 'Urgent Feedbacks', path: '/app/urgent-feedbacks', icon: AlertTriangle },
+    { name: 'Future Trends', path: '/app/future-trends', icon: TrendingUp },
     { name: 'Billing', path: '/app/billing', icon: CreditCard },
   ];
 

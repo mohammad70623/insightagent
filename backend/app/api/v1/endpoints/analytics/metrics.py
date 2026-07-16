@@ -1115,6 +1115,18 @@ async def fetch_urgent_feedbacks_queue(
         else:
             code = f"SYS-{int(f.id.hex[:4], 16) % 900 + 100}"
             
+        t_str = f.timestamp
+        if not t_str or t_str == "Just now":
+            dt = f.created_at
+            if dt:
+                hour_str = str(dt.hour % 12)
+                if hour_str == "0":
+                    hour_str = "12"
+                ampm = "am" if dt.hour < 12 else "pm"
+                t_str = f"{dt.day:02d}/{dt.month:02d}/{dt.year} {hour_str}:{dt.minute:02d} {ampm}"
+            else:
+                t_str = "Just now"
+
         compiled_queue.append({
             "id": str(f.id),
             "source": f.source,
@@ -1124,7 +1136,7 @@ async def fetch_urgent_feedbacks_queue(
             "message_snippet": f.snippet or "",
             "body": f.body or "",
             "severity": f.severity,
-            "timestamp": f.timestamp or "Just now",
+            "timestamp": t_str,
             "red_flag": f.red_flag,
             "alert_code": code
         })
@@ -1341,6 +1353,23 @@ async def sync_all_users_emails():
                         sender_email = clean_email.strip() if clean_email else from_header
                         sender_name = name.strip() if name.strip() else sender_email
 
+                        from datetime import datetime
+                        internal_date_ms = msg_detail.get("internalDate")
+                        if internal_date_ms:
+                            dt_msg = datetime.fromtimestamp(int(internal_date_ms) / 1000.0)
+                            hour_str = str(dt_msg.hour % 12)
+                            if hour_str == "0":
+                                hour_str = "12"
+                            ampm = "am" if dt_msg.hour < 12 else "pm"
+                            formatted_time = f"{dt_msg.day:02d}/{dt_msg.month:02d}/{dt_msg.year} {hour_str}:{dt_msg.minute:02d} {ampm}"
+                        else:
+                            dt_msg = datetime.now()
+                            hour_str = str(dt_msg.hour % 12)
+                            if hour_str == "0":
+                                hour_str = "12"
+                            ampm = "am" if dt_msg.hour < 12 else "pm"
+                            formatted_time = f"{dt_msg.day:02d}/{dt_msg.month:02d}/{dt_msg.year} {hour_str}:{dt_msg.minute:02d} {ampm}"
+
                         feedback = UrgentFeedback(
                             user_id=user.id,
                             email_message_id=rfc_msg_id,
@@ -1352,7 +1381,7 @@ async def sync_all_users_emails():
                             sender_name=sender_name,
                             severity=agent_res["severity"],
                             body=body,
-                            timestamp="Just now",
+                            timestamp=formatted_time,
                             red_flag=True
                         )
                         db.add(feedback)

@@ -19,6 +19,7 @@ const Support = lazy(() => import('../pages/Support'));
 const Docs = lazy(() => import('../pages/Docs'));
 const Feedback = lazy(() => import('../pages/Feedback'));
 const UrgentFeedbacksPage = lazy(() => import('../pages/UrgentFeedbacks'));
+const FutureTrendsPage = lazy(() => import('../pages/FutureTrends'));
 
 const LazyFallback = () => (
   <div className="flex h-[80vh] w-full items-center justify-center bg-transparent">
@@ -106,6 +107,10 @@ const router = createBrowserRouter([
       {
         path: "urgent-feedbacks",
         element: <Suspense fallback={<LazyFallback />}><UrgentFeedbacksPage /></Suspense>
+      },
+      {
+        path: "future-trends",
+        element: <Suspense fallback={<LazyFallback />}><FutureTrendsPage /></Suspense>
       },
       {
         path: "admin",
