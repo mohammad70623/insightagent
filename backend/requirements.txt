@@ -29,3 +29,4 @@ tavily-python==0.5.0
 cryptography>=42.0.0
 google-auth-oauthlib>=1.2.0
 google-api-python-client>=2.120.0
+langchain-openai
