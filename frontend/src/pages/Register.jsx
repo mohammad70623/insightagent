@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { Shield, KeyRound, Mail, User, ArrowRight, Sparkles, ShieldCheck, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { signInWithGoogle } from '../firebase';
+import { signInWithGoogle, handleRedirectResult } from '../firebase';
 
 /**
  * @description Enterprise Standalone Registration with Native OTP Verification State
@@ -87,47 +87,57 @@ const Register = () => {
     }
   };
 
+  const processGoogleAuthToken = async (idToken) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/google`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id_token: idToken,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log("🍏 [Auth Debug] Full Backend Response Data:", data);
+
+        const userName = data.user?.full_name || data.user?.name || (data.user?.first_name ? `${data.user.first_name} ${data.user.last_name || ''}`.trim() : '') || "User";
+        const userRole = data.user?.role || "user";
+        const userAvatar = data.user?.avatar || data.user?.avatar_url || data.user?.profile_picture || "";
+
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("userEmail", data.user?.email || "");
+        localStorage.setItem("userName", userName);
+        localStorage.setItem("userAvatar", userAvatar);
+        localStorage.setItem("userRole", userRole);
+
+        alert(`✨ Welcome, ${userName}! Account creation and verification successful.`);
+        navigate("/app/dashboard");
+        window.location.reload(); 
+      } else {
+        console.error("❌ Backend OAuth Verification Rejection:", data);
+        setError(data.detail || "Registration failed via Google");
+      }
+    } catch (err) {
+      console.error("🔴 Full-stack auth network pipeline collapse:", err);
+      setError("Server connection lost. Please ensure your FastAPI server is active.");
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     setError('');
     try {
       const result = await signInWithGoogle();
-      
       if (result.success) {
-        console.log("🔥 Firebase authenticated successfully. Forwarding token to FastAPI...");
-
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/google`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id_token: result.token,
-          }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          console.log("🍏 [Auth Debug] Full Backend Response Data:", data);
-
-          const userName = data.user?.full_name || data.user?.name || (data.user?.first_name ? `${data.user.first_name} ${data.user.last_name || ''}`.trim() : '') || "User";
-          const userRole = data.user?.role || "user";
-          const userAvatar = data.user?.avatar || data.user?.avatar_url || data.user?.profile_picture || "";
-
-          localStorage.setItem("token", data.access_token);
-          localStorage.setItem("userEmail", data.user?.email || "");
-          localStorage.setItem("userName", userName);
-          localStorage.setItem("userAvatar", userAvatar);
-          localStorage.setItem("userRole", userRole);
-
-          alert(`✨ Welcome, ${userName}! Account creation and verification successful.`);
-          navigate("/app/dashboard");
-          window.location.reload(); 
-        } else {
-          console.error("❌ Backend OAuth Verification Rejection:", data);
-          setError(data.detail || "Registration failed via Google");
+        if (result.redirecting) {
+          return;
         }
+        console.log("🔥 Firebase authenticated successfully. Forwarding token to FastAPI...");
+        await processGoogleAuthToken(result.token);
       } else {
         setError(result.error || "Google Signup Failed");
       }
@@ -138,6 +148,26 @@ const Register = () => {
       setIsGoogleLoading(false);
     }
   };
+
+  React.useEffect(() => {
+    const handleRedirect = async () => {
+      try {
+        const result = await handleRedirectResult();
+        if (result && result.success) {
+          setIsGoogleLoading(true);
+          console.log("🔥 Firebase authenticated via redirect. Forwarding token to FastAPI...");
+          await processGoogleAuthToken(result.token);
+        } else if (result && !result.success) {
+          setError(result.error || "Google Signup Failed");
+        }
+      } catch (err) {
+        console.error("Redirect handling error:", err);
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    };
+    handleRedirect();
+  }, [navigate]);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-main text-white font-sans select-none">

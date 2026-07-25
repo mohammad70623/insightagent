@@ -4,7 +4,7 @@ import { api } from '../services/api';
 import { Eye, EyeOff, ShieldCheck, AlertCircle, ArrowLeft } from 'lucide-react';
 import PrivacyPolicyModal from '../components/PrivacyPolicyModal';
 import TermsOfServiceModal from '../components/TermsOfServiceModal';
-import { signInWithGoogle } from '../firebase';
+import { signInWithGoogle, handleRedirectResult } from '../firebase';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -83,55 +83,59 @@ export default function Login() {
     }
   };
 
+  const processGoogleAuthToken = async (idToken) => {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/google`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id_token: idToken,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log("🍏 [Auth Debug] Full Backend Response Data:", data);
+
+        const userName = data.user?.full_name || data.user?.name || (data.user?.first_name ? `${data.user.first_name} ${data.user.last_name || ''}`.trim() : '') || "User";
+        const userRole = data.user?.role || "user";
+        const userAvatar = data.user?.avatar || data.user?.avatar_url || data.user?.profile_picture || "";
+
+        localStorage.setItem("token", data.access_token);
+        localStorage.setItem("userEmail", data.user?.email || "");
+        localStorage.setItem("userName", userName);
+        localStorage.setItem("userAvatar", userAvatar);
+        localStorage.setItem("userRole", userRole);
+
+        alert(`✨ Welcome back, ${userName}! Full-Stack Authentication Verified.`);
+        navigate("/app/dashboard");
+        window.location.reload(); 
+      } else {
+        console.error("❌ Backend OAuth Verification Rejection:", data);
+        alert(`❌ Backend Registration Failed: ${data.detail || "Authentication error"}`);
+        setError(data.detail || "Authentication error");
+      }
+    } catch (err) {
+      console.error("🔴 Full-stack auth network pipeline collapse:", err);
+      alert("❌ Server connection lost. Please ensure your FastAPI server is active.");
+      setError("Server connection lost. Please ensure your FastAPI server is active.");
+    }
+  };
+
   const handleGoogleLogin = async () => {
     setIsGoogleLoading(true);
     setError('');
     try {
-      // 1. Trigger the Firebase OAuth Popup via our utility
       const result = await signInWithGoogle();
-      
       if (result.success) {
-        console.log("🔥 Firebase authenticated successfully. Forwarding token to FastAPI...");
-
-        // 2. Dispatch the Firebase cryptographic ID token to our real FastAPI backend endpoint
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/google`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id_token: result.token, // Send the explicit Firebase ID token payload
-          }),
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          console.log("🍏 [Auth Debug] Full Backend Response Data:", data);
-
-          // 1. Bulletproof extraction of user properties from the backend payload
-          const userName = data.user?.full_name || data.user?.name || (data.user?.first_name ? `${data.user.first_name} ${data.user.last_name || ''}`.trim() : '') || "User";
-          const userRole = data.user?.role || "user";
-          const userAvatar = data.user?.avatar || data.user?.avatar_url || data.user?.profile_picture || "";
-
-          // 2. Commit the exact verified values to local storage for middleware checking
-          localStorage.setItem("token", data.access_token);
-          localStorage.setItem("userEmail", data.user?.email || "");
-          localStorage.setItem("userName", userName);
-          localStorage.setItem("userAvatar", userAvatar);
-          localStorage.setItem("userRole", userRole); // Crucial for protecting Admin sidebar routes
-
-          // 3. Clear debugging feedback and trigger safe internal navigation
-          alert(`✨ Welcome back, ${userName}! Full-Stack Authentication Verified.`);
-          
-          // Force a window reload or context update if your Sidebar depends on a state refresh
-          navigate("/app/dashboard");
-          window.location.reload(); 
-        } else {
-          console.error("❌ Backend OAuth Verification Rejection:", data);
-          alert(`❌ Backend Registration Failed: ${data.detail || "Authentication error"}`);
-          setError(data.detail || "Authentication error");
+        if (result.redirecting) {
+          return;
         }
+        console.log("🔥 Firebase authenticated successfully. Forwarding token to FastAPI...");
+        await processGoogleAuthToken(result.token);
       } else {
         alert(`❌ Google Auth Popup Cancelled/Failed: ${result.error}`);
         setError(result.error || "Google Authentication Failed");
@@ -144,6 +148,26 @@ export default function Login() {
       setIsGoogleLoading(false);
     }
   };
+
+  React.useEffect(() => {
+    const handleRedirect = async () => {
+      try {
+        const result = await handleRedirectResult();
+        if (result && result.success) {
+          setIsGoogleLoading(true);
+          console.log("🔥 Firebase authenticated via redirect. Forwarding token to FastAPI...");
+          await processGoogleAuthToken(result.token);
+        } else if (result && !result.success) {
+          setError(result.error || "Google Authentication Failed");
+        }
+      } catch (err) {
+        console.error("Redirect handling error:", err);
+      } finally {
+        setIsGoogleLoading(false);
+      }
+    };
+    handleRedirect();
+  }, [navigate]);
 
   const handleVerifySubmit = async (e) => {
     e.preventDefault();

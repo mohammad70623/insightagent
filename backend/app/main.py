@@ -64,10 +64,44 @@ app.include_router(analyze_router, prefix="/api")
 async def startup_event():
     from app.db.session import engine
     from sqlalchemy import text
+    from app.db.base_class import Base
+    from sqlmodel import SQLModel
+
+    # Ensure all SQLModel and SQLAlchemy schemas are imported and loaded into metadata registers
+    from app.models.user import User, Invoice
+    from app.models.chat import ChatSession, ChatMessage
+    from app.models.auth import OTPVerification, PasswordResetToken
+    from app.models.ticket import Ticket
+    from app.models.notification import Notification
+    from app.models.urgent_feedback import UrgentFeedback
+
+    # 1. Execute metadata-driven dynamic table creation first
+    try:
+        async with engine.begin() as conn:
+            logger.info("Bootstrapping core database schemas via metadata...")
+            await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(SQLModel.metadata.create_all)
+            logger.info("Dynamic database schema generation completed successfully!")
+    except Exception as bootstrap_err:
+        logger.error(f"Failed to bootstrap database schemas: {bootstrap_err}")
+
+    # 2. Run post-migration raw SQL commands and column alterations in isolated try-except transactions
     try:
         async with engine.begin() as conn:
             await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS profile_picture VARCHAR;'))
+            logger.info("User schema checked: profile_picture column verified.")
+    except Exception as alter_err:
+        logger.warning(f"Non-critical migration warning: Failed to alter user profile_picture: {alter_err}")
+
+    try:
+        async with engine.begin() as conn:
             await conn.execute(text('ALTER TABLE "user" ADD COLUMN IF NOT EXISTS google_refresh_token VARCHAR;'))
+            logger.info("User schema checked: google_refresh_token column verified.")
+    except Exception as alter_err:
+        logger.warning(f"Non-critical migration warning: Failed to alter user google_refresh_token: {alter_err}")
+
+    try:
+        async with engine.begin() as conn:
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS ticket (
                     id VARCHAR(50) PRIMARY KEY,
@@ -80,6 +114,12 @@ async def startup_event():
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
                 );
             """))
+            logger.info("Ticket schema verified.")
+    except Exception as create_err:
+        logger.warning(f"Non-critical migration warning: Failed to verify ticket table: {create_err}")
+
+    try:
+        async with engine.begin() as conn:
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS notification (
                     id UUID PRIMARY KEY,
@@ -91,6 +131,12 @@ async def startup_event():
                     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
                 );
             """))
+            logger.info("Notification schema verified.")
+    except Exception as create_err:
+        logger.warning(f"Non-critical migration warning: Failed to verify notification table: {create_err}")
+
+    try:
+        async with engine.begin() as conn:
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS urgentfeedback (
                     id UUID PRIMARY KEY,
@@ -110,9 +156,9 @@ async def startup_event():
                     FOREIGN KEY (user_id) REFERENCES "user"(id) ON DELETE CASCADE
                 );
             """))
-            logger.info("Database migration successful!")
-    except Exception as e:
-        logger.warning(f"Database migration info/error: {e}")
+            logger.info("Urgent Feedback schema verified.")
+    except Exception as create_err:
+        logger.warning(f"Non-critical migration warning: Failed to verify urgentfeedback table: {create_err}")
 
     # Launch Gmail Ingestion Background Task
     import asyncio

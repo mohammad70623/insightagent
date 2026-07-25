@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY, 
@@ -28,7 +28,42 @@ export const signInWithGoogle = async () => {
     const token = await user.getIdToken();
     return { user, token, success: true };
   } catch (error) {
-    console.error("Google Authentication Error:", error);
+    console.error("Google Authentication Popup Error:", error);
+    
+    // Catch popup blocked or closed scenarios
+    const popupErrorCodes = [
+      "auth/popup-blocked",
+      "auth/popup-closed-by-user",
+      "auth/cancelled-popup-request"
+    ];
+    
+    if (popupErrorCodes.includes(error.code) || (error.message && error.message.includes("popup"))) {
+      console.warn("Popup blocked or closed. Attempting Google redirect fallback...");
+      try {
+        await signInWithRedirect(auth, provider);
+        return { redirecting: true, success: true };
+      } catch (redirectError) {
+        console.error("Google Redirect Fallback Error:", redirectError);
+        return { error: redirectError.message, success: false };
+      }
+    }
+    
     return { error: error.message, success: false };
   }
 };
+
+export const handleRedirectResult = async () => {
+  try {
+    const result = await getRedirectResult(auth);
+    if (result) {
+      const user = result.user;
+      const token = await user.getIdToken();
+      return { user, token, success: true };
+    }
+    return null;
+  } catch (error) {
+    console.error("Google Redirect Result Error:", error);
+    return { error: error.message, success: false };
+  }
+};
+

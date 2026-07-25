@@ -126,7 +126,7 @@ const SwotModal = ({ isOpen, onClose, hasFiles, swotData, loading, onRefresh }) 
             <div>
               <div style={{ color:'#fff', fontSize:13, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', fontFamily:'monospace' }}>AI Strategic SWOT Intelligence</div>
               <div style={{ color:'#6b7280', fontSize:10, fontFamily:'monospace', marginTop:2 }}>
-                {hasFiles ? 'Powered by your uploaded documents · LLaMA 3 70B' : 'No documents uploaded yet'}
+                {hasFiles ? 'Powered by your uploaded documents ' : 'No documents uploaded yet'}
               </div>
             </div>
           </div>
