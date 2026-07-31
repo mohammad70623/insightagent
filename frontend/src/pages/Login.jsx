@@ -8,6 +8,7 @@ import { signInWithGoogle, handleRedirectResult } from '../firebase';
 
 export default function Login() {
   const navigate = useNavigate();
+
   
   // States: 'login', 'otp', 'forgot'
   const [authMode, setAuthMode] = useState('login');
@@ -301,7 +302,30 @@ export default function Login() {
                 <p className="text-xs text-brand-muted mt-1.5">Enter your credentials to access the dashboard</p>
               </div>
 
+              {/* Hiring Manager Demo Alert Banner */}
+              <div className="p-3.5 mb-5 rounded-lg border border-cyan-500/20 bg-cyan-950/15 backdrop-blur-md animate-fade-in flex flex-col gap-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-cyan-400 shrink-0 text-sm">👉</span>
+                  <div className="text-[11px] text-cyan-200 leading-normal font-medium">
+                    Reviewing as Hiring Manager? Use Email: <code className="bg-cyan-900/30 px-1 py-0.5 rounded text-white border border-cyan-500/10 font-mono">demo@insightagent.com</code> | Password/OTP: <code className="bg-cyan-900/30 px-1 py-0.5 rounded text-white border border-cyan-500/10 font-mono">000000</code>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail("demo@insightagent.com");
+                    setPassword("000000");
+                    setErrorMsg("");
+                    setSuccessMsg("");
+                  }}
+                  className="w-full text-center text-[10px] font-bold py-1 bg-cyan-500/10 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 rounded transition-all cursor-pointer font-sans"
+                >
+                  ⚡ Explore as Guest (Auto-Fill)
+                </button>
+              </div>
+
               <form onSubmit={handleLoginSubmit} className="space-y-4">
+
                 <div>
                   <input
                     type="email"
@@ -489,7 +513,28 @@ export default function Login() {
                 </p>
               </div>
 
+              {/* Hiring Manager Demo Alert Banner */}
+              <div className="p-3.5 mb-5 rounded-lg border border-cyan-500/20 bg-cyan-950/15 backdrop-blur-md animate-fade-in flex flex-col gap-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-cyan-400 shrink-0 text-sm">👉</span>
+                  <div className="text-[11px] text-cyan-200 leading-normal font-medium">
+                    Reviewing as Hiring Manager? Enter OTP code: <code className="bg-cyan-900/30 px-1 py-0.5 rounded text-white border border-cyan-500/10 font-mono">000000</code>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVerificationCode("000000");
+                    setErrorMsg("");
+                  }}
+                  className="w-full text-center text-[10px] font-bold py-1 bg-cyan-500/10 hover:bg-cyan-500/25 border border-cyan-500/30 text-cyan-300 rounded transition-all cursor-pointer font-sans"
+                >
+                  ⚡ Auto-fill Demo OTP
+                </button>
+              </div>
+
               <form onSubmit={handleVerifySubmit} className="space-y-4 animate-fade-in">
+
                 <div className="relative">
                   <input
                     type="text"

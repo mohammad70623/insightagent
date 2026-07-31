@@ -54,3 +54,4 @@ class Settings(BaseSettings):
     MASTER_OTP: Optional[str] = "000000"
 
 settings = Settings()
+

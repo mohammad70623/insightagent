@@ -62,8 +62,10 @@ const handleResponse = async (response) => {
     }
     throw new Error("Session expired. Please log in again.");
   }
+
   return response;
 };
+
 
 export const apiService = {
   /**
