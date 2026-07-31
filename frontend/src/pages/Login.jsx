@@ -9,15 +9,15 @@ import { signInWithGoogle, handleRedirectResult } from '../firebase';
 export default function Login() {
   const navigate = useNavigate();
 
-  
+
   // States: 'login', 'otp', 'forgot'
   const [authMode, setAuthMode] = useState('login');
-  
+
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
-  
+
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isVerifyLoading, setIsVerifyLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -51,7 +51,7 @@ export default function Login() {
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) return;
-    
+
     if (!validateEmail(email)) {
       setErrorMsg('Invalid email format. Please provide a valid corporate email.');
       return;
@@ -113,7 +113,7 @@ export default function Login() {
 
         alert(`✨ Welcome back, ${userName}! Full-Stack Authentication Verified.`);
         navigate("/app/dashboard");
-        window.location.reload(); 
+        window.location.reload();
       } else {
         console.error("❌ Backend OAuth Verification Rejection:", data);
         alert(`❌ Backend Registration Failed: ${data.detail || "Authentication error"}`);
@@ -181,7 +181,7 @@ export default function Login() {
         otp_code: verificationCode,
         purpose: 'login'
       });
-      
+
       localStorage.setItem('token', response.data.access_token);
       localStorage.setItem('user_role', response.data.user.role);
       navigate('/app/dashboard');
@@ -216,15 +216,15 @@ export default function Login() {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-main text-white font-sans">
-      
+
       {/* LEFT PANEL: BRAND (60%) */}
       <div className="relative hidden w-[60%] flex-col justify-center p-12 bg-gradient-to-br from-[#0B0F19] via-[#0D1527] to-[#0B0F19] lg:flex border-r border-gray-800/30">
         <div className="absolute inset-0 bg-[radial-gradient(#ffffff03_1px,transparent_1px)] [background-size:24px_24px] pointer-events-none" />
 
         <div className="absolute top-12 left-12 z-10 flex items-center gap-3">
-          <img 
-            src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
-            alt="InsightAgent Logo" 
+          <img
+            src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png"
+            alt="InsightAgent Logo"
             className="w-10 h-10 object-cover rounded-xl border border-slate-800 shadow-md"
             crossOrigin="anonymous"
           />
@@ -239,9 +239,9 @@ export default function Login() {
             <div className="absolute h-40 w-40 rounded-full border border-gray-800/80 animate-[spin_30s_linear_infinite]" />
             <div className="absolute h-44 w-28 rounded-full border border-brand-primary/20 rotate-45 animate-[spin_25s_linear_infinite]" />
             <div className="absolute h-28 w-44 rounded-full border border-indigo-500/10 -rotate-45" />
-            <img 
-              src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
-              alt="InsightAgent Logo" 
+            <img
+              src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png"
+              alt="InsightAgent Logo"
               className="z-10 w-16 h-16 object-cover rounded-2xl border border-gray-800/80 shadow-2xl animate-pulse"
               crossOrigin="anonymous"
             />
@@ -282,7 +282,7 @@ export default function Login() {
       {/* RIGHT PANEL */}
       <div className="relative flex flex-1 flex-col justify-center px-8 py-12 sm:px-16 lg:w-[40%] lg:flex-none bg-main">
         <div className="mx-auto w-full max-w-sm">
-          
+
           {errorMsg && (
             <div className="flex items-center gap-2 text-[11px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg mb-6 animate-fade-in">
               <AlertCircle size={14} /> {errorMsg}
@@ -359,13 +359,13 @@ export default function Login() {
 
                 <div className="flex items-center justify-between text-[11px] pt-1">
                   <label className="flex items-center gap-2 cursor-pointer text-brand-muted select-none font-medium">
-                    <input 
-                      type="checkbox" 
-                      className="checkbox checkbox-xs border-gray-700 rounded bg-transparent checked:bg-brand-primary [--chkbg:var(--color-brand-primary)] [--chkfg:black]" 
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-xs border-gray-700 rounded bg-transparent checked:bg-brand-primary [--chkbg:var(--color-brand-primary)] [--chkfg:black]"
                     />
                     Remember for 30 days
                   </label>
-                  <button 
+                  <button
                     type="button"
                     onClick={() => { setAuthMode('forgot'); setErrorMsg(''); setSuccessMsg(''); }}
                     className="font-semibold text-brand-primary hover:underline bg-transparent border-none cursor-pointer"
@@ -442,7 +442,7 @@ export default function Login() {
                 <span className="text-brand-muted">Don't have an account? </span>
                 <button
                   type="button"
-                  onClick={() => navigate('/register')} 
+                  onClick={() => navigate('/register')}
                   className="text-brand-primary hover:underline font-bold bg-transparent border-none outline-none cursor-pointer"
                 >
                   Request Access
@@ -490,7 +490,7 @@ export default function Login() {
               <div className="text-center text-xs font-medium pt-6 flex justify-center">
                 <button
                   type="button"
-                  onClick={() => { setAuthMode('login'); setErrorMsg(''); setSuccessMsg(''); }} 
+                  onClick={() => { setAuthMode('login'); setErrorMsg(''); setSuccessMsg(''); }}
                   className="text-gray-500 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer flex items-center gap-1.5 font-semibold"
                 >
                   <ArrowLeft size={14} /> Back to Sign In
@@ -564,7 +564,7 @@ export default function Login() {
               <div className="text-center text-xs font-medium border-t border-gray-850/40 pt-4 mt-6 flex justify-between items-center">
                 <button
                   type="button"
-                  onClick={() => setAuthMode('login')} 
+                  onClick={() => setAuthMode('login')}
                   className="text-gray-500 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
                 >
                   ← Cancel
@@ -579,7 +579,7 @@ export default function Login() {
                       formDataParams.append('password', password);
                       await api.post('/auth/login', formDataParams);
                       alert("Code resent successfully!");
-                    } catch(e) {}
+                    } catch (e) { }
                   }}
                 >
                   Resend Code
@@ -589,23 +589,23 @@ export default function Login() {
           )}
 
           <div className="mt-16 flex justify-center gap-6 text-[10px] text-gray-600 border-t border-gray-900 pt-4 font-semibold">
-            <button 
-              type="button" 
-              onClick={handleSupportClick} 
+            <button
+              type="button"
+              onClick={handleSupportClick}
               className="hover:text-gray-400 transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[10px]"
             >
               Support
             </button>
-            <button 
-              type="button" 
-              onClick={() => setShowTermsModal(true)} 
+            <button
+              type="button"
+              onClick={() => setShowTermsModal(true)}
               className="hover:text-gray-400 transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[10px]"
             >
               Terms
             </button>
-            <button 
-              type="button" 
-              onClick={() => setShowPrivacyModal(true)} 
+            <button
+              type="button"
+              onClick={() => setShowPrivacyModal(true)}
               className="hover:text-gray-400 transition-colors bg-transparent border-none p-0 cursor-pointer font-semibold text-[10px]"
             >
               Privacy
@@ -641,13 +641,13 @@ export default function Login() {
       )}
 
       {/* Shared Policy Modals */}
-      <PrivacyPolicyModal 
-        isOpen={showPrivacyModal} 
-        onClose={() => setShowPrivacyModal(false)} 
+      <PrivacyPolicyModal
+        isOpen={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
       />
-      <TermsOfServiceModal 
-        isOpen={showTermsModal} 
-        onClose={() => setShowTermsModal(false)} 
+      <TermsOfServiceModal
+        isOpen={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
       />
     </div>
   );

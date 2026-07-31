@@ -12,7 +12,7 @@ const Register = () => {
   // ─── CORE STATES ───
   const [isSignupStep, setIsSignupStep] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -56,7 +56,7 @@ const Register = () => {
         email: formData.email,
         password: formData.password
       });
-      setIsSignupStep(false); 
+      setIsSignupStep(false);
     } catch (err) {
       setErrorMsg(err.response?.data?.detail || 'Registration failed. Please try again.');
     } finally {
@@ -116,7 +116,7 @@ const Register = () => {
 
         alert(`✨ Welcome, ${userName}! Account creation and verification successful.`);
         navigate("/app/dashboard");
-        window.location.reload(); 
+        window.location.reload();
       } else {
         console.error("❌ Backend OAuth Verification Rejection:", data);
         setError(data.detail || "Registration failed via Google");
@@ -171,15 +171,15 @@ const Register = () => {
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-main text-white font-sans select-none">
-      
+
       {/* ─── LEFT PANEL: BRAND BANNER ─── */}
       <div className="hidden w-[45%] flex-col justify-between border-r border-gray-800/40 bg-[#0B0F19]/40 p-12 lg:flex relative">
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff01_1px,transparent_1px),linear-gradient(to_bottom,#ffffff01_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
-        
+
         <div className="flex items-center gap-3 relative z-10">
-          <img 
-            src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png" 
-            alt="InsightAgent Logo" 
+          <img
+            src="https://i.ibb.co.com/MD7vS43Z/Screenshot-2026-07-12-111127.png"
+            alt="InsightAgent Logo"
             className="w-9 h-9 object-cover rounded-xl border border-slate-850 shadow-md transform hover:scale-105 transition-transform duration-200"
             crossOrigin="anonymous"
           />
@@ -194,8 +194,8 @@ const Register = () => {
             <Sparkles size={10} /> {isSignupStep ? "Private Node Initialization" : "Identity Verification"}
           </span>
           <h2 className="text-3xl font-black tracking-tight text-white leading-tight">
-            {isSignupStep 
-              ? "Initialize your secure enterprise data node." 
+            {isSignupStep
+              ? "Initialize your secure enterprise data node."
               : "Verify your corporate identity channel."
             }
           </h2>
@@ -212,7 +212,7 @@ const Register = () => {
       {/* ─── RIGHT PANEL: DYNAMIC RECEPTOR (SIGNUP vs Verification) ─── */}
       <div className="flex flex-1 flex-col items-center justify-center bg-transparent px-6 relative">
         <div className="w-full max-w-sm space-y-8 animate-fade-in">
-          
+
           {errorMsg && (
             <div className="flex items-center gap-2 text-[11px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-3 py-2 rounded-lg animate-fade-in">
               <AlertCircle size={14} /> {errorMsg}
@@ -228,7 +228,7 @@ const Register = () => {
               </div>
 
               <form onSubmit={handleSignupSubmit} className="space-y-4">
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <label htmlFor="firstName" className="text-[11px] font-bold uppercase tracking-wider text-brand-muted font-mono">First Name</label>
@@ -364,6 +364,26 @@ const Register = () => {
                     </>
                   )}
                 </button>
+
+                <div className="relative flex py-3 items-center">
+                  <div className="flex-grow border-t border-gray-850/40"></div>
+                  <span className="flex-shrink mx-4 text-[10px] text-slate-500 font-mono uppercase tracking-wider">Hiring Manager Access</span>
+                  <div className="flex-grow border-t border-gray-850/40"></div>
+                </div>
+
+                <div className="flex flex-col gap-2.5 items-center justify-center p-3.5 rounded-xl border border-cyan-500/20 bg-cyan-950/10 backdrop-blur-sm animate-pulse-subtle">
+                  <span className="text-[11px] text-cyan-300 font-medium text-center">
+                    👉 Reviewing as Hiring Manager? Click to test with Demo Credentials
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/login')}
+                    className="w-full text-center text-xs font-bold py-3 px-4 bg-cyan-500 text-black hover:bg-cyan-400 rounded-xl transition-all shadow-lg shadow-cyan-500/10 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 font-sans"
+                  >
+                    ⚡ Explore as Guest
+                  </button>
+                </div>
+
                 {error && (
                   <div className="flex items-center gap-2 justify-center text-xs font-semibold text-red-400 bg-red-500/10 border border-red-500/20 px-4 py-2.5 rounded-xl mt-3 animate-fade-in transition-all">
                     <AlertCircle size={15} className="shrink-0 text-red-400" />
@@ -373,6 +393,7 @@ const Register = () => {
               </form>
 
               <div className="text-center text-xs font-medium border-t border-gray-850/40 pt-4">
+
                 <span className="text-brand-muted">Already have an enterprise node? </span>
                 <button
                   type="button"
@@ -384,7 +405,7 @@ const Register = () => {
               </div>
             </>
           ) : (
-        
+
             <>
               <div className="space-y-2 animate-fade-in">
                 <h3 className="text-2xl font-bold tracking-tight text-white">Check your email</h3>
@@ -427,7 +448,7 @@ const Register = () => {
               <div className="text-center text-xs font-medium border-t border-gray-850/40 pt-4 flex justify-between items-center px-1">
                 <button
                   type="button"
-                  onClick={() => setIsSignupStep(true)} 
+                  onClick={() => setIsSignupStep(true)}
                   className="text-gray-500 hover:text-white transition-colors bg-transparent border-none outline-none cursor-pointer"
                 >
                   ← Edit Credentials
@@ -444,7 +465,7 @@ const Register = () => {
                         password: formData.password
                       });
                       alert("OTP Code resent successfully!");
-                    } catch(e) {}
+                    } catch (e) { }
                   }}
                 >
                   Resend Code
