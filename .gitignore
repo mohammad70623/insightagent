@@ -30,3 +30,7 @@ dist-ssr
 *.env
 backend/app/core/.env
 backend/uploaded_documents/
+__pycache__/
+*.py[cod]
+*$py.class
+.env
